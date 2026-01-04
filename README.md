@@ -9,6 +9,7 @@ The terminal music tracker for chiptune and retro-style music with a great typo.
 - Triangle
 - Sawtooth
 - Reverse Sawtooth
+- Noise
 
 ## Effects
 
@@ -18,3 +19,8 @@ The terminal music tracker for chiptune and retro-style music with a great typo.
 - Delay
 - Distortion
 - Bitcrusher
+
+## TODOs
+
+- Visualize the waveform with applied effects in a chart using ntcharts
+- Implement a panel cycle mechanism for easier navigation with tab char, making tab a global key that must not be used in panel views

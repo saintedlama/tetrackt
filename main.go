@@ -92,7 +92,7 @@ func NewPattern(numTracks, numRows int) *Pattern {
 type InputMode int
 
 const (
-	NormalMode InputMode = iota
+	TrackMode InputMode = iota
 	JumpMode
 	EnvelopeEditMode
 )
@@ -133,6 +133,10 @@ var (
 			Foreground(lipgloss.Color("226")).
 			Bold(true)
 
+	selectedStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("126")).
+			Bold(true)
+
 	cellStyle = lipgloss.NewStyle().
 			Padding(0, 1)
 
@@ -143,6 +147,11 @@ var (
 	playbackRowStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("46")).
 				Bold(true)
+
+	panelBorderStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("240")).
+				Padding(1, 2)
 )
 
 // model represents the application state
@@ -163,6 +172,7 @@ type model struct {
 	playbackRow       int
 	envelopeField     EnvelopeEditField
 	envelopeEditInput string
+	sampleRate        beep.SampleRate
 }
 
 // tickMsg is sent to advance playback
@@ -225,7 +235,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.envelopeField = (m.envelopeField - 1 + 4) % 4
 				m.envelopeEditInput = ""
 			case "esc":
-				m.mode = NormalMode
+				m.mode = TrackMode
 				m.envelopeEditInput = ""
 			case "backspace":
 				if len(m.envelopeEditInput) > 0 {
@@ -250,10 +260,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.waveform = m.ensureTrackInstrument(m.cursorTrack)
 					}
 				}
-				m.mode = NormalMode
+				m.mode = TrackMode
 				m.jumpInput = ""
 			case "esc":
-				m.mode = NormalMode
+				m.mode = TrackMode
 				m.jumpInput = ""
 			case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9":
 				m.jumpInput += msg.String()
@@ -265,7 +275,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Normal mode key handling
+		// Track mode key handling
 		switch msg.String() {
 		case "q", "ctrl+c":
 			speaker.Clear()
@@ -469,10 +479,18 @@ func (m model) View() string {
 		m.waveform, currentInst, modeStr, playStatus, m.cursorTrack, m.cursorRow)))
 	header.WriteString("\n\n")
 
-	instView := m.instrumentView(currentInst)
-	instrumentHeight := countLines(instView)
-	visibleRows := m.visibleRows(instrumentHeight)
+	instView := m.synthView()
+	trackView := m.trackView()
 
+	body := lipgloss.JoinVertical(lipgloss.Left, instView, trackView)
+
+	// Footer help
+	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | W: Waveform | E: Envelope | Space: Play/Pause | Q: Quit")
+
+	return header.String() + body + "\n" + footer
+}
+
+func (m model) trackView() string {
 	// Track editor section
 	var tracks strings.Builder
 
@@ -498,7 +516,7 @@ func (m model) View() string {
 	}
 	tracks.WriteString("\n")
 
-	endRow := min(m.viewportRow+visibleRows, m.pattern.numRows)
+	endRow := min(m.viewportRow+m.visibleRows(m.instrumentHeight()), m.pattern.numRows)
 
 	// Render visible rows
 	for row := m.viewportRow; row < endRow; row++ {
@@ -527,29 +545,30 @@ func (m model) View() string {
 		tracks.WriteString("\n")
 	}
 
-	trackView := tracks.String()
-
-	body := lipgloss.JoinVertical(lipgloss.Left, instView, trackView)
-
-	// Footer help
-	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | W: Waveform | E: Envelope | Space: Play/Pause | Q: Quit")
-
-	return header.String() + body + "\n" + footer
+	return tracks.String()
 }
 
-func (m model) instrumentView(currentInst audio.WaveformType) string {
-	var inst strings.Builder
-	instTitle := headerStyle.Render("Instrument Editor")
-	inst.WriteString(instTitle)
-	inst.WriteString("\n")
-	inst.WriteString(strings.Repeat("─", len("Instrument Editor")))
-	inst.WriteString("\n")
-	inst.WriteString(fmt.Sprintf("Track %d\n", m.cursorTrack))
-	inst.WriteString(fmt.Sprintf("Waveform: %s\n\n", currentInst))
+func (m model) waveformView() string {
+	var waveformView strings.Builder
+	waveformView.WriteString("Waveform:\n")
 
+	currentInst := m.trackInstrumentValue(m.cursorTrack)
+	for _, wf := range m.waveformList {
+		if wf == currentInst {
+			waveformView.WriteString(selectedStyle.Render(fmt.Sprintf("%s", wf)))
+			waveformView.WriteString("\n")
+		} else {
+			waveformView.WriteString(fmt.Sprintf("%s\n", wf))
+		}
+	}
+
+	return waveformView.String()
+}
+
+func (m model) envelopeView() string {
 	// Show envelope
 	env := m.pattern.tracks[m.cursorTrack].instrument.Envelope
-	envText := fmt.Sprintf("ADSR Envelope:\n")
+	envText := "ADSR Envelope:\n"
 
 	if m.mode == EnvelopeEditMode {
 		envText += fmt.Sprintf("A: %s ms\n", m.envelopeFieldValue(EnvelopeAttack))
@@ -562,30 +581,27 @@ func (m model) instrumentView(currentInst audio.WaveformType) string {
 		envText += fmt.Sprintf("S: %3d %%\n", env.Sustain)
 		envText += fmt.Sprintf("R: %3d ms", env.Release)
 	}
-	inst.WriteString(envText)
-	inst.WriteString("\n\nWaveforms:\n")
 
-	for idx, wf := range m.waveformList {
-		marker := " "
-		if wf == currentInst {
-			marker = "*"
-		}
-		inst.WriteString(fmt.Sprintf("%s %d. %s\n", marker, idx, wf))
-	}
+	return envText
+}
 
-	inst.WriteString("\n")
-	inst.WriteString(helpStyle.Render("E: Edit envelope | W: Waveform | J: Jump | ↑↓←→: Move"))
+func (m model) synthView() string {
+	waveformView := m.waveformView()
+	envelopeView := m.envelopeView()
 
-	return inst.String()
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		panelBorderStyle.Render(waveformView),
+		panelBorderStyle.Render(envelopeView),
+	)
 }
 
 func (m model) instrumentHeight() int {
-	instView := m.instrumentView(m.trackInstrumentValue(m.cursorTrack))
-	return countLines(instView)
+	instView := m.synthView()
+	return countLines(instView) + 2 // +2 for panel border padding
 }
 
 func (m model) visibleRows(instrumentHeight int) int {
-	available := m.height - instrumentHeight - 6 // Leave space for header and footer
+	available := m.height - instrumentHeight - 8 // Leave space for header and footer and borders
 	if available < 5 {
 		return 5
 	}
@@ -639,14 +655,6 @@ func (m model) trackInstrumentValue(trackIdx int) audio.WaveformType {
 	return track.instrument.Waveform
 }
 
-// min returns the smaller of two ints
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func main() {
 	// Initialize synthesizer
 	sampleRate := beep.SampleRate(44100)
@@ -674,12 +682,13 @@ func main() {
 			cursorTrack:       0,
 			cursorRow:         0,
 			viewportRow:       0,
-			mode:              NormalMode,
+			mode:              TrackMode,
 			jumpInput:         "",
 			isPlaying:         false,
 			playbackRow:       0,
 			envelopeField:     EnvelopeAttack,
 			envelopeEditInput: "",
+			sampleRate:        44100,
 		},
 		tea.WithAltScreen(),
 	)
