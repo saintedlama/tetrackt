@@ -11,16 +11,16 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/faiface/beep"
-	"github.com/faiface/beep/speaker"
+	"github.com/gopxl/beep/v2"
+	"github.com/gopxl/beep/v2/speaker"
 )
 
 // Envelope represents ADSR envelope parameters
 type Envelope struct {
-	Attack  int // milliseconds
-	Decay   int // milliseconds
+	Attack  int // 0-100 (percentage of samples)
+	Decay   int // 0-100 (percentage of samples)
 	Sustain int // 0-100 (percentage of peak)
-	Release int // milliseconds
+	Release int // 0-100 (percentage of samples)
 }
 
 // Instrument represents a complete instrument with waveform and envelope
@@ -34,10 +34,10 @@ func NewInstrument(waveform audio.WaveformType) *Instrument {
 	return &Instrument{
 		Waveform: waveform,
 		Envelope: Envelope{
-			Attack:  10,
-			Decay:   50,
-			Sustain: 70,
-			Release: 100,
+			Attack:  0,
+			Decay:   0,
+			Sustain: 100,
+			Release: 0,
 		},
 	}
 }
@@ -66,14 +66,14 @@ type Pattern struct {
 // NewPattern creates a new pattern with the specified number of tracks and rows
 func NewPattern(numTracks, numRows int) *Pattern {
 	tracks := make([]Track, numTracks)
-	for i := 0; i < numTracks; i++ {
+	for i := range numTracks {
 		tracks[i] = Track{
 			number:     i,
 			instrument: NewInstrument(audio.Sine),
 			rows:       make([]TrackRow, numRows),
 		}
 		// Initialize all rows with empty data
-		for j := 0; j < numRows; j++ {
+		for j := range numRows {
 			tracks[i].rows[j] = TrackRow{
 				note:   "---",
 				volume: 0,
@@ -95,6 +95,7 @@ const (
 	TrackMode InputMode = iota
 	JumpMode
 	EnvelopeEditMode
+	WaveformEditMode
 )
 
 // EnvelopeEditField represents which envelope parameter is being edited
@@ -172,7 +173,6 @@ type model struct {
 	playbackRow       int
 	envelopeField     EnvelopeEditField
 	envelopeEditInput string
-	sampleRate        beep.SampleRate
 }
 
 // tickMsg is sent to advance playback
@@ -203,8 +203,11 @@ var noteNames = map[string]string{
 // Init initializes the application
 func (m model) Init() tea.Cmd {
 	// Initialize speaker with sample rate
-	sampleRate := beep.SampleRate(44100)
-	speaker.Init(sampleRate, sampleRate.N(time.Second/10))
+	sampleRate := m.synth.SampleRate
+	buffersize := sampleRate.N(time.Millisecond * 300)
+
+	speaker.Init(sampleRate, buffersize)
+
 	return nil
 }
 
@@ -212,39 +215,73 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Global mode switching
+		switch msg.String() {
+		case "w":
+			m.mode = WaveformEditMode
+			return m, nil
+		case "t":
+			m.mode = TrackMode
+			return m, nil
+		case "e":
+			m.mode = EnvelopeEditMode
+			return m, nil
+		}
+
+		// Global note playing (available in any mode)
+		if freq, ok := noteFrequencies[msg.String()]; ok {
+			m.playNote(freq)
+			// Also set note in track if in track mode
+			if m.mode == TrackMode {
+				if noteName, ok := noteNames[msg.String()]; ok {
+					m.pattern.tracks[m.cursorTrack].rows[m.cursorRow].note = noteName
+				}
+			}
+			return m, nil
+		}
+
 		// Handle envelope edit mode
 		if m.mode == EnvelopeEditMode {
 			switch msg.String() {
-			case "enter":
-				// Save the envelope value
-				m.saveEnvelopeValue(m.envelopeEditInput)
-				m.envelopeField = (m.envelopeField + 1) % 4 // Cycle through ADSR
-				m.envelopeEditInput = ""
-			case "tab":
-				// Move to next envelope field
-				if m.envelopeEditInput != "" {
-					m.saveEnvelopeValue(m.envelopeEditInput)
-				}
-				m.envelopeField = (m.envelopeField + 1) % 4
-				m.envelopeEditInput = ""
-			case "shift+tab":
+			case "up":
 				// Move to previous envelope field
-				if m.envelopeEditInput != "" {
-					m.saveEnvelopeValue(m.envelopeEditInput)
-				}
 				m.envelopeField = (m.envelopeField - 1 + 4) % 4
-				m.envelopeEditInput = ""
+			case "down":
+				// Move to next envelope field
+				m.envelopeField = (m.envelopeField + 1) % 4
+			case "left":
+				// Decrease value by 1
+				m.adjustEnvelopeValue(-1)
+			case "shift+left":
+				// Decrease value by 10
+				m.adjustEnvelopeValue(-10)
+			case "right":
+				// Increase value by 1
+				m.adjustEnvelopeValue(1)
+			case "shift+right":
+				// Increase value by 10
+				m.adjustEnvelopeValue(10)
 			case "esc":
 				m.mode = TrackMode
-				m.envelopeEditInput = ""
-			case "backspace":
-				if len(m.envelopeEditInput) > 0 {
-					m.envelopeEditInput = m.envelopeEditInput[:len(m.envelopeEditInput)-1]
-				}
-			case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9":
-				if len(m.envelopeEditInput) < 3 {
-					m.envelopeEditInput += msg.String()
-				}
+			}
+			return m, nil
+		}
+
+		// Handle waveform edit mode
+		if m.mode == WaveformEditMode {
+			switch msg.String() {
+			case "up", "left":
+				// Move to previous waveform
+				m.waveformIdx = (m.waveformIdx - 1 + len(m.waveformList)) % len(m.waveformList)
+				m.waveform = m.waveformList[m.waveformIdx]
+				m.setTrackInstrument(m.cursorTrack, m.waveform)
+			case "down", "right":
+				// Move to next waveform
+				m.waveformIdx = (m.waveformIdx + 1) % len(m.waveformList)
+				m.waveform = m.waveformList[m.waveformIdx]
+				m.setTrackInstrument(m.cursorTrack, m.waveform)
+			case "esc":
+				m.mode = TrackMode
 			}
 			return m, nil
 		}
@@ -289,19 +326,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				speaker.Clear()
 			}
-		case "1", "2", "3", "4", "5", "6", "7":
-			// Set note in current cell and play it
-			if noteName, ok := noteNames[msg.String()]; ok {
-				m.pattern.tracks[m.cursorTrack].rows[m.cursorRow].note = noteName
-			}
-			if freq, ok := noteFrequencies[msg.String()]; ok {
-				m.playNote(freq)
-			}
-		case "w":
-			// Cycle to the next waveform type
-			m.waveformIdx = (m.waveformIdx + 1) % len(m.waveformList)
-			m.waveform = m.waveformList[m.waveformIdx]
-			m.setTrackInstrument(m.cursorTrack, m.waveform)
 		case "j":
 			// Enter jump mode
 			m.mode = JumpMode
@@ -410,7 +434,7 @@ func (m *model) playRowNotes(row int) {
 		freq := m.noteToFrequency(trackRow.note)
 		if freq > 0 {
 			inst := m.ensureTrackInstrument(trackIdx)
-			gen := m.synth.NewGenerator(inst, freq)
+			gen := m.synth.NewWaveform(inst, freq)
 			generators = append(generators, gen)
 		}
 	}
@@ -448,11 +472,25 @@ func (m *model) noteToFrequency(note string) float64 {
 // playNote plays a note at the given frequency using the current waveform
 func (m *model) playNote(frequency float64) {
 	inst := m.ensureTrackInstrument(m.cursorTrack)
-	gen := m.synth.NewGenerator(inst, frequency)
+	waveform := m.synth.NewWaveform(inst, frequency)
+
+	// TODO: Calculate the number of samples for the note duration
+	envelope := m.pattern.tracks[m.cursorTrack].instrument.Envelope
+
+	duration := m.synth.SampleRate.N(time.Millisecond * 300)
+
+	adsr := m.synth.NewADSREnvelope(
+		waveform,
+		duration,
+		float64(envelope.Attack)/100.0,
+		float64(envelope.Decay)/100.0,
+		float64(envelope.Sustain)/100.0,
+		float64(envelope.Release)/100.0,
+	)
 
 	// Take only 0.3 seconds of the generated tone
-	duration := beep.SampleRate(44100).N(time.Millisecond * 300)
-	limited := beep.Take(duration, gen)
+
+	limited := beep.Take(duration, adsr)
 
 	// Clear previous sound and play the new note
 	speaker.Clear()
@@ -469,6 +507,10 @@ func (m model) View() string {
 	modeStr := "NORMAL"
 	if m.mode == JumpMode {
 		modeStr = fmt.Sprintf("JUMP: %s", m.jumpInput)
+	} else if m.mode == EnvelopeEditMode {
+		modeStr = "ENVELOPE"
+	} else if m.mode == WaveformEditMode {
+		modeStr = "WAVEFORM"
 	}
 	playStatus := "STOPPED"
 	if m.isPlaying {
@@ -485,7 +527,7 @@ func (m model) View() string {
 	body := lipgloss.JoinVertical(lipgloss.Left, instView, trackView)
 
 	// Footer help
-	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | W: Waveform | E: Envelope | Space: Play/Pause | Q: Quit")
+	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | W: Waveform (↑↓←→ select) | E: Envelope (↑↓ select, ←→ adjust) | T: Track | Space: Play/Pause | Q: Quit")
 
 	return header.String() + body + "\n" + footer
 }
@@ -565,22 +607,41 @@ func (m model) waveformView() string {
 	return waveformView.String()
 }
 
+// percentageToKnob converts a percentage value to a knob character
+func percentageToKnob(percentage int) string {
+	if percentage <= 25 {
+		return "◔" // Quarter filled
+	} else if percentage <= 50 {
+		return "◗" // Half filled
+	} else if percentage <= 75 {
+		return "◕" // Three-quarter filled
+	} else {
+		return "●" // Fully filled
+	}
+}
+
+// renderKnobLine renders a single knob line with label, knob, and percentage
+func (m model) renderKnobLine(field EnvelopeEditField, value int, label string) string {
+	knobChar := percentageToKnob(value)
+	isSelected := m.mode == EnvelopeEditMode && m.envelopeField == field
+
+	knobDisplay := fmt.Sprintf("%s: %s %3d%%", label, knobChar, value)
+
+	if isSelected {
+		return selectedStyle.Render(knobDisplay)
+	}
+	return knobDisplay
+}
+
 func (m model) envelopeView() string {
 	// Show envelope
 	env := m.pattern.tracks[m.cursorTrack].instrument.Envelope
 	envText := "ADSR Envelope:\n"
 
-	if m.mode == EnvelopeEditMode {
-		envText += fmt.Sprintf("A: %s ms\n", m.envelopeFieldValue(EnvelopeAttack))
-		envText += fmt.Sprintf("D: %s ms\n", m.envelopeFieldValue(EnvelopeDecay))
-		envText += fmt.Sprintf("S: %s %%\n", m.envelopeFieldValue(EnvelopeSustain))
-		envText += fmt.Sprintf("R: %s ms", m.envelopeFieldValue(EnvelopeRelease))
-	} else {
-		envText += fmt.Sprintf("A: %3d ms\n", env.Attack)
-		envText += fmt.Sprintf("D: %3d ms\n", env.Decay)
-		envText += fmt.Sprintf("S: %3d %%\n", env.Sustain)
-		envText += fmt.Sprintf("R: %3d ms", env.Release)
-	}
+	envText += m.renderKnobLine(EnvelopeAttack, env.Attack, "A") + "\n"
+	envText += m.renderKnobLine(EnvelopeDecay, env.Decay, "D") + "\n"
+	envText += m.renderKnobLine(EnvelopeSustain, env.Sustain, "S") + "\n"
+	envText += m.renderKnobLine(EnvelopeRelease, env.Release, "R")
 
 	return envText
 }
@@ -667,6 +728,7 @@ func main() {
 		audio.Triangle,
 		audio.Sawtooth,
 		audio.SawtoothReverse,
+		audio.Noise,
 	}
 
 	// Create pattern with 8 tracks and 64 rows
@@ -688,7 +750,6 @@ func main() {
 			playbackRow:       0,
 			envelopeField:     EnvelopeAttack,
 			envelopeEditInput: "",
-			sampleRate:        44100,
 		},
 		tea.WithAltScreen(),
 	)
@@ -741,5 +802,42 @@ func (m *model) saveEnvelopeValue(input string) {
 		env.Sustain = value
 	case EnvelopeRelease:
 		env.Release = value
+	}
+}
+
+// adjustEnvelopeValue adjusts the current envelope field by a delta value
+func (m *model) adjustEnvelopeValue(delta int) {
+	env := &m.pattern.tracks[m.cursorTrack].instrument.Envelope
+	var currentValue *int
+
+	switch m.envelopeField {
+	case EnvelopeAttack:
+		currentValue = &env.Attack
+	case EnvelopeDecay:
+		currentValue = &env.Decay
+	case EnvelopeSustain:
+		currentValue = &env.Sustain
+	case EnvelopeRelease:
+		currentValue = &env.Release
+	}
+
+	if currentValue != nil {
+		newValue := *currentValue + delta
+
+		// For A, D, R: prevent increases that would make A+D+R exceed 100
+		if m.envelopeField != EnvelopeSustain && delta > 0 {
+			otherSum := env.Attack + env.Decay + env.Release - *currentValue
+			if newValue+otherSum > 100 {
+				return // block the increase
+			}
+		}
+
+		// Clamp value between 0 and 100
+		if newValue < 0 {
+			newValue = 0
+		} else if newValue > 100 {
+			newValue = 100
+		}
+		*currentValue = newValue
 	}
 }
