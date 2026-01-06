@@ -760,51 +760,6 @@ func main() {
 	}
 }
 
-// envelopeFieldValue returns the string representation of an envelope field being edited
-func (m model) envelopeFieldValue(field EnvelopeEditField) string {
-	if m.mode == EnvelopeEditMode && m.envelopeField == field {
-		return m.envelopeEditInput
-	}
-
-	env := m.pattern.tracks[m.cursorTrack].instrument.Envelope
-	switch field {
-	case EnvelopeAttack:
-		return fmt.Sprintf("%d", env.Attack)
-	case EnvelopeDecay:
-		return fmt.Sprintf("%d", env.Decay)
-	case EnvelopeSustain:
-		return fmt.Sprintf("%d", env.Sustain)
-	case EnvelopeRelease:
-		return fmt.Sprintf("%d", env.Release)
-	}
-	return ""
-}
-
-// saveEnvelopeValue saves the current envelope edit value to the track instrument
-func (m *model) saveEnvelopeValue(input string) {
-	if input == "" {
-		return
-	}
-
-	value := 0
-	fmt.Sscanf(input, "%d", &value)
-
-	env := &m.pattern.tracks[m.cursorTrack].instrument.Envelope
-	switch m.envelopeField {
-	case EnvelopeAttack:
-		env.Attack = value
-	case EnvelopeDecay:
-		env.Decay = value
-	case EnvelopeSustain:
-		if value > 100 {
-			value = 100
-		}
-		env.Sustain = value
-	case EnvelopeRelease:
-		env.Release = value
-	}
-}
-
 // adjustEnvelopeValue adjusts the current envelope field by a delta value
 func (m *model) adjustEnvelopeValue(delta int) {
 	env := &m.pattern.tracks[m.cursorTrack].instrument.Envelope

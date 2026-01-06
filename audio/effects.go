@@ -1,7 +1,6 @@
 package audio
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/gopxl/beep/v2"
@@ -40,7 +39,6 @@ func (s *Synth) NewADSREnvelope(streamer beep.Streamer, samples int, attack, dec
 	releaseSamples := int(release * float64(samples))
 	sustainSamples := samples - (attackSamples + decaySamples + releaseSamples)
 
-	fmt.Printf("sample counts:\n%d attack\n%d decay\n%d sustain\n%d release\n", attackSamples, decaySamples, sustainSamples, releaseSamples)
 	return &envelopeGenerator{
 		samples:  samples,
 		idx:      -1,
@@ -65,48 +63,36 @@ func (e *envelopeGenerator) nextSample() {
 			e.currentStage = StageAttack
 			e.currentLevel = 0.0001 // TODO: Extract mininimum level constant
 			e.currentMultiplier = calculateMultiplier(e.currentLevel, 1, e.attackSamples)
-
-			fmt.Printf("Entering attack stage at sample %d/%d with level %f and multiplier %f\n", e.idx, e.samples, e.currentLevel, e.currentMultiplier)
 		}
 	} else if e.idx < e.attackSamples+e.decaySamples {
 		if e.currentStage != StageDecay {
 			e.currentStage = StageDecay
 			e.currentLevel = 1.0
 			e.currentMultiplier = calculateMultiplier(e.currentLevel, e.sustain, e.decaySamples)
-
-			fmt.Printf("Entering decay stage at sample %d/%d with level %f and multiplier %f\n", e.idx, e.samples, e.currentLevel, e.currentMultiplier)
 		}
 	} else if e.idx < e.attackSamples+e.decaySamples+e.sustainSamples {
 		if e.currentStage != StageSustain {
 			e.currentStage = StageSustain
 			e.currentLevel = e.sustain
 			e.currentMultiplier = 1.0
-
-			fmt.Printf("Entering sustain stage at sample %d/%d with level %f and multiplier %f\n", e.idx, e.samples, e.currentLevel, e.currentMultiplier)
 		}
 	} else if e.idx < e.attackSamples+e.decaySamples+e.sustainSamples+e.releaseSamples {
 		if e.currentStage != StageRelease {
 			e.currentStage = StageRelease
 			e.currentLevel = e.sustain
 			e.currentMultiplier = calculateMultiplier(e.currentLevel, 0.0001, e.releaseSamples)
-
-			fmt.Printf("Entering release stage at sample %d/%d with level %f and multiplier %f\n", e.idx, e.samples, e.currentLevel, e.currentMultiplier)
 		}
 	} else {
 		if e.currentStage != StageOff {
 			e.currentStage = StageOff
 			e.currentLevel = 0.0
 			e.currentMultiplier = 1.0
-
-			fmt.Printf("Entering off stage at sample %d/%d with level %f and multiplier %f\n", e.idx, e.samples, e.currentLevel, e.currentMultiplier)
 		}
 	}
 }
 
 func (e *envelopeGenerator) Stream(samples [][2]float64) (n int, ok bool) {
 	n, ok = e.Streamer.Stream(samples)
-
-	fmt.Printf("Received %d samples in batch\n", len(samples))
 
 	// Process samples from streamer in context of a note
 	for i := 0; i < n; i++ {
