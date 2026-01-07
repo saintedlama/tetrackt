@@ -32,7 +32,7 @@ type envelopeGenerator struct {
 	releaseSamples int
 }
 
-// NewWaveform creates a beep.Streamer that generates the specified waveform
+// NewADSREnvelope creates a beep.Streamer that applies ADSR envelope to the provided streamer
 func (s *Synth) NewADSREnvelope(streamer beep.Streamer, samples int, attack, decay, sustain, release float64) beep.Streamer {
 	attackSamples := int(attack * float64(samples))
 	decaySamples := int(decay * float64(samples))

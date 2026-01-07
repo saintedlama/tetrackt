@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -17,27 +19,27 @@ import (
 
 // Envelope represents ADSR envelope parameters
 type Envelope struct {
-	Attack  int // 0-100 (percentage of samples)
-	Decay   int // 0-100 (percentage of samples)
-	Sustain int // 0-100 (percentage of peak)
-	Release int // 0-100 (percentage of samples)
+	Attack  ui.PercentageKnob
+	Decay   ui.PercentageKnob
+	Sustain ui.PercentageKnob
+	Release ui.PercentageKnob
 }
 
-// Instrument represents a complete instrument with waveform and envelope
+// Instrument represents a complete instrument with oscilator and envelope
 type Instrument struct {
-	Waveform audio.WaveformType
-	Envelope Envelope
+	Oscilator audio.OscilatorType
+	Envelope  Envelope
 }
 
 // NewInstrument creates a new instrument with default envelope
-func NewInstrument(waveform audio.WaveformType) *Instrument {
+func NewInstrument(oscilator audio.OscilatorType) *Instrument {
 	return &Instrument{
-		Waveform: waveform,
+		Oscilator: oscilator,
 		Envelope: Envelope{
-			Attack:  0,
-			Decay:   0,
-			Sustain: 100,
-			Release: 0,
+			Attack:  ui.NewPercentageKnob("A", 0.0, false, defaultStyle, selectedStyle),
+			Decay:   ui.NewPercentageKnob("D", 0.0, false, defaultStyle, selectedStyle),
+			Sustain: ui.NewPercentageKnob("S", 1.0, false, defaultStyle, selectedStyle),
+			Release: ui.NewPercentageKnob("R", 0.0, false, defaultStyle, selectedStyle),
 		},
 	}
 }
@@ -95,7 +97,7 @@ const (
 	TrackMode InputMode = iota
 	JumpMode
 	EnvelopeEditMode
-	WaveformEditMode
+	OscilatorEditMode
 )
 
 // EnvelopeEditField represents which envelope parameter is being edited
@@ -138,6 +140,8 @@ var (
 			Background(lipgloss.Color("126")).
 			Bold(true)
 
+	defaultStyle = lipgloss.NewStyle()
+
 	cellStyle = lipgloss.NewStyle().
 			Padding(0, 1)
 
@@ -153,51 +157,91 @@ var (
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("240")).
 				Padding(1, 2)
+
+	activePanelBorderStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("86")).
+				Bold(true).
+				Padding(1, 2)
+
+	modalBorderStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("214")).
+				Padding(1, 2)
+)
+
+const (
+	minOctave = 1
+	maxOctave = 8
 )
 
 // model represents the application state
 type model struct {
-	width             int
-	height            int
-	synth             *audio.Synth
-	waveform          audio.WaveformType
-	waveformList      []audio.WaveformType
-	waveformIdx       int
-	pattern           *Pattern
-	cursorTrack       int
-	cursorRow         int
-	viewportRow       int // Top row visible in the viewport
-	mode              InputMode
-	jumpInput         string
-	isPlaying         bool
-	playbackRow       int
-	envelopeField     EnvelopeEditField
-	envelopeEditInput string
+	width           int
+	height          int
+	synth           *audio.Synth
+	oscilator       audio.OscilatorType
+	oscilatorList   []audio.OscilatorType
+	oscilatorIdx    int
+	pattern         *Pattern
+	cursorTrack     int
+	cursorRow       int
+	viewportRow     int // Top row visible in the viewport
+	mode            InputMode
+	jumpInput       string
+	isPlaying       bool
+	playbackRow     int
+	envelopeField   EnvelopeEditField
+	showPresetModal bool
+	presetIndex     int
+	octave          int
 }
 
 // tickMsg is sent to advance playback
 type tickMsg time.Time
 
-// noteFrequencies maps keys to frequencies for C major scale (C4 to B4)
-var noteFrequencies = map[string]float64{
-	"1": 261.63, // C4
-	"2": 293.66, // D4
-	"3": 329.63, // E4
-	"4": 349.23, // F4
-	"5": 392.00, // G4
-	"6": 440.00, // A4
-	"7": 493.88, // B4
+// Base note data (octave-agnostic)
+var noteBaseFrequencies = map[string]float64{
+	"C": 261.63, // C4
+	"D": 293.66, // D4
+	"E": 329.63, // E4
+	"F": 349.23, // F4
+	"G": 392.00, // G4
+	"A": 440.00, // A4
+	"B": 493.88, // B4
 }
 
-// noteNames maps keys to note names for display in track editor
-var noteNames = map[string]string{
-	"1": "C-4",
-	"2": "D-4",
-	"3": "E-4",
-	"4": "F-4",
-	"5": "G-4",
-	"6": "A-4",
-	"7": "B-4",
+var noteKeyToName = map[string]string{
+	"1": "C",
+	"2": "D",
+	"3": "E",
+	"4": "F",
+	"5": "G",
+	"6": "A",
+	"7": "B",
+}
+
+type envelopePreset struct {
+	Name    string
+	Type    string
+	Attack  float64
+	Decay   float64
+	Sustain float64
+	Release float64
+}
+
+var envelopePresets = []envelopePreset{
+	{Name: "Off", Type: "Utility", Attack: 0.00, Decay: 0.00, Sustain: 1.00, Release: 0.00},
+	{Name: "Pluck Clean", Type: "Pluck", Attack: 0.01, Decay: 0.12, Sustain: 0.00, Release: 0.10},
+	{Name: "Soft Pad", Type: "Pad", Attack: 0.30, Decay: 0.30, Sustain: 0.80, Release: 0.35},
+	{Name: "Bright Lead", Type: "Lead", Attack: 0.02, Decay: 0.10, Sustain: 0.60, Release: 0.12},
+	{Name: "Organ Hold", Type: "Organ", Attack: 0.00, Decay: 0.00, Sustain: 1.00, Release: 0.08},
+	{Name: "Perc Hit", Type: "Percussion", Attack: 0.00, Decay: 0.18, Sustain: 0.00, Release: 0.20},
+	{Name: "Bass Pluck", Type: "Bass", Attack: 0.01, Decay: 0.15, Sustain: 0.10, Release: 0.08},
+	{Name: "Piano", Type: "Keys", Attack: 0.02, Decay: 0.40, Sustain: 0.20, Release: 0.15},
+	{Name: "Brass", Type: "Brass", Attack: 0.12, Decay: 0.25, Sustain: 0.70, Release: 0.20},
+	{Name: "Warm Strings", Type: "Strings", Attack: 0.50, Decay: 0.20, Sustain: 0.80, Release: 0.25},
+	{Name: "Slow Swell", Type: "Pad", Attack: 0.65, Decay: 0.10, Sustain: 0.90, Release: 0.20},
 }
 
 // Init initializes the application
@@ -218,7 +262,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global mode switching
 		switch msg.String() {
 		case "w":
-			m.mode = WaveformEditMode
+			m.mode = OscilatorEditMode
 			return m, nil
 		case "t":
 			m.mode = TrackMode
@@ -226,23 +270,80 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "e":
 			m.mode = EnvelopeEditMode
 			return m, nil
+		case "+":
+			if m.octave < maxOctave {
+				m.octave++
+			}
+			return m, nil
+		case "-":
+			if m.octave > minOctave {
+				m.octave--
+			}
+			return m, nil
+		case "tab":
+			// Cycle through Oscilator, Envelope, Track modes
+			switch m.mode {
+			case OscilatorEditMode:
+				m.mode = EnvelopeEditMode
+			case EnvelopeEditMode:
+				m.mode = TrackMode
+			default:
+				m.mode = OscilatorEditMode
+			}
+			return m, nil
+		case "shift+tab":
+			// Reverse cycle through Oscilator, Envelope, Track modes
+			switch m.mode {
+			case OscilatorEditMode:
+				m.mode = TrackMode
+			case EnvelopeEditMode:
+				m.mode = OscilatorEditMode
+			default:
+				m.mode = EnvelopeEditMode
+			}
+			return m, nil
 		}
 
 		// Global note playing (available in any mode)
-		if freq, ok := noteFrequencies[msg.String()]; ok {
+		if base, ok := noteKeyToName[msg.String()]; ok {
+			noteName := fmt.Sprintf("%s-%d", base, m.octave)
+			freq := noteFrequency(base, m.octave)
 			m.playNote(freq)
 			// Also set note in track if in track mode
 			if m.mode == TrackMode {
-				if noteName, ok := noteNames[msg.String()]; ok {
-					m.pattern.tracks[m.cursorTrack].rows[m.cursorRow].note = noteName
-				}
+				m.pattern.tracks[m.cursorTrack].rows[m.cursorRow].note = noteName
 			}
 			return m, nil
 		}
 
 		// Handle envelope edit mode
 		if m.mode == EnvelopeEditMode {
+			// If preset modal is open, handle modal navigation
+			if m.showPresetModal {
+				switch msg.String() {
+				case "up":
+					m.presetIndex = (m.presetIndex - 1 + len(envelopePresets)) % len(envelopePresets)
+				case "down":
+					m.presetIndex = (m.presetIndex + 1) % len(envelopePresets)
+				case "enter":
+					preset := envelopePresets[m.presetIndex]
+					env := &m.pattern.tracks[m.cursorTrack].instrument.Envelope
+					env.Attack.Value = preset.Attack
+					env.Decay.Value = preset.Decay
+					env.Sustain.Value = preset.Sustain
+					env.Release.Value = preset.Release
+					m.showPresetModal = false
+				case "esc", "p":
+					m.showPresetModal = false
+				}
+				return m, nil
+			}
+
 			switch msg.String() {
+			case "p":
+				m.showPresetModal = true
+				m.presetIndex = 0
+				return m, nil
 			case "up":
 				// Move to previous envelope field
 				m.envelopeField = (m.envelopeField - 1 + 4) % 4
@@ -250,36 +351,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Move to next envelope field
 				m.envelopeField = (m.envelopeField + 1) % 4
 			case "left":
-				// Decrease value by 1
-				m.adjustEnvelopeValue(-1)
+				// Decrease value by 1%
+				m.adjustEnvelopeValue(-0.01)
 			case "shift+left":
-				// Decrease value by 10
-				m.adjustEnvelopeValue(-10)
+				// Decrease value by 10%
+				m.adjustEnvelopeValue(-0.10)
 			case "right":
-				// Increase value by 1
-				m.adjustEnvelopeValue(1)
+				// Increase value by 1%
+				m.adjustEnvelopeValue(0.01)
 			case "shift+right":
-				// Increase value by 10
-				m.adjustEnvelopeValue(10)
+				// Increase value by 10%
+				m.adjustEnvelopeValue(0.10)
 			case "esc":
 				m.mode = TrackMode
 			}
 			return m, nil
 		}
 
-		// Handle waveform edit mode
-		if m.mode == WaveformEditMode {
+		// Handle oscilator edit mode
+		if m.mode == OscilatorEditMode {
 			switch msg.String() {
 			case "up", "left":
-				// Move to previous waveform
-				m.waveformIdx = (m.waveformIdx - 1 + len(m.waveformList)) % len(m.waveformList)
-				m.waveform = m.waveformList[m.waveformIdx]
-				m.setTrackInstrument(m.cursorTrack, m.waveform)
+				// Move to previous oscilator
+				m.oscilatorIdx = (m.oscilatorIdx - 1 + len(m.oscilatorList)) % len(m.oscilatorList)
+				m.oscilator = m.oscilatorList[m.oscilatorIdx]
+				m.setTrackInstrument(m.cursorTrack, m.oscilator)
 			case "down", "right":
-				// Move to next waveform
-				m.waveformIdx = (m.waveformIdx + 1) % len(m.waveformList)
-				m.waveform = m.waveformList[m.waveformIdx]
-				m.setTrackInstrument(m.cursorTrack, m.waveform)
+				// Move to next oscilator
+				m.oscilatorIdx = (m.oscilatorIdx + 1) % len(m.oscilatorList)
+				m.oscilator = m.oscilatorList[m.oscilatorIdx]
+				m.setTrackInstrument(m.cursorTrack, m.oscilator)
 			case "esc":
 				m.mode = TrackMode
 			}
@@ -294,7 +395,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if trackNum, err := strconv.Atoi(m.jumpInput); err == nil {
 					if trackNum >= 0 && trackNum < m.pattern.numTracks {
 						m.cursorTrack = trackNum
-						m.waveform = m.ensureTrackInstrument(m.cursorTrack)
+						m.oscilator = m.ensureTrackInstrument(m.cursorTrack)
 					}
 				}
 				m.mode = TrackMode
@@ -334,18 +435,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Enter envelope edit mode
 			m.mode = EnvelopeEditMode
 			m.envelopeField = EnvelopeAttack
-			m.envelopeEditInput = ""
 		case "left":
 			// Move cursor left (previous track)
 			if m.cursorTrack > 0 {
 				m.cursorTrack--
-				m.waveform = m.ensureTrackInstrument(m.cursorTrack)
+				m.oscilator = m.ensureTrackInstrument(m.cursorTrack)
 			}
 		case "right":
 			// Move cursor right (next track)
 			if m.cursorTrack < m.pattern.numTracks-1 {
 				m.cursorTrack++
-				m.waveform = m.ensureTrackInstrument(m.cursorTrack)
+				m.oscilator = m.ensureTrackInstrument(m.cursorTrack)
 			}
 		case "up":
 			// Move cursor up (previous row)
@@ -434,7 +534,7 @@ func (m *model) playRowNotes(row int) {
 		freq := m.noteToFrequency(trackRow.note)
 		if freq > 0 {
 			inst := m.ensureTrackInstrument(trackIdx)
-			gen := m.synth.NewWaveform(inst, freq)
+			gen := m.synth.NewOscilator(inst, freq)
 			generators = append(generators, gen)
 		}
 	}
@@ -450,29 +550,35 @@ func (m *model) playRowNotes(row int) {
 	}
 }
 
-// noteToFrequency converts a note name to frequency
-func (m *model) noteToFrequency(note string) float64 {
-	// Map note names to frequencies
-	noteFreqMap := map[string]float64{
-		"C-4": 261.63,
-		"D-4": 293.66,
-		"E-4": 329.63,
-		"F-4": 349.23,
-		"G-4": 392.00,
-		"A-4": 440.00,
-		"B-4": 493.88,
+// noteFrequency returns the frequency for a base note name (C..B) at an octave.
+func noteFrequency(base string, octave int) float64 {
+	baseFreq, ok := noteBaseFrequencies[base]
+	if !ok {
+		return 0
 	}
-
-	if freq, ok := noteFreqMap[note]; ok {
-		return freq
-	}
-	return 0
+	// Reference octave is 4 in noteBaseFrequencies
+	offset := float64(octave - 4)
+	return baseFreq * math.Pow(2, offset)
 }
 
-// playNote plays a note at the given frequency using the current waveform
+// noteToFrequency converts a note name like "C-4" to frequency.
+func (m *model) noteToFrequency(note string) float64 {
+	parts := strings.Split(note, "-")
+	if len(parts) != 2 {
+		return 0
+	}
+	base := parts[0]
+	oct, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0
+	}
+	return noteFrequency(base, oct)
+}
+
+// playNote plays a note at the given frequency using the current oscilator
 func (m *model) playNote(frequency float64) {
 	inst := m.ensureTrackInstrument(m.cursorTrack)
-	waveform := m.synth.NewWaveform(inst, frequency)
+	oscilator := m.synth.NewOscilator(inst, frequency)
 
 	// TODO: Calculate the number of samples for the note duration
 	envelope := m.pattern.tracks[m.cursorTrack].instrument.Envelope
@@ -480,12 +586,12 @@ func (m *model) playNote(frequency float64) {
 	duration := m.synth.SampleRate.N(time.Millisecond * 300)
 
 	adsr := m.synth.NewADSREnvelope(
-		waveform,
+		oscilator,
 		duration,
-		float64(envelope.Attack)/100.0,
-		float64(envelope.Decay)/100.0,
-		float64(envelope.Sustain)/100.0,
-		float64(envelope.Release)/100.0,
+		envelope.Attack.Value,
+		envelope.Decay.Value,
+		envelope.Sustain.Value,
+		envelope.Release.Value,
 	)
 
 	// Take only 0.3 seconds of the generated tone
@@ -504,30 +610,47 @@ func (m model) View() string {
 	header.WriteString(titleStyle.Render("🎵 Tetrackt - Music Tracker"))
 	header.WriteString("\n")
 
-	modeStr := "NORMAL"
-	if m.mode == JumpMode {
+	modeStr := "TRACK"
+	switch m.mode {
+	case JumpMode:
 		modeStr = fmt.Sprintf("JUMP: %s", m.jumpInput)
-	} else if m.mode == EnvelopeEditMode {
+	case EnvelopeEditMode:
 		modeStr = "ENVELOPE"
-	} else if m.mode == WaveformEditMode {
-		modeStr = "WAVEFORM"
+	case OscilatorEditMode:
+		modeStr = "OSCILATOR"
 	}
 	playStatus := "STOPPED"
 	if m.isPlaying {
 		playStatus = fmt.Sprintf("PLAYING (Row %d)", m.playbackRow)
 	}
 	currentInst := m.trackInstrumentValue(m.cursorTrack)
-	header.WriteString(infoStyle.Render(fmt.Sprintf("Waveform: %s | Instrument: %s | Mode: %s | %s | Track: %d | Row: %d",
-		m.waveform, currentInst, modeStr, playStatus, m.cursorTrack, m.cursorRow)))
+	header.WriteString(infoStyle.Render(fmt.Sprintf("Oscilator: %s | Instrument: %s | Mode: %s | %s | Track: %d | Row: %d | Octave: %d",
+		m.oscilator, currentInst, modeStr, playStatus, m.cursorTrack, m.cursorRow, m.octave)))
 	header.WriteString("\n\n")
 
 	instView := m.synthView()
 	trackView := m.trackView()
 
-	body := lipgloss.JoinVertical(lipgloss.Left, instView, trackView)
+	// Apply border to track view with conditional highlighting
+	trackBorder := panelBorderStyle
+	if m.mode == TrackMode {
+		trackBorder = activePanelBorderStyle
+	}
+	trackViewWithBorder := trackBorder.Render(trackView)
+
+	body := lipgloss.JoinVertical(lipgloss.Left, instView, trackViewWithBorder)
+
+	// Optional modal overlay for envelope presets
+	if m.showPresetModal {
+		modal := m.renderPresetModal()
+		width := lipgloss.Width(modal)
+		height := lipgloss.Height(modal)
+
+		body = lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, modal, lipgloss.WithWhitespaceChars("TETRACKT"), lipgloss.WithWhitespaceBackground(lipgloss.Color("236")))
+	}
 
 	// Footer help
-	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | W: Waveform (↑↓←→ select) | E: Envelope (↑↓ select, ←→ adjust) | T: Track | Space: Play/Pause | Q: Quit")
+	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | +/-: Octave | W: Oscilator (↑↓←→ select) | E: Envelope (↑↓ select, ←→ adjust) | T: Track | Space: Play/Pause | Q: Quit")
 
 	return header.String() + body + "\n" + footer
 }
@@ -539,11 +662,11 @@ func (m model) trackView() string {
 	// Track headers
 	tracks.WriteString("    ") // Row number space
 	for i := 0; i < m.pattern.numTracks; i++ {
-		trackHeader := fmt.Sprintf("Track %d", i)
+		trackHeader := fmt.Sprintf("Track %d", i+1)
 		if i == m.cursorTrack {
 			trackHeader = headerStyle.Render(trackHeader)
 		} else {
-			trackHeader = headerStyle.Copy().Foreground(lipgloss.Color("244")).Render(trackHeader)
+			trackHeader = headerStyle.Foreground(lipgloss.Color("244")).Render(trackHeader)
 		}
 		tracks.WriteString(trackHeader)
 		tracks.WriteString("  ")
@@ -590,69 +713,81 @@ func (m model) trackView() string {
 	return tracks.String()
 }
 
-func (m model) waveformView() string {
-	var waveformView strings.Builder
-	waveformView.WriteString("Waveform:\n")
+func (m model) oscilatorView() string {
+	var oscilatorView strings.Builder
+	oscilatorView.WriteString("Oscilator:\n")
 
 	currentInst := m.trackInstrumentValue(m.cursorTrack)
-	for _, wf := range m.waveformList {
+	for _, wf := range m.oscilatorList {
 		if wf == currentInst {
-			waveformView.WriteString(selectedStyle.Render(fmt.Sprintf("%s", wf)))
-			waveformView.WriteString("\n")
+			oscilatorView.WriteString(selectedStyle.Render(fmt.Sprintf("%s", wf)))
+			oscilatorView.WriteString("\n")
 		} else {
-			waveformView.WriteString(fmt.Sprintf("%s\n", wf))
+			oscilatorView.WriteString(fmt.Sprintf("%s\n", wf))
 		}
 	}
 
-	return waveformView.String()
-}
-
-// percentageToKnob converts a percentage value to a knob character
-func percentageToKnob(percentage int) string {
-	if percentage <= 25 {
-		return "◔" // Quarter filled
-	} else if percentage <= 50 {
-		return "◗" // Half filled
-	} else if percentage <= 75 {
-		return "◕" // Three-quarter filled
-	} else {
-		return "●" // Fully filled
-	}
-}
-
-// renderKnobLine renders a single knob line with label, knob, and percentage
-func (m model) renderKnobLine(field EnvelopeEditField, value int, label string) string {
-	knobChar := percentageToKnob(value)
-	isSelected := m.mode == EnvelopeEditMode && m.envelopeField == field
-
-	knobDisplay := fmt.Sprintf("%s: %s %3d%%", label, knobChar, value)
-
-	if isSelected {
-		return selectedStyle.Render(knobDisplay)
-	}
-	return knobDisplay
+	return oscilatorView.String()
 }
 
 func (m model) envelopeView() string {
 	// Show envelope
 	env := m.pattern.tracks[m.cursorTrack].instrument.Envelope
-	envText := "ADSR Envelope:\n"
 
-	envText += m.renderKnobLine(EnvelopeAttack, env.Attack, "A") + "\n"
-	envText += m.renderKnobLine(EnvelopeDecay, env.Decay, "D") + "\n"
-	envText += m.renderKnobLine(EnvelopeSustain, env.Sustain, "S") + "\n"
-	envText += m.renderKnobLine(EnvelopeRelease, env.Release, "R")
+	envView := strings.Builder{}
+	envView.WriteString("ADSR Envelope:\n")
 
-	return envText
+	envView.WriteString(env.Attack.View() + "\n")
+	envView.WriteString(env.Decay.View() + "\n")
+	envView.WriteString(env.Sustain.View() + "\n")
+	envView.WriteString(env.Release.View() + "\n")
+
+	return envView.String()
+}
+
+func (m model) renderPresetModal() string {
+	var b strings.Builder
+	b.WriteString("Envelope Presets (Enter to apply, Esc to cancel)\n")
+
+	for idx, p := range envelopePresets {
+		line := fmt.Sprintf("%s  A:%3d%% D:%3d%% S:%3d%% R:%3d%%",
+			p.Name,
+			int(p.Attack*100),
+			int(p.Decay*100),
+			int(p.Sustain*100),
+			int(p.Release*100),
+		)
+
+		if idx == m.presetIndex {
+			line = selectedStyle.Render(line)
+		} else {
+			line = defaultStyle.Render(line)
+		}
+
+		b.WriteString(line + "\n")
+	}
+
+	return modalBorderStyle.Render(b.String())
 }
 
 func (m model) synthView() string {
-	waveformView := m.waveformView()
+	oscilatorView := m.oscilatorView()
 	envelopeView := m.envelopeView()
 
+	// Apply active border to the current mode panel
+	oscilatorBorder := panelBorderStyle
+	envelopeBorder := panelBorderStyle
+
+	switch m.mode {
+	case OscilatorEditMode:
+		oscilatorBorder = activePanelBorderStyle
+	case EnvelopeEditMode:
+		envelopeBorder = activePanelBorderStyle
+	}
+
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		panelBorderStyle.Render(waveformView),
-		panelBorderStyle.Render(envelopeView),
+		oscilatorBorder.Render(oscilatorView),
+		envelopeBorder.Render(envelopeView),
 	)
 }
 
@@ -684,16 +819,16 @@ func formatVolume(volume int) string {
 	return fmt.Sprintf("%02d", volume)
 }
 
-// setTrackInstrument assigns an instrument waveform to a track
-func (m *model) setTrackInstrument(trackIdx int, wf audio.WaveformType) {
+// setTrackInstrument assigns an instrument oscilator to a track
+func (m *model) setTrackInstrument(trackIdx int, osc audio.OscilatorType) {
 	if trackIdx < 0 || trackIdx >= m.pattern.numTracks {
 		return
 	}
-	m.pattern.tracks[trackIdx].instrument.Waveform = wf
+	m.pattern.tracks[trackIdx].instrument.Oscilator = osc
 }
 
-// ensureTrackInstrument returns the track instrument waveform, defaulting to sine
-func (m *model) ensureTrackInstrument(trackIdx int) audio.WaveformType {
+// ensureTrackInstrument returns the track instrument oscilator, defaulting to sine
+func (m *model) ensureTrackInstrument(trackIdx int) audio.OscilatorType {
 	if trackIdx < 0 || trackIdx >= m.pattern.numTracks {
 		return audio.Sine
 	}
@@ -701,11 +836,11 @@ func (m *model) ensureTrackInstrument(trackIdx int) audio.WaveformType {
 	if track.instrument == nil {
 		track.instrument = NewInstrument(audio.Sine)
 	}
-	return track.instrument.Waveform
+	return track.instrument.Oscilator
 }
 
-// trackInstrumentValue returns the track instrument waveform without mutating
-func (m model) trackInstrumentValue(trackIdx int) audio.WaveformType {
+// trackInstrumentValue returns the track instrument oscilator without mutating
+func (m model) trackInstrumentValue(trackIdx int) audio.OscilatorType {
 	if trackIdx < 0 || trackIdx >= m.pattern.numTracks {
 		return audio.Sine
 	}
@@ -713,7 +848,7 @@ func (m model) trackInstrumentValue(trackIdx int) audio.WaveformType {
 	if track.instrument == nil {
 		return audio.Sine
 	}
-	return track.instrument.Waveform
+	return track.instrument.Oscilator
 }
 
 func main() {
@@ -721,8 +856,8 @@ func main() {
 	sampleRate := beep.SampleRate(44100)
 	synth := audio.NewSynth(sampleRate)
 
-	// Create list of available waveforms
-	waveforms := []audio.WaveformType{
+	// Create list of available oscilators
+	oscilators := []audio.OscilatorType{
 		audio.Sine,
 		audio.Square,
 		audio.Triangle,
@@ -736,20 +871,20 @@ func main() {
 
 	p := tea.NewProgram(
 		model{
-			synth:             synth,
-			waveform:          audio.Sine,
-			waveformList:      waveforms,
-			waveformIdx:       0,
-			pattern:           pattern,
-			cursorTrack:       0,
-			cursorRow:         0,
-			viewportRow:       0,
-			mode:              TrackMode,
-			jumpInput:         "",
-			isPlaying:         false,
-			playbackRow:       0,
-			envelopeField:     EnvelopeAttack,
-			envelopeEditInput: "",
+			synth:         synth,
+			oscilator:     audio.Sine,
+			oscilatorList: oscilators,
+			oscilatorIdx:  0,
+			pattern:       pattern,
+			cursorTrack:   0,
+			cursorRow:     0,
+			viewportRow:   0,
+			mode:          TrackMode,
+			jumpInput:     "",
+			isPlaying:     false,
+			playbackRow:   0,
+			envelopeField: EnvelopeAttack,
+			octave:        4,
 		},
 		tea.WithAltScreen(),
 	)
@@ -761,19 +896,19 @@ func main() {
 }
 
 // adjustEnvelopeValue adjusts the current envelope field by a delta value
-func (m *model) adjustEnvelopeValue(delta int) {
+func (m *model) adjustEnvelopeValue(delta float64) {
 	env := &m.pattern.tracks[m.cursorTrack].instrument.Envelope
-	var currentValue *int
+	var currentValue *float64
 
 	switch m.envelopeField {
 	case EnvelopeAttack:
-		currentValue = &env.Attack
+		currentValue = &env.Attack.Value
 	case EnvelopeDecay:
-		currentValue = &env.Decay
+		currentValue = &env.Decay.Value
 	case EnvelopeSustain:
-		currentValue = &env.Sustain
+		currentValue = &env.Sustain.Value
 	case EnvelopeRelease:
-		currentValue = &env.Release
+		currentValue = &env.Release.Value
 	}
 
 	if currentValue != nil {
@@ -781,7 +916,7 @@ func (m *model) adjustEnvelopeValue(delta int) {
 
 		// For A, D, R: prevent increases that would make A+D+R exceed 100
 		if m.envelopeField != EnvelopeSustain && delta > 0 {
-			otherSum := env.Attack + env.Decay + env.Release - *currentValue
+			otherSum := env.Attack.Value + env.Decay.Value + env.Release.Value - *currentValue
 			if newValue+otherSum > 100 {
 				return // block the increase
 			}
@@ -790,9 +925,10 @@ func (m *model) adjustEnvelopeValue(delta int) {
 		// Clamp value between 0 and 100
 		if newValue < 0 {
 			newValue = 0
-		} else if newValue > 100 {
-			newValue = 100
+		} else if newValue > 1.0 {
+			newValue = 1.0
 		}
+
 		*currentValue = newValue
 	}
 }

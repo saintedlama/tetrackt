@@ -7,21 +7,21 @@ import (
 	"github.com/gopxl/beep/v2"
 )
 
-// WaveformType represents the type of waveform to generate
-type WaveformType string
+// OscilatorType represents the type of oscilator waveform to generate
+type OscilatorType string
 
 const (
-	Sine            WaveformType = "sine"
-	Square          WaveformType = "square"
-	Triangle        WaveformType = "triangle"
-	Sawtooth        WaveformType = "sawtooth"
-	SawtoothReverse WaveformType = "sawtooth_reverse"
-	Noise           WaveformType = "noise"
+	Sine            OscilatorType = "sine"
+	Square          OscilatorType = "square"
+	Triangle        OscilatorType = "triangle"
+	Sawtooth        OscilatorType = "sawtooth"
+	SawtoothReverse OscilatorType = "sawtooth_reverse"
+	Noise           OscilatorType = "noise"
 )
 
-// NewWaveform creates a beep.Streamer that generates the specified waveform
-func (s *Synth) NewWaveform(waveType WaveformType, frequency float64) beep.Streamer {
-	return &waveformGenerator{
+// NewOscilator creates a beep.Streamer that generates the specified oscilator waveform
+func (s *Synth) NewOscilator(waveType OscilatorType, frequency float64) beep.Streamer {
+	return &oscilatorGenerator{
 		waveType:   waveType,
 		frequency:  frequency,
 		sampleRate: s.SampleRate,
@@ -29,16 +29,16 @@ func (s *Synth) NewWaveform(waveType WaveformType, frequency float64) beep.Strea
 	}
 }
 
-// waveformGenerator implements beep.Streamer for waveform generation
-type waveformGenerator struct {
-	waveType   WaveformType
+// oscilatorGenerator implements beep.Streamer for oscilator waveform generation
+type oscilatorGenerator struct {
+	waveType   OscilatorType
 	frequency  float64
 	sampleRate beep.SampleRate
 	phase      float64
 }
 
-// Stream fills the samples buffer with waveform data
-func (g *waveformGenerator) Stream(samples [][2]float64) (n int, ok bool) {
+// Stream fills the samples buffer with oscilator waveform data
+func (g *oscilatorGenerator) Stream(samples [][2]float64) (n int, ok bool) {
 	phaseIncrement := g.frequency / float64(g.sampleRate)
 
 	for i := range samples {
@@ -85,6 +85,6 @@ func (g *waveformGenerator) Stream(samples [][2]float64) (n int, ok bool) {
 }
 
 // Err returns any error that occurred during streaming
-func (g *waveformGenerator) Err() error {
+func (g *oscilatorGenerator) Err() error {
 	return nil
 }
