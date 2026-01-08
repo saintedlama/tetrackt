@@ -10,16 +10,14 @@ type PercentageKnob struct {
 	Label         string
 	Value         float64
 	Selected      bool
-	Style         lipgloss.Style
 	SelectedStyle lipgloss.Style
 }
 
-func NewPercentageKnob(label string, value float64, selected bool, style lipgloss.Style, selectedStyle lipgloss.Style) PercentageKnob {
+func NewPercentageKnob(label string, value float64, selected bool, selectedStyle lipgloss.Style) PercentageKnob {
 	return PercentageKnob{
 		Label:         label,
 		Value:         value,
 		Selected:      selected,
-		Style:         style,
 		SelectedStyle: selectedStyle,
 	}
 }
@@ -32,7 +30,7 @@ func (k PercentageKnob) View() string {
 	if k.Selected {
 		return k.SelectedStyle.Render(knobDisplay)
 	}
-	return k.Style.Render(knobDisplay)
+	return knobDisplay
 }
 
 // percentageToKnob converts a percentage value to a knob character

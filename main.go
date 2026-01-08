@@ -17,37 +17,11 @@ import (
 	"github.com/gopxl/beep/v2/speaker"
 )
 
-// Envelope represents ADSR envelope parameters
-type Envelope struct {
-	Attack  ui.PercentageKnob
-	Decay   ui.PercentageKnob
-	Sustain ui.PercentageKnob
-	Release ui.PercentageKnob
-}
-
-// Instrument represents a complete instrument with oscilator and envelope
-type Instrument struct {
-	Oscilator audio.OscilatorType
-	Envelope  Envelope
-}
-
-// NewInstrument creates a new instrument with default envelope
-func NewInstrument(oscilator audio.OscilatorType) *Instrument {
-	return &Instrument{
-		Oscilator: oscilator,
-		Envelope: Envelope{
-			Attack:  ui.NewPercentageKnob("A", 0.0, false, defaultStyle, selectedStyle),
-			Decay:   ui.NewPercentageKnob("D", 0.0, false, defaultStyle, selectedStyle),
-			Sustain: ui.NewPercentageKnob("S", 1.0, false, defaultStyle, selectedStyle),
-			Release: ui.NewPercentageKnob("R", 0.0, false, defaultStyle, selectedStyle),
-		},
-	}
-}
-
 // Track represents a single track in the pattern
 type Track struct {
 	number     int
-	instrument *Instrument
+	oscillator audio.OscillatorType
+	envelope   audio.Envelope
 	rows       []TrackRow
 }
 
@@ -71,7 +45,8 @@ func NewPattern(numTracks, numRows int) *Pattern {
 	for i := range numTracks {
 		tracks[i] = Track{
 			number:     i,
-			instrument: NewInstrument(audio.Sine),
+			oscillator: audio.Sine,
+			envelope:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
 			rows:       make([]TrackRow, numRows),
 		}
 		// Initialize all rows with empty data
@@ -95,19 +70,8 @@ type InputMode int
 
 const (
 	TrackMode InputMode = iota
-	JumpMode
 	EnvelopeEditMode
-	OscilatorEditMode
-)
-
-// EnvelopeEditField represents which envelope parameter is being edited
-type EnvelopeEditField int
-
-const (
-	EnvelopeAttack EnvelopeEditField = iota
-	EnvelopeDecay
-	EnvelopeSustain
-	EnvelopeRelease
+	OscillatorEditMode
 )
 
 var (
@@ -183,9 +147,8 @@ type model struct {
 	width           int
 	height          int
 	synth           *audio.Synth
-	oscilator       audio.OscilatorType
-	oscilatorList   []audio.OscilatorType
-	oscilatorIdx    int
+	oscillator      ui.OscillatorModel
+	envelope        ui.EnvelopeModel
 	pattern         *Pattern
 	cursorTrack     int
 	cursorRow       int
@@ -194,7 +157,6 @@ type model struct {
 	jumpInput       string
 	isPlaying       bool
 	playbackRow     int
-	envelopeField   EnvelopeEditField
 	showPresetModal bool
 	presetIndex     int
 	octave          int
@@ -265,7 +227,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global mode switching
 		switch msg.String() {
 		case "w":
-			m.mode = OscilatorEditMode
+			m.mode = OscillatorEditMode
 			return m, nil
 		case "t":
 			m.mode = TrackMode
@@ -284,23 +246,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "tab":
-			// Cycle through Oscilator, Envelope, Track modes
+			// Cycle through Oscillator, Envelope, Track modes
 			switch m.mode {
-			case OscilatorEditMode:
+			case OscillatorEditMode:
 				m.mode = EnvelopeEditMode
 			case EnvelopeEditMode:
 				m.mode = TrackMode
 			default:
-				m.mode = OscilatorEditMode
+				m.mode = OscillatorEditMode
 			}
 			return m, nil
 		case "shift+tab":
-			// Reverse cycle through Oscilator, Envelope, Track modes
+			// Reverse cycle through Oscillator, Envelope, Track modes
 			switch m.mode {
-			case OscilatorEditMode:
+			case OscillatorEditMode:
 				m.mode = TrackMode
 			case EnvelopeEditMode:
-				m.mode = OscilatorEditMode
+				m.mode = OscillatorEditMode
 			default:
 				m.mode = EnvelopeEditMode
 			}
@@ -330,12 +292,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.presetIndex = (m.presetIndex + 1) % len(envelopePresets)
 				case "enter":
 					preset := envelopePresets[m.presetIndex]
-					env := &m.pattern.tracks[m.cursorTrack].instrument.Envelope
-					env.Attack.Value = preset.Attack
-					env.Decay.Value = preset.Decay
-					env.Sustain.Value = preset.Sustain
-					env.Release.Value = preset.Release
+
+					// TODO: This double sync is messy - Refactor
+					env := &m.pattern.tracks[m.cursorTrack].envelope
+					env.Attack = preset.Attack
+					env.Decay = preset.Decay
+					env.Sustain = preset.Sustain
+					env.Release = preset.Release
+
+					m.envelope.Attack.Value = preset.Attack
+					m.envelope.Decay.Value = preset.Decay
+					m.envelope.Sustain.Value = preset.Sustain
+					m.envelope.Release.Value = preset.Release
+
 					m.showPresetModal = false
+
+					// TODO: Reflect changes in envelope model UI
 				case "esc", "p":
 					m.showPresetModal = false
 				}
@@ -347,72 +319,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.showPresetModal = true
 				m.presetIndex = 0
 				return m, nil
-			case "up":
-				// Move to previous envelope field
-				m.envelopeField = (m.envelopeField - 1 + 4) % 4
-			case "down":
-				// Move to next envelope field
-				m.envelopeField = (m.envelopeField + 1) % 4
-			case "left":
-				// Decrease value by 1%
-				m.adjustEnvelopeValue(-0.01)
-			case "shift+left":
-				// Decrease value by 10%
-				m.adjustEnvelopeValue(-0.10)
-			case "right":
-				// Increase value by 1%
-				m.adjustEnvelopeValue(0.01)
-			case "shift+right":
-				// Increase value by 10%
-				m.adjustEnvelopeValue(0.10)
 			case "esc":
 				m.mode = TrackMode
+				return m, nil
 			}
+
+			m.envelope = m.envelope.Update(msg)
+			track := &m.pattern.tracks[m.cursorTrack]
+			track.envelope = audio.Envelope{
+				Attack:  m.envelope.Attack.Value,
+				Decay:   m.envelope.Decay.Value,
+				Sustain: m.envelope.Sustain.Value,
+				Release: m.envelope.Release.Value,
+			}
+
 			return m, nil
 		}
 
-		// Handle oscilator edit mode
-		if m.mode == OscilatorEditMode {
+		// Handle oscillator edit mode
+		if m.mode == OscillatorEditMode {
 			switch msg.String() {
-			case "up", "left":
-				// Move to previous oscilator
-				m.oscilatorIdx = (m.oscilatorIdx - 1 + len(m.oscilatorList)) % len(m.oscilatorList)
-				m.oscilator = m.oscilatorList[m.oscilatorIdx]
-				m.setTrackInstrument(m.cursorTrack, m.oscilator)
-			case "down", "right":
-				// Move to next oscilator
-				m.oscilatorIdx = (m.oscilatorIdx + 1) % len(m.oscilatorList)
-				m.oscilator = m.oscilatorList[m.oscilatorIdx]
-				m.setTrackInstrument(m.cursorTrack, m.oscilator)
 			case "esc":
 				m.mode = TrackMode
+				return m, nil
 			}
-			return m, nil
-		}
 
-		// Handle jump mode separately
-		if m.mode == JumpMode {
-			switch msg.String() {
-			case "enter":
-				// Parse jump input and jump to track
-				if trackNum, err := strconv.Atoi(m.jumpInput); err == nil {
-					if trackNum >= 0 && trackNum < m.pattern.numTracks {
-						m.cursorTrack = trackNum
-						m.oscilator = m.ensureTrackInstrument(m.cursorTrack)
-					}
-				}
-				m.mode = TrackMode
-				m.jumpInput = ""
-			case "esc":
-				m.mode = TrackMode
-				m.jumpInput = ""
-			case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9":
-				m.jumpInput += msg.String()
-			case "backspace":
-				if len(m.jumpInput) > 0 {
-					m.jumpInput = m.jumpInput[:len(m.jumpInput)-1]
-				}
-			}
+			m.oscillator = m.oscillator.Update(msg)
+			// TODO: This seems weird - Explose if passing an OnChange callback be better?
+			track := &m.pattern.tracks[m.cursorTrack]
+			track.oscillator = m.oscillator.Oscillator
+
 			return m, nil
 		}
 
@@ -430,25 +366,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				speaker.Clear()
 			}
-		case "j":
-			// Enter jump mode
-			m.mode = JumpMode
-			m.jumpInput = ""
 		case "e":
 			// Enter envelope edit mode
 			m.mode = EnvelopeEditMode
-			m.envelopeField = EnvelopeAttack
 		case "left":
 			// Move cursor left (previous track)
 			if m.cursorTrack > 0 {
 				m.cursorTrack--
-				m.oscilator = m.ensureTrackInstrument(m.cursorTrack)
+				m.oscillator.Oscillator = m.pattern.tracks[m.cursorTrack].oscillator
 			}
 		case "right":
 			// Move cursor right (next track)
 			if m.cursorTrack < m.pattern.numTracks-1 {
 				m.cursorTrack++
-				m.oscilator = m.ensureTrackInstrument(m.cursorTrack)
+				m.oscillator.Oscillator = m.pattern.tracks[m.cursorTrack].oscillator
 			}
 		case "up":
 			// Move cursor up (previous row)
@@ -536,8 +467,8 @@ func (m *model) playRowNotes(row int) {
 		// Parse note to frequency (simple mapping for now)
 		freq := m.noteToFrequency(trackRow.note)
 		if freq > 0 {
-			inst := m.ensureTrackInstrument(trackIdx)
-			gen := m.synth.NewOscilator(inst, freq)
+			inst := m.pattern.tracks[trackIdx].oscillator
+			gen := m.synth.NewOscillator(inst, freq)
 			generators = append(generators, gen)
 		}
 	}
@@ -578,23 +509,23 @@ func (m *model) noteToFrequency(note string) float64 {
 	return noteFrequency(base, oct)
 }
 
-// playNote plays a note at the given frequency using the current oscilator
+// playNote plays a note at the given frequency using the current oscillator
 func (m *model) playNote(frequency float64) {
-	inst := m.ensureTrackInstrument(m.cursorTrack)
-	oscilator := m.synth.NewOscilator(inst, frequency)
+	inst := m.pattern.tracks[m.cursorTrack].oscillator
+	oscillator := m.synth.NewOscillator(inst, frequency)
 
-	// TODO: Calculate the number of samples for the note duration
-	envelope := m.pattern.tracks[m.cursorTrack].instrument.Envelope
+	envelope := m.pattern.tracks[m.cursorTrack].envelope
 
 	duration := m.synth.SampleRate.N(time.Millisecond * 300)
 
 	adsr := m.synth.NewADSREnvelope(
-		oscilator,
-		duration,
-		envelope.Attack.Value,
-		envelope.Decay.Value,
-		envelope.Sustain.Value,
-		envelope.Release.Value,
+		oscillator,
+		duration, audio.Envelope{
+			Attack:  envelope.Attack,
+			Decay:   envelope.Decay,
+			Sustain: envelope.Sustain,
+			Release: envelope.Release,
+		},
 	)
 
 	// Take only 0.3 seconds of the generated tone
@@ -615,20 +546,18 @@ func (m model) View() string {
 
 	modeStr := "TRACK"
 	switch m.mode {
-	case JumpMode:
-		modeStr = fmt.Sprintf("JUMP: %s", m.jumpInput)
 	case EnvelopeEditMode:
 		modeStr = "ENVELOPE"
-	case OscilatorEditMode:
-		modeStr = "OSCILATOR"
+	case OscillatorEditMode:
+		modeStr = "OSCILLATOR"
 	}
 	playStatus := "STOPPED"
 	if m.isPlaying {
 		playStatus = fmt.Sprintf("PLAYING (Row %d)", m.playbackRow)
 	}
-	currentInst := m.trackInstrumentValue(m.cursorTrack)
-	header.WriteString(infoStyle.Render(fmt.Sprintf("Oscilator: %s | Instrument: %s | Mode: %s | %s | Track: %d | Row: %d | Octave: %d",
-		m.oscilator, currentInst, modeStr, playStatus, m.cursorTrack, m.cursorRow, m.octave)))
+	currentInst := m.pattern.tracks[m.cursorTrack].oscillator
+	header.WriteString(infoStyle.Render(fmt.Sprintf("Oscillator: %s | Instrument: %s | Mode: %s | %s | Track: %d | Row: %d | Octave: %d",
+		m.oscillator.Oscillator, currentInst, modeStr, playStatus, m.cursorTrack, m.cursorRow, m.octave)))
 	header.WriteString("\n\n")
 
 	instView := m.synthView()
@@ -643,6 +572,9 @@ func (m model) View() string {
 
 	body := lipgloss.JoinVertical(lipgloss.Left, instView, trackViewWithBorder)
 
+	// Footer help
+	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | +/-: Octave | W: Oscillator (↑↓←→ select) | E: Envelope (↑↓ select, ←→ adjust) | T: Track | Space: Play/Pause | Q: Quit")
+
 	// Optional modal overlay for envelope presets
 	if m.showPresetModal {
 		modal := m.renderPresetModal()
@@ -651,9 +583,6 @@ func (m model) View() string {
 
 		body = lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, modal, lipgloss.WithWhitespaceChars("TETRACKT"), lipgloss.WithWhitespaceBackground(lipgloss.Color("236")))
 	}
-
-	// Footer help
-	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | +/-: Octave | W: Oscilator (↑↓←→ select) | E: Envelope (↑↓ select, ←→ adjust) | T: Track | Space: Play/Pause | Q: Quit")
 
 	return header.String() + body + "\n" + footer
 }
@@ -672,7 +601,7 @@ func (m model) trackView() string {
 			trackHeader = headerStyle.Foreground(lipgloss.Color("#555555")).Render(trackHeader)
 		}
 		tracks.WriteString(trackHeader)
-		tracks.WriteString("  ")
+		tracks.WriteString("    ")
 	}
 	tracks.WriteString("\n")
 
@@ -680,7 +609,7 @@ func (m model) trackView() string {
 	tracks.WriteString("    ")
 	for i := 0; i < m.pattern.numTracks; i++ {
 		tracks.WriteString(strings.Repeat("─", 10))
-		tracks.WriteString("  ")
+		tracks.WriteString("   ")
 	}
 	tracks.WriteString("\n")
 
@@ -716,38 +645,6 @@ func (m model) trackView() string {
 	return tracks.String()
 }
 
-func (m model) oscilatorView() string {
-	var oscilatorView strings.Builder
-	oscilatorView.WriteString("Oscilator:\n")
-
-	currentInst := m.trackInstrumentValue(m.cursorTrack)
-	for _, wf := range m.oscilatorList {
-		if wf == currentInst {
-			oscilatorView.WriteString(selectedStyle.Render(fmt.Sprintf("%s", wf)))
-			oscilatorView.WriteString("\n")
-		} else {
-			oscilatorView.WriteString(fmt.Sprintf("%s\n", wf))
-		}
-	}
-
-	return oscilatorView.String()
-}
-
-func (m model) envelopeView() string {
-	// Show envelope
-	env := m.pattern.tracks[m.cursorTrack].instrument.Envelope
-
-	envView := strings.Builder{}
-	envView.WriteString("ADSR Envelope:\n")
-
-	envView.WriteString(env.Attack.View() + "\n")
-	envView.WriteString(env.Decay.View() + "\n")
-	envView.WriteString(env.Sustain.View() + "\n")
-	envView.WriteString(env.Release.View() + "\n")
-
-	return envView.String()
-}
-
 func (m model) renderPresetModal() string {
 	var b strings.Builder
 	b.WriteString("Envelope Presets (Enter to apply, Esc to cancel)\n")
@@ -774,22 +671,22 @@ func (m model) renderPresetModal() string {
 }
 
 func (m model) synthView() string {
-	oscilatorView := m.oscilatorView()
-	envelopeView := m.envelopeView()
+	oscillatorView := m.oscillator.View()
+	envelopeView := m.envelope.View()
 
 	// Apply active border to the current mode panel
-	oscilatorBorder := panelBorderStyle
+	oscillatorBorder := panelBorderStyle
 	envelopeBorder := panelBorderStyle
 
 	switch m.mode {
-	case OscilatorEditMode:
-		oscilatorBorder = activePanelBorderStyle
+	case OscillatorEditMode:
+		oscillatorBorder = activePanelBorderStyle
 	case EnvelopeEditMode:
 		envelopeBorder = activePanelBorderStyle
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		oscilatorBorder.Render(oscilatorView),
+		oscillatorBorder.Render(oscillatorView),
 		envelopeBorder.Render(envelopeView),
 	)
 }
@@ -822,72 +719,31 @@ func formatVolume(volume int) string {
 	return fmt.Sprintf("%02d", volume)
 }
 
-// setTrackInstrument assigns an instrument oscilator to a track
-func (m *model) setTrackInstrument(trackIdx int, osc audio.OscilatorType) {
-	if trackIdx < 0 || trackIdx >= m.pattern.numTracks {
-		return
-	}
-	m.pattern.tracks[trackIdx].instrument.Oscilator = osc
-}
-
-// ensureTrackInstrument returns the track instrument oscilator, defaulting to sine
-func (m *model) ensureTrackInstrument(trackIdx int) audio.OscilatorType {
-	if trackIdx < 0 || trackIdx >= m.pattern.numTracks {
-		return audio.Sine
-	}
-	track := &m.pattern.tracks[trackIdx]
-	if track.instrument == nil {
-		track.instrument = NewInstrument(audio.Sine)
-	}
-	return track.instrument.Oscilator
-}
-
-// trackInstrumentValue returns the track instrument oscilator without mutating
-func (m model) trackInstrumentValue(trackIdx int) audio.OscilatorType {
-	if trackIdx < 0 || trackIdx >= m.pattern.numTracks {
-		return audio.Sine
-	}
-	track := m.pattern.tracks[trackIdx]
-	if track.instrument == nil {
-		return audio.Sine
-	}
-	return track.instrument.Oscilator
-}
-
 func main() {
 	// Initialize synthesizer
 	sampleRate := beep.SampleRate(44100)
 	synth := audio.NewSynth(sampleRate)
 
-	// Create list of available oscilators
-	oscilators := []audio.OscilatorType{
-		audio.Sine,
-		audio.Square,
-		audio.Triangle,
-		audio.Sawtooth,
-		audio.SawtoothReverse,
-		audio.Noise,
-	}
-
 	// Create pattern with 8 tracks and 64 rows
 	pattern := NewPattern(8, 64)
 
+	cursorTrack := 0
+	track := pattern.tracks[cursorTrack]
+
 	p := tea.NewProgram(
 		model{
-			synth:         synth,
-			oscilator:     audio.Sine,
-			oscilatorList: oscilators,
-			oscilatorIdx:  0,
-			pattern:       pattern,
-			cursorTrack:   0,
-			cursorRow:     0,
-			viewportRow:   0,
-			mode:          TrackMode,
-			jumpInput:     "",
-			isPlaying:     false,
-			playbackRow:   0,
-			envelopeField: EnvelopeAttack,
-			octave:        4,
+			synth:       synth,
+			oscillator:  ui.NewOscillatorModel(selectedStyle, track.oscillator),
+			envelope:    ui.NewEnvelopeModel(selectedStyle, track.envelope),
+			pattern:     pattern,
+			cursorTrack: cursorTrack,
+			cursorRow:   0,
+			viewportRow: 0,
+			mode:        TrackMode,
+			jumpInput:   "",
+			isPlaying:   false,
+			playbackRow: 0,
+			octave:      4,
 		},
 		tea.WithAltScreen(),
 	)
@@ -895,43 +751,5 @@ func main() {
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
-	}
-}
-
-// adjustEnvelopeValue adjusts the current envelope field by a delta value
-func (m *model) adjustEnvelopeValue(delta float64) {
-	env := &m.pattern.tracks[m.cursorTrack].instrument.Envelope
-	var currentValue *float64
-
-	switch m.envelopeField {
-	case EnvelopeAttack:
-		currentValue = &env.Attack.Value
-	case EnvelopeDecay:
-		currentValue = &env.Decay.Value
-	case EnvelopeSustain:
-		currentValue = &env.Sustain.Value
-	case EnvelopeRelease:
-		currentValue = &env.Release.Value
-	}
-
-	if currentValue != nil {
-		newValue := *currentValue + delta
-
-		// For A, D, R: prevent increases that would make A+D+R exceed 100
-		if m.envelopeField != EnvelopeSustain && delta > 0 {
-			otherSum := env.Attack.Value + env.Decay.Value + env.Release.Value - *currentValue
-			if newValue+otherSum > 100 {
-				return // block the increase
-			}
-		}
-
-		// Clamp value between 0 and 100
-		if newValue < 0 {
-			newValue = 0
-		} else if newValue > 1.0 {
-			newValue = 1.0
-		}
-
-		*currentValue = newValue
 	}
 }
