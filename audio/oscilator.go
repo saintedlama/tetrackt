@@ -7,21 +7,21 @@ import (
 	"github.com/gopxl/beep/v2"
 )
 
-// OscilatorType represents the type of oscilator waveform to generate
-type OscilatorType string
+// OscillatorType represents the type of oscillator waveform to generate
+type OscillatorType string
 
 const (
-	Sine            OscilatorType = "sine"
-	Square          OscilatorType = "square"
-	Triangle        OscilatorType = "triangle"
-	Sawtooth        OscilatorType = "sawtooth"
-	SawtoothReverse OscilatorType = "sawtooth_reverse"
-	Noise           OscilatorType = "noise"
+	Sine            OscillatorType = "sine"
+	Square          OscillatorType = "square"
+	Triangle        OscillatorType = "triangle"
+	Sawtooth        OscillatorType = "sawtooth"
+	SawtoothReverse OscillatorType = "sawtooth_reverse"
+	Noise           OscillatorType = "noise"
 )
 
-// NewOscilator creates a beep.Streamer that generates the specified oscilator waveform
-func (s *Synth) NewOscilator(waveType OscilatorType, frequency float64) beep.Streamer {
-	return &oscilatorGenerator{
+// NewOscillator creates a beep.Streamer that generates the specified oscillator waveform
+func (s *Synth) NewOscillator(waveType OscillatorType, frequency float64) beep.Streamer {
+	return &oscillatorGenerator{
 		waveType:   waveType,
 		frequency:  frequency,
 		sampleRate: s.SampleRate,
@@ -29,16 +29,16 @@ func (s *Synth) NewOscilator(waveType OscilatorType, frequency float64) beep.Str
 	}
 }
 
-// oscilatorGenerator implements beep.Streamer for oscilator waveform generation
-type oscilatorGenerator struct {
-	waveType   OscilatorType
+// oscillatorGenerator implements beep.Streamer for oscillator waveform generation
+type oscillatorGenerator struct {
+	waveType   OscillatorType
 	frequency  float64
 	sampleRate beep.SampleRate
 	phase      float64
 }
 
-// Stream fills the samples buffer with oscilator waveform data
-func (g *oscilatorGenerator) Stream(samples [][2]float64) (n int, ok bool) {
+// Stream fills the samples buffer with oscillator waveform data
+func (g *oscillatorGenerator) Stream(samples [][2]float64) (n int, ok bool) {
 	phaseIncrement := g.frequency / float64(g.sampleRate)
 
 	for i := range samples {
@@ -85,6 +85,6 @@ func (g *oscilatorGenerator) Stream(samples [][2]float64) (n int, ok bool) {
 }
 
 // Err returns any error that occurred during streaming
-func (g *oscilatorGenerator) Err() error {
+func (g *oscillatorGenerator) Err() error {
 	return nil
 }

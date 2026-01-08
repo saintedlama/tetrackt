@@ -32,11 +32,15 @@ type envelopeGenerator struct {
 	releaseSamples int
 }
 
+type Envelope struct {
+	Attack, Decay, Sustain, Release float64
+}
+
 // NewADSREnvelope creates a beep.Streamer that applies ADSR envelope to the provided streamer
-func (s *Synth) NewADSREnvelope(streamer beep.Streamer, samples int, attack, decay, sustain, release float64) beep.Streamer {
-	attackSamples := int(attack * float64(samples))
-	decaySamples := int(decay * float64(samples))
-	releaseSamples := int(release * float64(samples))
+func (s *Synth) NewADSREnvelope(streamer beep.Streamer, samples int, envelope Envelope) beep.Streamer {
+	attackSamples := int(envelope.Attack * float64(samples))
+	decaySamples := int(envelope.Decay * float64(samples))
+	releaseSamples := int(envelope.Release * float64(samples))
 	sustainSamples := samples - (attackSamples + decaySamples + releaseSamples)
 
 	return &envelopeGenerator{
@@ -47,7 +51,7 @@ func (s *Synth) NewADSREnvelope(streamer beep.Streamer, samples int, attack, dec
 		currentStage:      StageOff,
 		currentLevel:      0, // start with minimum level greater than 0 for multiplicative increase
 		currentMultiplier: 1.0,
-		sustain:           sustain,
+		sustain:           envelope.Sustain,
 		attackSamples:     attackSamples,
 		decaySamples:      decaySamples,
 		sustainSamples:    sustainSamples,
