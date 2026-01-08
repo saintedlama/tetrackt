@@ -113,31 +113,33 @@ const (
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("86")).
+			Foreground(lipgloss.Color("#00e5ff")).
+			Background(lipgloss.Color("#0f0f0f")).
 			Padding(0, 1)
 
 	infoStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("220")).
+			Foreground(lipgloss.Color("#ffa726")).
 			Padding(0, 1)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
+			Foreground(lipgloss.Color("#666666")).
 			Padding(1, 1)
 
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("39")).
+			Foreground(lipgloss.Color("#00ffff")).
 			Padding(0, 1)
 
 	rowNumStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("246"))
+			Foreground(lipgloss.Color("#888888"))
 
 	cursorRowStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("226")).
+			Foreground(lipgloss.Color("#ff9800")).
 			Bold(true)
 
 	selectedStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("126")).
+			Background(lipgloss.Color("#d81b60")).
+			Foreground(lipgloss.Color("#ffffff")).
 			Bold(true)
 
 	defaultStyle = lipgloss.NewStyle()
@@ -146,27 +148,28 @@ var (
 			Padding(0, 1)
 
 	cursorCellStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("240")).
+			Background(lipgloss.Color("#2a2a2a")).
+			Foreground(lipgloss.Color("#00e5ff")).
 			Padding(0, 1)
 
 	playbackRowStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("46")).
+				Foreground(lipgloss.Color("#00ffff")).
 				Bold(true)
 
 	panelBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("240")).
+				BorderForeground(lipgloss.Color("#333333")).
 				Padding(1, 2)
 
 	activePanelBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("86")).
+				BorderForeground(lipgloss.Color("#00e5ff")).
 				Bold(true).
 				Padding(1, 2)
 
 	modalBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("214")).
+				BorderForeground(lipgloss.Color("#ff9800")).
 				Padding(1, 2)
 )
 
@@ -666,7 +669,7 @@ func (m model) trackView() string {
 		if i == m.cursorTrack {
 			trackHeader = headerStyle.Render(trackHeader)
 		} else {
-			trackHeader = headerStyle.Foreground(lipgloss.Color("244")).Render(trackHeader)
+			trackHeader = headerStyle.Foreground(lipgloss.Color("#555555")).Render(trackHeader)
 		}
 		tracks.WriteString(trackHeader)
 		tracks.WriteString("  ")
