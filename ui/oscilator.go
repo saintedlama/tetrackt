@@ -16,11 +16,21 @@ type OscilatorModel struct {
 	selectedStyle lipgloss.Style
 }
 
-func NewOscilatorModel(selectedStyle lipgloss.Style) OscilatorModel {
+func NewOscilatorModel(selectedStyle lipgloss.Style, oscilator audio.OscilatorType) OscilatorModel {
+	oscilatorList := []audio.OscilatorType{audio.Sine, audio.Square, audio.Triangle, audio.Sawtooth, audio.SawtoothReverse, audio.Noise}
+	oscilatorIdx := 0
+
+	for i, osc := range oscilatorList {
+		if osc == oscilator {
+			oscilatorIdx = i
+			break
+		}
+	}
+
 	return OscilatorModel{
-		Oscilator:     audio.Sine,
-		oscilatorIdx:  0,
-		oscilatorList: []audio.OscilatorType{audio.Sine, audio.Square, audio.Triangle, audio.Sawtooth, audio.SawtoothReverse, audio.Noise},
+		Oscilator:     oscilator,
+		oscilatorIdx:  oscilatorIdx,
+		oscilatorList: oscilatorList,
 		selectedStyle: selectedStyle,
 	}
 }
@@ -41,7 +51,7 @@ func (m OscilatorModel) View() string {
 	return oscilatorView.String()
 }
 
-func (m OscilatorModel) Update(msg tea.KeyMsg) (OscilatorModel, tea.Cmd) {
+func (m OscilatorModel) Update(msg tea.KeyMsg) OscilatorModel {
 	switch msg.String() {
 	case "up", "left":
 		// Move to previous oscilator
@@ -53,5 +63,5 @@ func (m OscilatorModel) Update(msg tea.KeyMsg) (OscilatorModel, tea.Cmd) {
 		m.Oscilator = m.oscilatorList[m.oscilatorIdx]
 	}
 
-	return m, nil
+	return m
 }
