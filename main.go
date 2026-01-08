@@ -19,10 +19,10 @@ import (
 
 // Track represents a single track in the pattern
 type Track struct {
-	number    int
-	oscilator audio.OscilatorType
-	envelope  audio.Envelope
-	rows      []TrackRow
+	number     int
+	oscillator audio.OscillatorType
+	envelope   audio.Envelope
+	rows       []TrackRow
 }
 
 // TrackRow represents a single row in a track
@@ -44,10 +44,10 @@ func NewPattern(numTracks, numRows int) *Pattern {
 	tracks := make([]Track, numTracks)
 	for i := range numTracks {
 		tracks[i] = Track{
-			number:    i,
-			oscilator: audio.Sine,
-			envelope:  audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
-			rows:      make([]TrackRow, numRows),
+			number:     i,
+			oscillator: audio.Sine,
+			envelope:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
+			rows:       make([]TrackRow, numRows),
 		}
 		// Initialize all rows with empty data
 		for j := range numRows {
@@ -71,7 +71,7 @@ type InputMode int
 const (
 	TrackMode InputMode = iota
 	EnvelopeEditMode
-	OscilatorEditMode
+	OscillatorEditMode
 )
 
 var (
@@ -147,7 +147,7 @@ type model struct {
 	width           int
 	height          int
 	synth           *audio.Synth
-	oscilator       ui.OscilatorModel
+	oscillator      ui.OscillatorModel
 	envelope        ui.EnvelopeModel
 	pattern         *Pattern
 	cursorTrack     int
@@ -227,7 +227,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global mode switching
 		switch msg.String() {
 		case "w":
-			m.mode = OscilatorEditMode
+			m.mode = OscillatorEditMode
 			return m, nil
 		case "t":
 			m.mode = TrackMode
@@ -246,23 +246,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "tab":
-			// Cycle through Oscilator, Envelope, Track modes
+			// Cycle through Oscillator, Envelope, Track modes
 			switch m.mode {
-			case OscilatorEditMode:
+			case OscillatorEditMode:
 				m.mode = EnvelopeEditMode
 			case EnvelopeEditMode:
 				m.mode = TrackMode
 			default:
-				m.mode = OscilatorEditMode
+				m.mode = OscillatorEditMode
 			}
 			return m, nil
 		case "shift+tab":
-			// Reverse cycle through Oscilator, Envelope, Track modes
+			// Reverse cycle through Oscillator, Envelope, Track modes
 			switch m.mode {
-			case OscilatorEditMode:
+			case OscillatorEditMode:
 				m.mode = TrackMode
 			case EnvelopeEditMode:
-				m.mode = OscilatorEditMode
+				m.mode = OscillatorEditMode
 			default:
 				m.mode = EnvelopeEditMode
 			}
@@ -336,18 +336,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Handle oscilator edit mode
-		if m.mode == OscilatorEditMode {
+		// Handle oscillator edit mode
+		if m.mode == OscillatorEditMode {
 			switch msg.String() {
 			case "esc":
 				m.mode = TrackMode
 				return m, nil
 			}
 
-			m.oscilator = m.oscilator.Update(msg)
+			m.oscillator = m.oscillator.Update(msg)
 			// TODO: This seems weird - Explose if passing an OnChange callback be better?
 			track := &m.pattern.tracks[m.cursorTrack]
-			track.oscilator = m.oscilator.Oscilator
+			track.oscillator = m.oscillator.Oscillator
 
 			return m, nil
 		}
@@ -373,13 +373,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Move cursor left (previous track)
 			if m.cursorTrack > 0 {
 				m.cursorTrack--
-				m.oscilator.Oscilator = m.pattern.tracks[m.cursorTrack].oscilator
+				m.oscillator.Oscillator = m.pattern.tracks[m.cursorTrack].oscillator
 			}
 		case "right":
 			// Move cursor right (next track)
 			if m.cursorTrack < m.pattern.numTracks-1 {
 				m.cursorTrack++
-				m.oscilator.Oscilator = m.pattern.tracks[m.cursorTrack].oscilator
+				m.oscillator.Oscillator = m.pattern.tracks[m.cursorTrack].oscillator
 			}
 		case "up":
 			// Move cursor up (previous row)
@@ -467,8 +467,8 @@ func (m *model) playRowNotes(row int) {
 		// Parse note to frequency (simple mapping for now)
 		freq := m.noteToFrequency(trackRow.note)
 		if freq > 0 {
-			inst := m.pattern.tracks[trackIdx].oscilator
-			gen := m.synth.NewOscilator(inst, freq)
+			inst := m.pattern.tracks[trackIdx].oscillator
+			gen := m.synth.NewOscillator(inst, freq)
 			generators = append(generators, gen)
 		}
 	}
@@ -509,17 +509,17 @@ func (m *model) noteToFrequency(note string) float64 {
 	return noteFrequency(base, oct)
 }
 
-// playNote plays a note at the given frequency using the current oscilator
+// playNote plays a note at the given frequency using the current oscillator
 func (m *model) playNote(frequency float64) {
-	inst := m.pattern.tracks[m.cursorTrack].oscilator
-	oscilator := m.synth.NewOscilator(inst, frequency)
+	inst := m.pattern.tracks[m.cursorTrack].oscillator
+	oscillator := m.synth.NewOscillator(inst, frequency)
 
 	envelope := m.pattern.tracks[m.cursorTrack].envelope
 
 	duration := m.synth.SampleRate.N(time.Millisecond * 300)
 
 	adsr := m.synth.NewADSREnvelope(
-		oscilator,
+		oscillator,
 		duration, audio.Envelope{
 			Attack:  envelope.Attack,
 			Decay:   envelope.Decay,
@@ -548,16 +548,16 @@ func (m model) View() string {
 	switch m.mode {
 	case EnvelopeEditMode:
 		modeStr = "ENVELOPE"
-	case OscilatorEditMode:
-		modeStr = "OSCILATOR"
+	case OscillatorEditMode:
+		modeStr = "OSCILLATOR"
 	}
 	playStatus := "STOPPED"
 	if m.isPlaying {
 		playStatus = fmt.Sprintf("PLAYING (Row %d)", m.playbackRow)
 	}
-	currentInst := m.pattern.tracks[m.cursorTrack].oscilator
-	header.WriteString(infoStyle.Render(fmt.Sprintf("Oscilator: %s | Instrument: %s | Mode: %s | %s | Track: %d | Row: %d | Octave: %d",
-		m.oscilator.Oscilator, currentInst, modeStr, playStatus, m.cursorTrack, m.cursorRow, m.octave)))
+	currentInst := m.pattern.tracks[m.cursorTrack].oscillator
+	header.WriteString(infoStyle.Render(fmt.Sprintf("Oscillator: %s | Instrument: %s | Mode: %s | %s | Track: %d | Row: %d | Octave: %d",
+		m.oscillator.Oscillator, currentInst, modeStr, playStatus, m.cursorTrack, m.cursorRow, m.octave)))
 	header.WriteString("\n\n")
 
 	instView := m.synthView()
@@ -573,7 +573,7 @@ func (m model) View() string {
 	body := lipgloss.JoinVertical(lipgloss.Left, instView, trackViewWithBorder)
 
 	// Footer help
-	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | +/-: Octave | W: Oscilator (↑↓←→ select) | E: Envelope (↑↓ select, ←→ adjust) | T: Track | Space: Play/Pause | Q: Quit")
+	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | +/-: Octave | W: Oscillator (↑↓←→ select) | E: Envelope (↑↓ select, ←→ adjust) | T: Track | Space: Play/Pause | Q: Quit")
 
 	// Optional modal overlay for envelope presets
 	if m.showPresetModal {
@@ -671,22 +671,22 @@ func (m model) renderPresetModal() string {
 }
 
 func (m model) synthView() string {
-	oscilatorView := m.oscilator.View()
+	oscillatorView := m.oscillator.View()
 	envelopeView := m.envelope.View()
 
 	// Apply active border to the current mode panel
-	oscilatorBorder := panelBorderStyle
+	oscillatorBorder := panelBorderStyle
 	envelopeBorder := panelBorderStyle
 
 	switch m.mode {
-	case OscilatorEditMode:
-		oscilatorBorder = activePanelBorderStyle
+	case OscillatorEditMode:
+		oscillatorBorder = activePanelBorderStyle
 	case EnvelopeEditMode:
 		envelopeBorder = activePanelBorderStyle
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		oscilatorBorder.Render(oscilatorView),
+		oscillatorBorder.Render(oscillatorView),
 		envelopeBorder.Render(envelopeView),
 	)
 }
@@ -733,7 +733,7 @@ func main() {
 	p := tea.NewProgram(
 		model{
 			synth:       synth,
-			oscilator:   ui.NewOscilatorModel(selectedStyle, track.oscilator),
+			oscillator:  ui.NewOscillatorModel(selectedStyle, track.oscillator),
 			envelope:    ui.NewEnvelopeModel(selectedStyle, track.envelope),
 			pattern:     pattern,
 			cursorTrack: cursorTrack,
