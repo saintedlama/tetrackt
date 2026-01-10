@@ -227,11 +227,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = Envelope1EditMode
 			return m, nil
 		case "+":
+			// change octave for current note
+			if m.mode == TrackMode {
+				note := m.pattern.tracks[m.cursorTrack].rows[m.cursorRow].note
+				if note != "---" && note != "" {
+					if newNote, freq, ok := changeNoteOctave(note, 1); ok {
+						m.pattern.tracks[m.cursorTrack].rows[m.cursorRow].note = newNote
+						m.playNote(freq)
+						return m, nil
+					}
+				}
+			}
+
 			if m.octave < maxOctave {
 				m.octave++
 			}
 			return m, nil
 		case "-":
+			// change octave for current note
+			if m.mode == TrackMode {
+				note := m.pattern.tracks[m.cursorTrack].rows[m.cursorRow].note
+				if note != "---" && note != "" {
+					if newNote, freq, ok := changeNoteOctave(note, -1); ok {
+						m.pattern.tracks[m.cursorTrack].rows[m.cursorRow].note = newNote
+						m.playNote(freq)
+						return m, nil
+					}
+				}
+			}
+
 			if m.octave > minOctave {
 				m.octave--
 			}
