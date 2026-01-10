@@ -13,6 +13,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/goccy/go-yaml"
 	"github.com/gopxl/beep/v2"
 	"github.com/gopxl/beep/v2/effects"
 	"github.com/gopxl/beep/v2/speaker"
@@ -34,6 +35,30 @@ type TrackRow struct {
 	note   string // e.g., "C-4", "D#5", "---" for empty
 	volume int    // 0-64
 	effect string // effect command
+}
+
+// SavedTrackRow is the YAML-serializable form of TrackRow
+type SavedTrackRow struct {
+	Note   string `yaml:"note"`
+	Volume int    `yaml:"volume"`
+	Effect string `yaml:"effect"`
+}
+
+// SavedTrack is the YAML-serializable form of Track
+type SavedTrack struct {
+	Oscillator1 string          `yaml:"oscillator1"`
+	Envelope1   audio.Envelope  `yaml:"envelope1"`
+	Oscillator2 string          `yaml:"oscillator2"`
+	Envelope2   audio.Envelope  `yaml:"envelope2"`
+	Mixer       float64         `yaml:"mixer"`
+	Rows        []SavedTrackRow `yaml:"rows"`
+}
+
+// SavedSong is the complete song structure for YAML serialization
+type SavedSong struct {
+	NumRows   int          `yaml:"num_rows"`
+	NumTracks int          `yaml:"num_tracks"`
+	Tracks    []SavedTrack `yaml:"tracks"`
 }
 
 // Pattern represents the pattern editor with multiple tracks
@@ -173,6 +198,12 @@ type model struct {
 	// loop-to-row mode: loops rows 0..loopEndRow (inclusive)
 	loopToRow  bool
 	loopEndRow int
+	// file dialog state
+	fileDialogMode  int // 0: none, 1: save, 2: load
+	fileDialogInput string
+	fileDialogError string
+	// current loaded/saved filename (prefill on save)
+	currentFilename string
 }
 
 // tickMsg is sent to advance playback
@@ -199,6 +230,81 @@ var noteKeyToName = map[string]string{
 	"7": "B",
 }
 
+// patternToSong converts the runtime Pattern to a SavedSong for YAML serialization
+func patternToSong(p *Pattern) SavedSong {
+	saved := SavedSong{
+		NumRows:   p.numRows,
+		NumTracks: p.numTracks,
+		Tracks:    make([]SavedTrack, p.numTracks),
+	}
+	for i, track := range p.tracks {
+		rows := make([]SavedTrackRow, len(track.rows))
+		for j, row := range track.rows {
+			rows[j] = SavedTrackRow{
+				Note:   row.note,
+				Volume: row.volume,
+				Effect: row.effect,
+			}
+		}
+		saved.Tracks[i] = SavedTrack{
+			Oscillator1: string(track.oscillator1),
+			Envelope1:   track.envelope1,
+			Oscillator2: string(track.oscillator2),
+			Envelope2:   track.envelope2,
+			Mixer:       track.mixer,
+			Rows:        rows,
+		}
+	}
+	return saved
+}
+
+// songToPattern converts a SavedSong back to a runtime Pattern
+func songToPattern(saved SavedSong) *Pattern {
+	p := NewPattern(saved.NumTracks, saved.NumRows)
+	for i, savedTrack := range saved.Tracks {
+		track := &p.tracks[i]
+		track.oscillator1 = audio.OscillatorType(savedTrack.Oscillator1)
+		track.envelope1 = savedTrack.Envelope1
+		track.oscillator2 = audio.OscillatorType(savedTrack.Oscillator2)
+		track.envelope2 = savedTrack.Envelope2
+		track.mixer = savedTrack.Mixer
+		for j, row := range savedTrack.Rows {
+			if j < len(track.rows) {
+				track.rows[j] = TrackRow{
+					note:   row.Note,
+					volume: row.Volume,
+					effect: row.Effect,
+				}
+			}
+		}
+	}
+	return p
+}
+
+// saveSongToFile writes the pattern as YAML
+func saveSongToFile(p *Pattern, filename string) error {
+	song := patternToSong(p)
+	data, err := yaml.Marshal(song)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filename, data, 0644)
+}
+
+// loadSongFromFile reads a YAML file and returns a Pattern
+func loadSongFromFile(filename string) (*Pattern, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	var saved SavedSong
+	err = yaml.Unmarshal(data, &saved)
+	if err != nil {
+		return nil, err
+	}
+	return songToPattern(saved), nil
+}
+
 // Init initializes the application
 func (m model) Init() tea.Cmd {
 	// Initialize speaker with sample rate
@@ -214,8 +320,83 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Handle file dialog input first
+		if m.fileDialogMode > 0 {
+			switch msg.String() {
+			case "enter":
+				if m.fileDialogMode == 1 {
+					// Save
+					filename := m.fileDialogInput
+					if !strings.HasSuffix(filename, ".yaml") {
+						filename += ".yaml"
+					}
+					err := saveSongToFile(m.pattern, filename)
+					if err != nil {
+						m.fileDialogError = fmt.Sprintf("Save failed: %v", err)
+					} else {
+						m.currentFilename = filename
+						m.fileDialogMode = 0
+						m.fileDialogInput = ""
+						m.fileDialogError = ""
+					}
+				} else if m.fileDialogMode == 2 {
+					// Load
+					filename := m.fileDialogInput
+					if !strings.HasSuffix(filename, ".yaml") {
+						filename += ".yaml"
+					}
+					p, err := loadSongFromFile(filename)
+					if err != nil {
+						m.fileDialogError = fmt.Sprintf("Load failed: %v", err)
+					} else {
+						m.pattern = p
+						m.currentFilename = filename
+						m.fileDialogMode = 0
+						m.fileDialogInput = ""
+						m.fileDialogError = ""
+						m.cursorTrack = 0
+						m.cursorRow = 0
+						m.viewportRow = 0
+					}
+				}
+				return m, nil
+			case "esc":
+				m.fileDialogMode = 0
+				m.fileDialogInput = ""
+				m.fileDialogError = ""
+				return m, nil
+			case "backspace":
+				if len(m.fileDialogInput) > 0 {
+					m.fileDialogInput = m.fileDialogInput[:len(m.fileDialogInput)-1]
+				}
+				return m, nil
+			default:
+				// Type into the input field
+				if len(msg.String()) == 1 && msg.String() >= " " && msg.String() <= "~" {
+					m.fileDialogInput += msg.String()
+				}
+				return m, nil
+			}
+		}
+
 		// Global mode switching
 		switch msg.String() {
+		case "s":
+			// Open save dialog
+			m.fileDialogMode = 1
+			if m.currentFilename != "" {
+				m.fileDialogInput = m.currentFilename
+			} else {
+				m.fileDialogInput = "song"
+			}
+			m.fileDialogError = ""
+			return m, nil
+		case "l":
+			// Open load dialog
+			m.fileDialogMode = 2
+			m.fileDialogInput = ""
+			m.fileDialogError = ""
+			return m, nil
 		case "w":
 			m.mode = Oscillator1EditMode
 			return m, nil
@@ -608,7 +789,7 @@ func (m model) View() string {
 	body := lipgloss.JoinVertical(lipgloss.Left, instView, trackViewWithBorder)
 
 	// Footer help
-	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | +/-: Octave | W: Oscillator (↑↓←→ select) | E: Envelope (↑↓ select, ←→ adjust) | T: Track | p: Play/Pause | P: Loop 0..Row/Pause | Q: Quit")
+	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | +/-: Octave | W: Oscillator (↑↓←→ select) | E: Envelope (↑↓ select, ←→ adjust) | T: Track | p: Play/Pause | P: Loop 0..Row/Pause | S: Save | L: Load | Q: Quit")
 
 	// TODO: More generic modal handling
 	if m.envelope1.ShowModal && m.mode == Envelope1EditMode {
@@ -617,6 +798,21 @@ func (m model) View() string {
 
 	if m.envelope2.ShowModal && m.mode == Envelope2EditMode {
 		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.envelope2.View())
+	}
+
+	// File dialog modal
+	if m.fileDialogMode > 0 {
+		dialogTitle := "Save Song"
+		if m.fileDialogMode == 2 {
+			dialogTitle = "Load Song"
+		}
+		dialogContent := fmt.Sprintf("%s\n\nFilename: %s_\n\n", dialogTitle, m.fileDialogInput)
+		if m.fileDialogError != "" {
+			dialogContent += fmt.Sprintf("Error: %s\n", m.fileDialogError)
+		}
+		dialogContent += "[Enter to confirm, Esc to cancel]"
+		modalView := modalBorderStyle.Render(dialogContent)
+		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modalView)
 	}
 
 	return header.String() + body + "\n" + footer
