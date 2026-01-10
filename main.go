@@ -153,23 +153,24 @@ const (
 
 // model represents the application state
 type model struct {
-	width       int
-	height      int
-	synth       *audio.Synth
-	oscillator1 ui.OscillatorModel
-	envelope1   *ui.EnvelopeModel
-	oscillator2 ui.OscillatorModel
-	envelope2   *ui.EnvelopeModel
-	mixer       ui.Mixer
-	pattern     *Pattern
-	cursorTrack int
-	cursorRow   int
-	viewportRow int // Top row visible in the viewport
-	mode        InputMode
-	jumpInput   string
-	isPlaying   bool
-	playbackRow int
-	octave      int
+	width        int
+	height       int
+	synth        *audio.Synth
+	oscillator1  ui.OscillatorModel
+	envelope1    *ui.EnvelopeModel
+	oscillator2  ui.OscillatorModel
+	envelope2    *ui.EnvelopeModel
+	mixer        ui.Mixer
+	pattern      *Pattern
+	cursorTrack  int
+	cursorRow    int
+	viewportRow  int // Top row visible in the viewport
+	mode         InputMode
+	jumpInput    string
+	isPlaying    bool
+	playbackRow  int
+	octave       int
+	globalVolume float64 
 	// loop-to-row mode: loops rows 0..loopEndRow (inclusive)
 	loopToRow  bool
 	loopEndRow int
@@ -233,6 +234,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "-":
 			if m.octave > minOctave {
 				m.octave--
+			}
+			return m, nil
+		// volume
+		case "[":
+			if m.globalVolume > 0.0 {
+				m.globalVolume -= 0.05
+				if m.globalVolume < 0.0 {
+					m.globalVolume = 0.0
+				}
+			}
+			return m, nil
+		case "]":
+			if m.globalVolume < 1.0 {
+				m.globalVolume += 0.05
+				if m.globalVolume > 1.0 {
+					m.globalVolume = 1.0
+				}
 			}
 			return m, nil
 		// TODO: Use int based logic with modes for cycling!
@@ -488,12 +506,49 @@ func (m *model) playRowNotes(row int) {
 	// If we have any notes to play, mix and play them
 	if len(generators) > 0 {
 		mixed := beep.Mix(generators...)
+
+		// global vol
+		volumeAdjusted := &effects.Volume{
+			Streamer: mixed,
+			Base:     2,
+			Volume:   volumeToDecibels(m.globalVolume),
+			Silent:   m.globalVolume == 0,
+		}
+
 		duration := beep.SampleRate(44100).N(time.Millisecond * 150)
-		limited := beep.Take(duration, mixed)
+		limited := beep.Take(duration, volumeAdjusted)
 
 		//speaker.Clear()
 		speaker.Play(limited)
 	}
+}
+
+func volumeToDecibels(volume float64) float64 {
+	if volume <= 0 {
+		return -999 
+	}
+	return math.Log2(volume) * 6
+}
+
+func changeNoteOctave(note string, delta int) (string, float64, bool) {
+	parts := strings.Split(note, "-")
+	if len(parts) != 2 {
+		return "", 0, false
+	}
+	base := parts[0]
+	octave, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return "", 0, false
+	}
+
+	newOctave := octave + delta
+	if newOctave < minOctave || newOctave > maxOctave {
+		return "", 0, false
+	}
+
+	newNote := fmt.Sprintf("%s-%d", base, newOctave)
+	freq := noteFrequency(base, newOctave)
+	return newNote, freq, true
 }
 
 // noteFrequency returns the frequency for a base note name (C..B) at an octave.
@@ -559,8 +614,15 @@ func (m *model) playNote(frequency float64) {
 
 	mixed := beep.Mix(mix1, mix2)
 
+	volumeAdjusted := &effects.Volume{
+		Streamer: mixed,
+		Base:     2,
+		Volume:   volumeToDecibels(m.globalVolume),
+		Silent:   m.globalVolume == 0,
+	}
+
 	// Take only 0.3 seconds of the generated tone
-	limited := beep.Take(duration, mixed)
+	limited := beep.Take(duration, volumeAdjusted)
 
 	// Clear previous sound and play the new note
 	//speaker.Clear()
@@ -608,7 +670,7 @@ func (m model) View() string {
 	body := lipgloss.JoinVertical(lipgloss.Left, instView, trackViewWithBorder)
 
 	// Footer help
-	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | +/-: Octave | W: Oscillator (↑↓←→ select) | E: Envelope (↑↓ select, ←→ adjust) | T: Track | p: Play/Pause | P: Loop 0..Row/Pause | Q: Quit")
+	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | +/-: Octave | [/]: Volume | W: Oscillator | E: Envelope | T: Track | p: Play/Pause | P: Loop | Q: Quit")
 
 	// TODO: More generic modal handling
 	if m.envelope1.ShowModal && m.mode == Envelope1EditMode {
@@ -687,6 +749,8 @@ func (m model) synthView() string {
 	oscillatorView2 := m.oscillator2.View()
 	envelopeView2 := m.envelope2.View()
 
+	m.mixer.GlobalVolume = m.globalVolume
+
 	// Apply active border to the current mode panel
 	oscillator1Border := panelBorderStyle
 	envelope1Border := panelBorderStyle
@@ -757,21 +821,22 @@ func main() {
 
 	p := tea.NewProgram(
 		model{
-			synth:       synth,
-			oscillator1: ui.NewOscillatorModel(selectedStyle, track.oscillator1),
-			envelope1:   ui.NewEnvelopeModel(selectedStyle, track.envelope1),
-			oscillator2: ui.NewOscillatorModel(selectedStyle, track.oscillator2),
-			envelope2:   ui.NewEnvelopeModel(selectedStyle, track.envelope2),
-			mixer:       ui.NewMixer(),
-			pattern:     pattern,
-			cursorTrack: cursorTrack,
-			cursorRow:   0,
-			viewportRow: 0,
-			mode:        TrackMode,
-			jumpInput:   "",
-			isPlaying:   false,
-			playbackRow: 0,
-			octave:      4,
+			synth:        synth,
+			oscillator1:  ui.NewOscillatorModel(selectedStyle, track.oscillator1),
+			envelope1:    ui.NewEnvelopeModel(selectedStyle, track.envelope1),
+			oscillator2:  ui.NewOscillatorModel(selectedStyle, track.oscillator2),
+			envelope2:    ui.NewEnvelopeModel(selectedStyle, track.envelope2),
+			mixer:        ui.NewMixer(),
+			pattern:      pattern,
+			cursorTrack:  cursorTrack,
+			cursorRow:    0,
+			viewportRow:  0,
+			mode:         TrackMode,
+			jumpInput:    "",
+			isPlaying:    false,
+			playbackRow:  0,
+			octave:       4,
+			globalVolume: 1.0,
 		},
 		tea.WithAltScreen(),
 	)
