@@ -25,19 +25,43 @@ type EnvelopeModel struct {
 	Decay   PercentageKnob
 	Sustain PercentageKnob
 	Release PercentageKnob
+
+	ShowModal   bool
+	PresetModel PresetModel
 }
 
-func NewEnvelopeModel(selectedStyle lipgloss.Style, envelope audio.Envelope) EnvelopeModel {
-	return EnvelopeModel{
+func NewEnvelopeModel(selectedStyle lipgloss.Style, envelope audio.Envelope) *EnvelopeModel {
+	return &EnvelopeModel{
 		envelopeField: EnvelopeAttack,
 		Attack:        NewPercentageKnob("Attack", envelope.Attack, true, selectedStyle),
 		Decay:         NewPercentageKnob("Decay", envelope.Decay, false, selectedStyle),
 		Sustain:       NewPercentageKnob("Sustain", envelope.Sustain, false, selectedStyle),
 		Release:       NewPercentageKnob("Release", envelope.Release, false, selectedStyle),
+
+		PresetModel: NewPresetModel(selectedStyle),
 	}
 }
 
-func (m EnvelopeModel) Update(msg tea.KeyMsg) EnvelopeModel {
+// TODO: Need to get the values back to the track somehow (through main model?)
+func (m *EnvelopeModel) Update(msg tea.KeyMsg) *EnvelopeModel {
+	if m.ShowModal {
+		switch msg.String() {
+		case "enter":
+			m.Attack.Value = m.PresetModel.envelope.Attack
+			m.Decay.Value = m.PresetModel.envelope.Decay
+			m.Sustain.Value = m.PresetModel.envelope.Sustain
+			m.Release.Value = m.PresetModel.envelope.Release
+			m.ShowModal = false
+
+			return m
+		case "esc", "p":
+			m.ShowModal = false
+			return m
+		}
+
+		m.PresetModel = m.PresetModel.Update(msg)
+	}
+
 	switch msg.String() {
 	case "up":
 		// Move to previous envelope field
@@ -57,6 +81,8 @@ func (m EnvelopeModel) Update(msg tea.KeyMsg) EnvelopeModel {
 	case "shift+right":
 		// Increase value by 10%
 		m.adjustEnvelopeValue(0.10)
+	case "p":
+		m.ShowModal = !m.ShowModal
 	}
 
 	// TODO: Use a selection index instead of "selected" flags in knobs
@@ -119,7 +145,11 @@ func (m *EnvelopeModel) adjustEnvelopeValue(delta float64) {
 	}
 }
 
-func (m EnvelopeModel) View() string {
+func (m *EnvelopeModel) View() string {
+	if m.ShowModal {
+		return m.PresetModel.View()
+	}
+
 	envView := strings.Builder{}
 	envView.WriteString("ADSR Envelope:\n")
 
