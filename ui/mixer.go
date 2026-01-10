@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -8,12 +9,14 @@ import (
 )
 
 type Mixer struct {
-	MixBalance PercentageKnob
+	MixBalance   PercentageKnob
+	GlobalVolume float64 // Global output volume (0.0 to 1.0), set by main
 }
 
 func NewMixer() Mixer {
 	return Mixer{
-		MixBalance: NewPercentageKnob("Balance", 0.5, true, lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))),
+		MixBalance:   NewPercentageKnob("Balance", 0.5, true, lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))),
+		GlobalVolume: 1.0,
 	}
 }
 
@@ -22,6 +25,7 @@ func (m *Mixer) View() string {
 	envView.WriteString("Mixer:\n")
 
 	envView.WriteString(m.MixBalance.View() + "\n")
+	envView.WriteString(fmt.Sprintf("Volume:  %3d%%", int(m.GlobalVolume*100)))
 
 	return envView.String()
 }
