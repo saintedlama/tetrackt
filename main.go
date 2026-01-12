@@ -101,10 +101,10 @@ type InputMode int
 
 const (
 	TrackMode InputMode = iota
-	Envelope1EditMode
 	Oscillator1EditMode
-	Envelope2EditMode
+	Envelope1EditMode
 	Oscillator2EditMode
+	Envelope2EditMode
 	MixerEditMode
 )
 
@@ -417,37 +417,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		// TODO: Use int based logic with modes for cycling!
 		case "tab":
-			// Cycle through Oscillator, Envelope, Track modes
-			switch m.mode {
-			case Oscillator1EditMode:
-				m.mode = Envelope1EditMode
-			case Envelope1EditMode:
-				m.mode = Oscillator2EditMode
-			case Oscillator2EditMode:
-				m.mode = Envelope2EditMode
-			case Envelope2EditMode:
-				m.mode = MixerEditMode
-			case MixerEditMode:
-				m.mode = TrackMode
-			default:
-				m.mode = Oscillator1EditMode
-			}
+			m.mode = InputMode((int(m.mode) + 1) % 6) // Cycle through 6 modes
 			return m, nil
 		case "shift+tab":
-			// Reverse cycle through Oscillator, Envelope, Track modes
-			switch m.mode {
-			case Oscillator1EditMode:
-				m.mode = TrackMode
-			case Envelope1EditMode:
-				m.mode = Oscillator1EditMode
-			case Oscillator2EditMode:
-				m.mode = Envelope1EditMode
-			case Envelope2EditMode:
-				m.mode = Oscillator2EditMode
-			case MixerEditMode:
-				m.mode = Envelope2EditMode
-			default:
-				m.mode = Envelope1EditMode
+			m.mode = InputMode((int(m.mode) - 1) % 6) // Cycle through 6 modes
+			if m.mode < 0 {
+				m.mode += 6
 			}
 			return m, nil
 		case "q", "ctrl+c":
