@@ -42,9 +42,12 @@ func (m OscillatorModel) View() string {
 	for i, osc := range m.oscillatorList {
 		if i == m.oscillatorIdx {
 			oscillatorView.WriteString(m.selectedStyle.Render(fmt.Sprintf("%s", osc)))
-			oscillatorView.WriteString("\n")
 		} else {
-			fmt.Fprintf(&oscillatorView, "%s\n", osc)
+			fmt.Fprint(&oscillatorView, osc)
+		}
+
+		if i < len(m.oscillatorList)-1 {
+			oscillatorView.WriteString("\n")
 		}
 	}
 

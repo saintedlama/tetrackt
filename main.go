@@ -157,18 +157,18 @@ var (
 	panelBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("#333333")).
-				Padding(1, 2)
+				Padding(0, 2)
 
 	activePanelBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("#00e5ff")).
 				Bold(true).
-				Padding(1, 2)
+				Padding(0, 2)
 
 	modalBorderStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("#ff9800")).
-				Padding(1, 2)
+				Padding(0, 2)
 )
 
 const (
@@ -191,7 +191,6 @@ type model struct {
 	cursorRow   int
 	viewportRow int // Top row visible in the viewport
 	mode        InputMode
-	jumpInput   string
 	isPlaying   bool
 	playbackRow int
 	octave      int
@@ -309,7 +308,7 @@ func loadSongFromFile(filename string) (*Pattern, error) {
 func (m model) Init() tea.Cmd {
 	// Initialize speaker with sample rate
 	sampleRate := m.synth.SampleRate
-	buffersize := sampleRate.N(time.Millisecond * 300)
+	buffersize := sampleRate.N(time.Millisecond * 250)
 
 	speaker.Init(sampleRate, buffersize)
 
@@ -528,7 +527,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.mode == MixerEditMode {
 			m.mixer.Update(msg)
 			track := &m.pattern.tracks[m.cursorTrack]
-			track.mixer = m.mixer.MixBalance.Value
+			track.mixer = m.mixer.MixBalance
 
 			return m, nil
 		}
@@ -635,7 +634,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // tick returns a command that sends a tickMsg after a delay
 func (m *model) tick() tea.Cmd {
-	return tea.Tick(time.Millisecond*300, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Millisecond*250, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
@@ -704,6 +703,7 @@ func (m *model) noteToFrequency(note string) float64 {
 
 // playNote plays a note at the given frequency using the current oscillator
 func (m *model) playNote(frequency float64) {
+	// TODO: This is synth arrangement coupled with playback functionality. Refactor to a synth method in audio that takes oscillator type, envelope, frequency and combines this into a playable note or streamer?
 	oscillatorType1 := m.pattern.tracks[m.cursorTrack].oscillator1
 	oscillator1 := m.synth.NewOscillator(oscillatorType1, frequency)
 	envelope1 := m.pattern.tracks[m.cursorTrack].envelope1
@@ -712,7 +712,7 @@ func (m *model) playNote(frequency float64) {
 	oscillator2 := m.synth.NewOscillator(oscillatorType2, frequency)
 	envelope2 := m.pattern.tracks[m.cursorTrack].envelope2
 
-	duration := m.synth.SampleRate.N(time.Millisecond * 300)
+	duration := m.synth.SampleRate.N(time.Millisecond * 250)
 
 	streamer1 := m.synth.NewADSREnvelope(
 		oscillator1,
@@ -734,9 +734,9 @@ func (m *model) playNote(frequency float64) {
 		},
 	)
 
-	v := (m.mixer.MixBalance.Value - 0.5) * 2 // Scale to -1 to 1
-	mix1 := &effects.Volume{Streamer: streamer1, Base: 2, Volume: -v, Silent: v == 1}
-	mix2 := &effects.Volume{Streamer: streamer2, Base: 2, Volume: v, Silent: v == -1}
+	v := (m.mixer.MixBalance - 0.5) * 2 // Scale to -1 to 1
+	mix1 := &effects.Volume{Streamer: streamer1, Base: 2, Volume: -v, Silent: v >= 1}
+	mix2 := &effects.Volume{Streamer: streamer2, Base: 2, Volume: v, Silent: v <= -1}
 
 	mixed := beep.Mix(mix1, mix2)
 
@@ -964,7 +964,6 @@ func main() {
 			cursorRow:   0,
 			viewportRow: 0,
 			mode:        TrackMode,
-			jumpInput:   "",
 			isPlaying:   false,
 			playbackRow: 0,
 			octave:      4,

@@ -1,19 +1,22 @@
 package ui
 
 import (
+	"fmt"
+	"math"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 type Mixer struct {
-	MixBalance PercentageKnob
+	BalanceBar Bar
+	MixBalance float64
 }
 
 func NewMixer() Mixer {
 	return Mixer{
-		MixBalance: NewPercentageKnob("Balance", 0.5, true, lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))),
+		MixBalance: 0.5,
+		BalanceBar: NewBar(0, 1, 0.5, 10),
 	}
 }
 
@@ -21,7 +24,11 @@ func (m *Mixer) View() string {
 	envView := strings.Builder{}
 	envView.WriteString("Mixer:\n")
 
-	envView.WriteString(m.MixBalance.View() + "\n")
+	v := m.MixBalance
+
+	fmt.Fprintf(&envView, "%3d%% ", int(math.Round((1-v)*100)))
+	envView.WriteString(m.BalanceBar.View())
+	fmt.Fprintf(&envView, " %3d%%", int(math.Round(v*100)))
 
 	return envView.String()
 }
@@ -29,21 +36,23 @@ func (m *Mixer) View() string {
 func (m *Mixer) Update(msg tea.KeyMsg) *Mixer {
 	switch msg.String() {
 	case "left":
-		if m.MixBalance.Value > 0.0 {
-			m.MixBalance.Value -= 0.01
-		}
+		m.MixBalance -= 0.01
 	case "shift+left":
-		if m.MixBalance.Value > 0.1 {
-			m.MixBalance.Value -= 0.1
-		}
+		m.MixBalance -= 0.1
 	case "right":
-		if m.MixBalance.Value < 1.0 {
-			m.MixBalance.Value += 0.01
-		}
+		m.MixBalance += 0.01
 	case "shift+right":
-		if m.MixBalance.Value < 0.9 {
-			m.MixBalance.Value += 0.1
-		}
+		m.MixBalance += 0.1
 	}
+
+	m.MixBalance = math.Round(m.MixBalance*100) / 100
+
+	if m.MixBalance < 0 {
+		m.MixBalance = 0
+	} else if m.MixBalance > 1 {
+		m.MixBalance = 1
+	}
+
+	m.BalanceBar.Value = m.MixBalance
 	return m
 }

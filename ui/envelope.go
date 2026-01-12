@@ -156,7 +156,7 @@ func (m *EnvelopeModel) View() string {
 	envView.WriteString(m.Attack.View() + "\n")
 	envView.WriteString(m.Decay.View() + "\n")
 	envView.WriteString(m.Sustain.View() + "\n")
-	envView.WriteString(m.Release.View() + "\n")
+	envView.WriteString(m.Release.View())
 
 	return envView.String()
 }
