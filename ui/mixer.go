@@ -9,14 +9,16 @@ import (
 )
 
 type Mixer struct {
-	BalanceBar Bar
-	MixBalance float64
+	BalanceBar   Bar
+	MixBalance   float64
+	GlobalVolume float64 // Global output volume (0.0 to 1.0), set by main
 }
 
 func NewMixer() Mixer {
 	return Mixer{
-		MixBalance: 0.5,
-		BalanceBar: NewBar(0, 1, 0.5, 10),
+		MixBalance:   0.5,
+		BalanceBar:   NewBar(0, 1, 0.5, 10),
+		GlobalVolume: 1.0,
 	}
 }
 
@@ -29,6 +31,7 @@ func (m *Mixer) View() string {
 	fmt.Fprintf(&envView, "%3d%% ", int(math.Round((1-v)*100)))
 	envView.WriteString(m.BalanceBar.View())
 	fmt.Fprintf(&envView, " %3d%%", int(math.Round(v*100)))
+	envView.WriteString(fmt.Sprintf("Volume:  %3d%%", int(m.GlobalVolume*100)))
 
 	return envView.String()
 }
