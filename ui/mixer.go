@@ -31,6 +31,7 @@ func (m *Mixer) View() string {
 	fmt.Fprintf(&envView, "%3d%% ", int(math.Round((1-v)*100)))
 	envView.WriteString(m.BalanceBar.View())
 	fmt.Fprintf(&envView, " %3d%%", int(math.Round(v*100)))
+	envView.WriteString("\n")
 	envView.WriteString(fmt.Sprintf("Volume:  %3d%%", int(m.GlobalVolume*100)))
 
 	return envView.String()

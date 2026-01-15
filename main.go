@@ -442,21 +442,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		// volume
-		case "[":
-			if m.globalVolume > 0.0 {
-				m.globalVolume -= 0.05
-				if m.globalVolume < 0.0 {
-					m.globalVolume = 0.0
-				}
+		case "[", "alt+[": // decrease volume, for german keyboard layout we need to consider the alt+combo
+			m.globalVolume -= 0.05
+			if m.globalVolume < 0.0 {
+				m.globalVolume = 0.0
 			}
+
+			// TODO: Refactor to avoid syncing state with models
+			m.mixer.GlobalVolume = m.globalVolume
 			return m, nil
-		case "]":
-			if m.globalVolume < 1.0 {
-				m.globalVolume += 0.05
-				if m.globalVolume > 1.0 {
-					m.globalVolume = 1.0
-				}
+		case "]", "alt+]": // increase volume, for german keyboard layout we need to consider the alt+combo
+			m.globalVolume += 0.05
+			if m.globalVolume > 1.0 {
+				m.globalVolume = 1.0
 			}
+
+			// TODO: Refactor to avoid syncing state with models
+			m.mixer.GlobalVolume = m.globalVolume
 			return m, nil
 		// TODO: Use int based logic with modes for cycling!
 		case "tab":
