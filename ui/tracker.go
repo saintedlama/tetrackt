@@ -1,0 +1,252 @@
+package ui
+
+import (
+	"fmt"
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/tetrackt/tetrackt/audio"
+)
+
+var (
+	headerStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#00ffff")).
+			Padding(0, 1)
+
+	rowNumStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#888888"))
+
+	cursorRowStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ff9800")).
+			Bold(true)
+
+	playbackRowStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#00ffff")).
+				Bold(true)
+
+	cellStyle = lipgloss.NewStyle().
+			Padding(0, 1)
+
+	cursorCellStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("#2a2a2a")).
+			Foreground(lipgloss.Color("#00e5ff")).
+			Padding(0, 1)
+)
+
+// TrackerModel represents the state of the tracker pattern editor
+type TrackerModel struct {
+	Tracks         []Track
+	NumRows        int
+	NumTracks      int
+	CursorTrack    int
+	CursorRow      int
+	IsPlaying      bool
+	LoopToRow      bool
+	LoopEndRow     int
+	PlaybackRow    int
+	viewportRow    int
+	ViewportHeight int // TODO: Not sure if we need both ViewportHeight and ViewportWidth
+	ViewportWidth  int
+}
+
+// Track represents a single track in the pattern
+type Track struct {
+	number      int
+	Oscillator1 audio.OscillatorType
+	Envelope1   audio.Envelope
+	Oscillator2 audio.OscillatorType
+	Envelope2   audio.Envelope
+	Mixer       float64
+	Rows        []TrackRow
+}
+
+func (m Track) CurrentRow() TrackRow {
+	return m.Rows[m.number]
+}
+
+// TrackRow represents a single row in a track
+type TrackRow struct {
+	Note   string // e.g., "C-4", "D#5", "---" for empty
+	Volume int    // 0-64
+	Effect string // effect command
+}
+
+// NewPattern creates a new pattern with the specified number of tracks and rows
+func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerModel {
+	tracks := make([]Track, numTracks)
+	for i := range numTracks {
+		tracks[i] = Track{
+			number:      i,
+			Oscillator1: audio.Sine,
+			Envelope1:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
+			Oscillator2: audio.Sine,
+			Envelope2:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
+			Rows:        make([]TrackRow, numRows),
+		}
+		// Initialize all rows with empty data
+		for j := range numRows {
+			tracks[i].Rows[j] = TrackRow{
+				Note:   "---",
+				Volume: 0,
+				Effect: "---",
+			}
+		}
+	}
+	return &TrackerModel{
+		Tracks:         tracks,
+		NumRows:        numRows,
+		NumTracks:      numTracks,
+		CursorTrack:    0,
+		IsPlaying:      false,
+		LoopToRow:      false,
+		PlaybackRow:    0,
+		CursorRow:      0,
+		viewportRow:    0,
+		ViewportHeight: viewportHeight,
+		ViewportWidth:  viewportWidth,
+	}
+}
+
+func (m TrackerModel) CurrentTrack() Track {
+	return m.Tracks[m.CursorTrack]
+}
+
+func (m TrackerModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m TrackerModel) View() string {
+	// Track editor section
+	var tracks strings.Builder
+
+	// Track headers
+	tracks.WriteString("    ") // Row number space
+	for i := 0; i < m.NumTracks; i++ {
+		trackHeader := fmt.Sprintf("Track %d", i+1)
+		if i == m.CursorTrack {
+			trackHeader = headerStyle.Render(trackHeader)
+		} else {
+			trackHeader = headerStyle.Foreground(lipgloss.Color("#555555")).Render(trackHeader)
+		}
+		tracks.WriteString(trackHeader)
+		tracks.WriteString("    ")
+	}
+	tracks.WriteString("\n")
+
+	// Separator
+	tracks.WriteString("    ")
+	for i := 0; i < m.NumTracks; i++ {
+		tracks.WriteString(strings.Repeat("─", 10))
+		tracks.WriteString("   ")
+	}
+	tracks.WriteString("\n")
+
+	endRow := min(m.ViewportHeight, m.NumRows)
+
+	// Render visible rows
+	for row := m.ViewportHeight; row < endRow; row++ {
+		// Row number with playback indicator
+		rowNumStr := fmt.Sprintf("%02d ", row)
+		if row == m.PlaybackRow && m.IsPlaying {
+			tracks.WriteString(playbackRowStyle.Render(rowNumStr))
+		} else if row == m.CursorRow {
+			tracks.WriteString(cursorRowStyle.Render(rowNumStr))
+		} else {
+			tracks.WriteString(rowNumStyle.Render(rowNumStr))
+		}
+
+		// Track cells
+		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
+			trackRow := m.Tracks[trackIdx].Rows[row]
+			cellContent := fmt.Sprintf("%-3s %2s %3s", trackRow.Note, formatVolume(trackRow.Volume), trackRow.Effect)
+
+			if row == m.CursorRow && trackIdx == m.CursorTrack {
+				tracks.WriteString(cursorCellStyle.Render(cellContent))
+			} else {
+				tracks.WriteString(cellStyle.Render(cellContent))
+			}
+			tracks.WriteString(" ")
+		}
+		tracks.WriteString("\n")
+	}
+
+	return tracks.String()
+}
+
+func (m TrackerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		keyStr := msg.String()
+
+		// Track mode key handling
+		switch keyStr {
+		case "left":
+			// Move cursor left (previous track)
+			if m.CursorTrack > 0 {
+				m.CursorTrack--
+
+				// TODO: solve sync problem between tracker and osc, env, mixer models
+				//m.oscillator1.Oscillator = m.pattern.tracks[m.cursorTrack].oscillator1
+			}
+		case "right":
+			// Move cursor right (next track)
+			if m.CursorTrack < m.NumTracks-1 {
+				m.CursorTrack++
+				// TODO: solve sync problem between tracker and osc, env, mixer models
+				//m.oscillator1.Oscillator = m.pattern.tracks[m.cursorTrack].oscillator1
+			}
+		case "up":
+			// Move cursor up (previous row)
+			if m.CursorRow > 0 {
+				m.CursorRow--
+				// Adjust viewport if needed
+				if m.CursorRow < m.viewportRow {
+					m.viewportRow = m.CursorRow
+				}
+			}
+		case "down":
+			// Move cursor down (next row)
+			if m.CursorRow < m.NumRows-1 {
+				m.CursorRow++
+				// Adjust viewport if needed
+				visibleRows := m.visibleRows()
+				if m.CursorRow >= m.viewportRow+visibleRows {
+					m.viewportRow = m.CursorRow - visibleRows + 1
+				}
+			}
+		case "home":
+			// Jump to first row
+			m.CursorRow = 0
+			m.viewportRow = 0
+		case "end":
+			// Jump to last row
+			m.CursorRow = m.NumRows - 1
+			visibleRows := m.visibleRows()
+			m.viewportRow = m.NumRows - visibleRows
+			if m.viewportRow < 0 {
+				m.viewportRow = 0
+			}
+		}
+	}
+
+	return m, nil
+}
+
+func (m TrackerModel) visibleRows() int {
+	available := m.ViewportHeight
+	if available < 5 {
+		return 5
+	}
+
+	return available
+}
+
+// formatVolume formats volume value for display
+func formatVolume(volume int) string {
+	if volume == 0 {
+		return ".."
+	}
+	return fmt.Sprintf("%02d", volume)
+}

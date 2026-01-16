@@ -14,10 +14,10 @@ type Mixer struct {
 	GlobalVolume float64 // Global output volume (0.0 to 1.0), set by main
 }
 
-func NewMixer() Mixer {
+func NewMixer(balance float64) Mixer {
 	return Mixer{
-		MixBalance:   0.5,
-		BalanceBar:   NewBar(0, 1, 0.5, 10),
+		MixBalance:   balance,
+		BalanceBar:   NewBar(0, 1, balance, 10),
 		GlobalVolume: 1.0,
 	}
 }
