@@ -431,6 +431,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			freq := noteFrequency(base, m.octave)
 			m.playNote(freq)
 
+			if m.mode == TrackMode {
+				m.tracker.SetNote(base, m.octave)
+			}
+
 			return m, nil
 		}
 
@@ -533,10 +537,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
+		// TODO: Could be more generic rendering the chrome and calculate chrome height
 		synthViewHeight := lipgloss.Height(m.synthView())
 
-		m.tracker.ViewportHeight = m.height - synthViewHeight - 4
-		m.tracker.ViewportWidth = m.width
+		m.tracker.Viewport = ui.Viewport{
+			Height: m.height - (synthViewHeight + 4),
+			Width:  m.width,
+		}
 
 		return m, nil
 	}
@@ -708,8 +715,6 @@ func (m *model) playNote(frequency float64) {
 func (m model) View() string {
 	// Build header
 	var header strings.Builder
-	header.WriteString(titleStyle.Render("TeTrackT - Music Tracker"))
-	header.WriteString("\n")
 
 	modeStr := "TRACK"
 	switch m.mode {
@@ -738,22 +743,22 @@ func (m model) View() string {
 		modeStr, playStatus, m.tracker.CursorTrack, m.tracker.CursorRow, m.octave)))
 	header.WriteString("\n\n")
 
-	instView := m.synthView()
-	trackView := m.tracker.View()
+	synthView := m.synthView()
+	trackerView := m.tracker.View()
 
 	// Apply border to track view with conditional highlighting
-	trackBorder := panelBorderStyle
+	trackerBorder := panelBorderStyle
 	if m.mode == TrackMode {
-		trackBorder = activePanelBorderStyle
+		trackerBorder = activePanelBorderStyle
 	}
-	trackViewWithBorder := trackBorder.Render(trackView)
 
-	body := lipgloss.JoinVertical(lipgloss.Left, instView, trackViewWithBorder)
+	trackerViewWithBorder := trackerBorder.Render(trackerView)
+	body := lipgloss.JoinVertical(lipgloss.Left, synthView, trackerViewWithBorder)
 
 	// Footer help
 	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | +/-: Octave | [/]: Volume | W: Oscillator | E: Envelope | T: Track | p: Play/Pause | P: Loop | S: Save | L: Load | Q: Quit")
 
-	// TODO: More generic modal handling
+	// TODO: More generic modal handling, use commands?
 	if m.envelope1.ShowModal && m.mode == Envelope1EditMode {
 		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.envelope1.View())
 	}

@@ -35,20 +35,24 @@ var (
 			Padding(0, 1)
 )
 
+type Viewport struct {
+	Width  int
+	Height int
+}
+
 // TrackerModel represents the state of the tracker pattern editor
 type TrackerModel struct {
-	Tracks         []Track
-	NumRows        int
-	NumTracks      int
-	CursorTrack    int
-	CursorRow      int
-	IsPlaying      bool
-	LoopToRow      bool
-	LoopEndRow     int
-	PlaybackRow    int
-	viewportRow    int
-	ViewportHeight int // TODO: Not sure if we need both ViewportHeight and ViewportWidth
-	ViewportWidth  int
+	Tracks      []Track
+	NumRows     int
+	NumTracks   int
+	CursorTrack int
+	CursorRow   int
+	IsPlaying   bool
+	LoopToRow   bool
+	LoopEndRow  int
+	PlaybackRow int
+	viewportRow int
+	Viewport    Viewport
 }
 
 // Track represents a single track in the pattern
@@ -60,10 +64,6 @@ type Track struct {
 	Envelope2   audio.Envelope
 	Mixer       float64
 	Rows        []TrackRow
-}
-
-func (m Track) CurrentRow() TrackRow {
-	return m.Rows[m.number]
 }
 
 // TrackRow represents a single row in a track
@@ -95,29 +95,24 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 		}
 	}
 	return &TrackerModel{
-		Tracks:         tracks,
-		NumRows:        numRows,
-		NumTracks:      numTracks,
-		CursorTrack:    0,
-		IsPlaying:      false,
-		LoopToRow:      false,
-		PlaybackRow:    0,
-		CursorRow:      0,
-		viewportRow:    0,
-		ViewportHeight: viewportHeight,
-		ViewportWidth:  viewportWidth,
+		Tracks:      tracks,
+		NumRows:     numRows,
+		NumTracks:   numTracks,
+		CursorTrack: 0,
+		IsPlaying:   false,
+		LoopToRow:   false,
+		PlaybackRow: 0,
+		CursorRow:   0,
+		viewportRow: 0,
+		Viewport:    Viewport{Width: viewportWidth, Height: viewportHeight},
 	}
 }
 
-func (m TrackerModel) CurrentTrack() Track {
-	return m.Tracks[m.CursorTrack]
-}
-
-func (m TrackerModel) Init() tea.Cmd {
+func (m *TrackerModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m TrackerModel) View() string {
+func (m *TrackerModel) View() string {
 	// Track editor section
 	var tracks strings.Builder
 
@@ -143,10 +138,10 @@ func (m TrackerModel) View() string {
 	}
 	tracks.WriteString("\n")
 
-	endRow := min(m.ViewportHeight, m.NumRows)
+	endRow := min(m.viewportRow+m.visibleRows(), m.NumRows)
 
 	// Render visible rows
-	for row := m.ViewportHeight; row < endRow; row++ {
+	for row := m.viewportRow; row < endRow; row++ {
 		// Row number with playback indicator
 		rowNumStr := fmt.Sprintf("%02d ", row)
 		if row == m.PlaybackRow && m.IsPlaying {
@@ -175,7 +170,7 @@ func (m TrackerModel) View() string {
 	return tracks.String()
 }
 
-func (m TrackerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *TrackerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		keyStr := msg.String()
@@ -224,23 +219,16 @@ func (m TrackerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Jump to last row
 			m.CursorRow = m.NumRows - 1
 			visibleRows := m.visibleRows()
-			m.viewportRow = m.NumRows - visibleRows
-			if m.viewportRow < 0 {
-				m.viewportRow = 0
-			}
+			m.viewportRow = max(m.NumRows-visibleRows, 0)
 		}
 	}
 
 	return m, nil
 }
 
-func (m TrackerModel) visibleRows() int {
-	available := m.ViewportHeight
-	if available < 5 {
-		return 5
-	}
-
-	return available
+func (m *TrackerModel) visibleRows() int {
+	chromeRows := 4 // header + separator + padding
+	return m.Viewport.Height - chromeRows
 }
 
 // formatVolume formats volume value for display
@@ -249,4 +237,19 @@ func formatVolume(volume int) string {
 		return ".."
 	}
 	return fmt.Sprintf("%02d", volume)
+}
+
+func (m Track) CurrentRow() TrackRow {
+	return m.Rows[m.number]
+}
+
+func (m *TrackerModel) CurrentTrack() Track {
+	return m.Tracks[m.CursorTrack]
+}
+
+func (m *TrackerModel) SetNote(base string, octave int) TrackRow {
+	trackCell := &m.Tracks[m.CursorTrack].Rows[m.CursorRow]
+	trackCell.Note = fmt.Sprintf("%s-%d", base, octave)
+
+	return *trackCell
 }
