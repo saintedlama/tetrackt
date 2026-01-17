@@ -14,12 +14,20 @@ type Mixer struct {
 	GlobalVolume float64 // Global output volume (0.0 to 1.0), set by main
 }
 
-func NewMixer() Mixer {
-	return Mixer{
-		MixBalance:   0.5,
-		BalanceBar:   NewBar(0, 1, 0.5, 10),
+type MixerUpdated struct {
+	Balance float64
+}
+
+func NewMixer(balance float64) *Mixer {
+	return &Mixer{
+		MixBalance:   balance,
+		BalanceBar:   NewBar(0, 1, balance, 10),
 		GlobalVolume: 1.0,
 	}
+}
+
+func (m *Mixer) Init() tea.Cmd {
+	return nil
 }
 
 func (m *Mixer) View() string {
@@ -37,16 +45,19 @@ func (m *Mixer) View() string {
 	return envView.String()
 }
 
-func (m *Mixer) Update(msg tea.KeyMsg) *Mixer {
-	switch msg.String() {
-	case "left":
-		m.MixBalance -= 0.01
-	case "shift+left":
-		m.MixBalance -= 0.1
-	case "right":
-		m.MixBalance += 0.01
-	case "shift+right":
-		m.MixBalance += 0.1
+func (m *Mixer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "left":
+			m.MixBalance -= 0.01
+		case "shift+left":
+			m.MixBalance -= 0.1
+		case "right":
+			m.MixBalance += 0.01
+		case "shift+right":
+			m.MixBalance += 0.1
+		}
 	}
 
 	m.MixBalance = math.Round(m.MixBalance*100) / 100
@@ -58,5 +69,11 @@ func (m *Mixer) Update(msg tea.KeyMsg) *Mixer {
 	}
 
 	m.BalanceBar.Value = m.MixBalance
-	return m
+
+	// TODO: Optimize to only send update when value changes
+	return m, func() tea.Msg {
+		return MixerUpdated{
+			Balance: m.MixBalance,
+		}
+	}
 }

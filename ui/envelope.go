@@ -21,91 +21,108 @@ const (
 type EnvelopeModel struct {
 	envelopeField EnvelopeEditField
 
-	Attack  PercentageKnob
-	Decay   PercentageKnob
-	Sustain PercentageKnob
-	Release PercentageKnob
+	Attack  float64
+	Decay   float64
+	Sustain float64
+	Release float64
 
-	ShowModal   bool
-	PresetModel PresetModel
+	ShowModal     bool
+	selectedStyle lipgloss.Style
+	PresetModel   PresetModel
+}
+
+type EnvelopeUpdated struct {
+	Envelope audio.Envelope
 }
 
 func NewEnvelopeModel(selectedStyle lipgloss.Style, envelope audio.Envelope) *EnvelopeModel {
 	return &EnvelopeModel{
 		envelopeField: EnvelopeAttack,
-		Attack:        NewPercentageKnob("Attack", envelope.Attack, true, selectedStyle),
-		Decay:         NewPercentageKnob("Decay", envelope.Decay, false, selectedStyle),
-		Sustain:       NewPercentageKnob("Sustain", envelope.Sustain, false, selectedStyle),
-		Release:       NewPercentageKnob("Release", envelope.Release, false, selectedStyle),
+		Attack:        envelope.Attack,
+		Decay:         envelope.Decay,
+		Sustain:       envelope.Sustain,
+		Release:       envelope.Release,
 
-		PresetModel: NewPresetModel(selectedStyle),
+		selectedStyle: selectedStyle,
+		PresetModel:   NewPresetModel(selectedStyle),
 	}
 }
 
 // TODO: Need to get the values back to the track somehow (through main model?)
-func (m *EnvelopeModel) Update(msg tea.KeyMsg) *EnvelopeModel {
+func (m *EnvelopeModel) Update(msg tea.Msg) (*EnvelopeModel, tea.Cmd) {
+	var cmd tea.Cmd
+
 	if m.ShowModal {
-		switch msg.String() {
-		case "enter":
-			m.Attack.Value = m.PresetModel.envelope.Attack
-			m.Decay.Value = m.PresetModel.envelope.Decay
-			m.Sustain.Value = m.PresetModel.envelope.Sustain
-			m.Release.Value = m.PresetModel.envelope.Release
-			m.ShowModal = false
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "enter":
+				m.Attack = m.PresetModel.envelope.Attack
+				m.Decay = m.PresetModel.envelope.Decay
+				m.Sustain = m.PresetModel.envelope.Sustain
+				m.Release = m.PresetModel.envelope.Release
+				m.ShowModal = false
 
-			return m
-		case "esc", "p":
-			m.ShowModal = false
-			return m
+				cmd = func() tea.Msg {
+					return EnvelopeUpdated{
+						Envelope: audio.Envelope{
+							Attack:  m.Attack,
+							Decay:   m.Decay,
+							Sustain: m.Sustain,
+							Release: m.Release,
+						},
+					}
+				}
+
+				return m, cmd
+			case "esc", "p":
+				m.ShowModal = false
+				return m, nil
+			}
+
+			m.PresetModel = m.PresetModel.Update(msg)
+			return m, nil
 		}
-
-		m.PresetModel = m.PresetModel.Update(msg)
+	}
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "up":
+			// Move to previous envelope field
+			m.envelopeField = (m.envelopeField - 1 + 4) % 4
+		case "down":
+			// Move to next envelope field
+			m.envelopeField = (m.envelopeField + 1) % 4
+		case "left":
+			// Decrease value by 1%
+			m.adjustEnvelopeValue(-0.01)
+		case "shift+left":
+			// Decrease value by 10%
+			m.adjustEnvelopeValue(-0.10)
+		case "right":
+			// Increase value by 1%
+			m.adjustEnvelopeValue(0.01)
+		case "shift+right":
+			// Increase value by 10%
+			m.adjustEnvelopeValue(0.10)
+		case "p":
+			m.ShowModal = !m.ShowModal
+		}
 	}
 
-	switch msg.String() {
-	case "up":
-		// Move to previous envelope field
-		m.envelopeField = (m.envelopeField - 1 + 4) % 4
-	case "down":
-		// Move to next envelope field
-		m.envelopeField = (m.envelopeField + 1) % 4
-	case "left":
-		// Decrease value by 1%
-		m.adjustEnvelopeValue(-0.01)
-	case "shift+left":
-		// Decrease value by 10%
-		m.adjustEnvelopeValue(-0.10)
-	case "right":
-		// Increase value by 1%
-		m.adjustEnvelopeValue(0.01)
-	case "shift+right":
-		// Increase value by 10%
-		m.adjustEnvelopeValue(0.10)
-	case "p":
-		m.ShowModal = !m.ShowModal
+	// TODO: Fired too often - only when value changes for clarity
+	cmd = func() tea.Msg {
+		return EnvelopeUpdated{
+			Envelope: audio.Envelope{
+				Attack:  m.Attack,
+				Decay:   m.Decay,
+				Sustain: m.Sustain,
+				Release: m.Release,
+			},
+		}
 	}
 
-	// TODO: Use a selection index instead of "selected" flags in knobs
-	// TODO: Refactor to avoid repetition
-	m.Attack.Selected = false
-	m.Decay.Selected = false
-	m.Sustain.Selected = false
-	m.Release.Selected = false
-
-	if m.envelopeField == EnvelopeAttack {
-		m.Attack.Selected = true
-	}
-	if m.envelopeField == EnvelopeDecay {
-		m.Decay.Selected = true
-	}
-	if m.envelopeField == EnvelopeSustain {
-		m.Sustain.Selected = true
-	}
-	if m.envelopeField == EnvelopeRelease {
-		m.Release.Selected = true
-	}
-
-	return m
+	return m, cmd
 }
 
 // adjustEnvelopeValue adjusts the current envelope field by a delta value
@@ -114,13 +131,13 @@ func (m *EnvelopeModel) adjustEnvelopeValue(delta float64) {
 
 	switch m.envelopeField {
 	case EnvelopeAttack:
-		currentValue = &m.Attack.Value
+		currentValue = &m.Attack
 	case EnvelopeDecay:
-		currentValue = &m.Decay.Value
+		currentValue = &m.Decay
 	case EnvelopeSustain:
-		currentValue = &m.Sustain.Value
+		currentValue = &m.Sustain
 	case EnvelopeRelease:
-		currentValue = &m.Release.Value
+		currentValue = &m.Release
 	}
 
 	if currentValue != nil {
@@ -128,7 +145,7 @@ func (m *EnvelopeModel) adjustEnvelopeValue(delta float64) {
 
 		// For A, D, R: prevent increases that would make A+D+R exceed 100
 		if m.envelopeField != EnvelopeSustain && delta > 0 {
-			otherSum := m.Attack.Value + m.Decay.Value + m.Release.Value - *currentValue
+			otherSum := m.Attack + m.Decay + m.Release - *currentValue
 			if newValue+otherSum > 1.0 {
 				return // block the increase
 			}
@@ -153,10 +170,20 @@ func (m *EnvelopeModel) View() string {
 	envView := strings.Builder{}
 	envView.WriteString("ADSR Envelope:\n")
 
-	envView.WriteString(m.Attack.View() + "\n")
-	envView.WriteString(m.Decay.View() + "\n")
-	envView.WriteString(m.Sustain.View() + "\n")
-	envView.WriteString(m.Release.View())
+	envView.WriteString(RenderKnobSelected("Attack", m.Attack, m.envelopeField == EnvelopeAttack, m.selectedStyle) + "\n")
+	envView.WriteString(RenderKnobSelected("Decay", m.Decay, m.envelopeField == EnvelopeDecay, m.selectedStyle) + "\n")
+	envView.WriteString(RenderKnobSelected("Sustain", m.Sustain, m.envelopeField == EnvelopeSustain, m.selectedStyle) + "\n")
+	envView.WriteString(RenderKnobSelected("Release", m.Release, m.envelopeField == EnvelopeRelease, m.selectedStyle))
 
 	return envView.String()
+}
+
+func RenderKnobSelected(label string, value float64, selected bool, selectedStyle lipgloss.Style) string {
+	knobChar := RenderKnob(label, value)
+
+	if selected {
+		return selectedStyle.Render(knobChar)
+	} else {
+		return knobChar
+	}
 }
