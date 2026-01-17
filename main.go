@@ -102,11 +102,11 @@ type model struct {
 	width       int
 	height      int
 	synth       *audio.Synth
-	oscillator1 ui.OscillatorModel
+	oscillator1 *ui.OscillatorModel
 	envelope1   *ui.EnvelopeModel
-	oscillator2 ui.OscillatorModel
+	oscillator2 *ui.OscillatorModel
 	envelope2   *ui.EnvelopeModel
-	mixer       ui.Mixer
+	mixer       *ui.Mixer
 	tracker     *ui.TrackerModel
 
 	mode InputMode
@@ -439,29 +439,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.mode == Envelope1EditMode {
-			m.envelope1.Update(msg)
-			track := m.tracker.CurrentTrack()
-			track.Envelope1 = audio.Envelope{
-				Attack:  m.envelope1.Attack.Value,
-				Decay:   m.envelope1.Decay.Value,
-				Sustain: m.envelope1.Sustain.Value,
-				Release: m.envelope1.Release.Value,
-			}
-
-			return m, nil
+			var _, cmd = m.envelope1.Update(msg)
+			return m, cmd
 		}
 
 		if m.mode == Envelope2EditMode {
-			m.envelope2.Update(msg)
-			track := m.tracker.CurrentTrack()
-			track.Envelope2 = audio.Envelope{
-				Attack:  m.envelope2.Attack.Value,
-				Decay:   m.envelope2.Decay.Value,
-				Sustain: m.envelope2.Sustain.Value,
-				Release: m.envelope2.Release.Value,
-			}
-
-			return m, nil
+			var _, cmd = m.envelope2.Update(msg)
+			return m, cmd
 		}
 
 		// Handle oscillator edit mode
@@ -472,12 +456,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			m.oscillator1 = m.oscillator1.Update(msg)
-			// TODO: This seems weird - Explose if passing an OnChange callback be better?
-			track := m.tracker.CurrentTrack()
-			track.Oscillator1 = m.oscillator1.Oscillator
-
-			return m, nil
+			var _, cmd = m.oscillator1.Update(msg)
+			return m, cmd
 		}
 
 		if m.mode == Oscillator2EditMode {
@@ -487,26 +467,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			m.oscillator2 = m.oscillator2.Update(msg)
-			// TODO: This seems weird - Explose if passing an OnChange callback be better?
-			track := m.tracker.CurrentTrack()
-			track.Oscillator2 = m.oscillator2.Oscillator
-
-			return m, nil
+			var _, cmd = m.oscillator2.Update(msg)
+			return m, cmd
 		}
 
 		if m.mode == MixerEditMode {
-			m.mixer.Update(msg)
+			var _, cmd = m.mixer.Update(msg)
 			track := m.tracker.CurrentTrack()
 			track.Mixer = m.mixer.MixBalance
 
-			return m, nil
+			return m, cmd
 		}
 
 		if m.mode == TrackMode {
-			m.tracker.Update(msg)
+			var _, cmd = m.tracker.Update(msg)
 
-			return m, nil
+			return m, cmd
 		}
 
 	case tickMsg:
@@ -546,6 +522,41 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, nil
+
+	case ui.TrackChanged:
+		// Update synth parameters based on current track
+		// TODO: Refactor to avoid to know about knob design at this stage - model should allow updating the envelope values
+		m.envelope1.Attack = msg.Envelope1.Attack
+		m.envelope1.Decay = msg.Envelope1.Decay
+		m.envelope1.Sustain = msg.Envelope1.Sustain
+		m.envelope1.Release = msg.Envelope1.Release
+		m.oscillator1.Oscillator = msg.Oscillator1
+
+		m.envelope2.Attack = msg.Envelope2.Attack
+		m.envelope2.Decay = msg.Envelope2.Decay
+		m.envelope2.Sustain = msg.Envelope2.Sustain
+		m.envelope2.Release = msg.Envelope2.Release
+		m.oscillator2.Oscillator = msg.Oscillator2
+
+		m.mixer.MixBalance = msg.Mixer
+	case ui.OscillatorUpdated:
+		// TODO: Refactor to allow updating via a method instead of direct field access
+		switch m.mode {
+		case Oscillator1EditMode:
+			m.tracker.Tracks[m.tracker.CursorTrack].Oscillator1 = msg.Oscillator
+		case Oscillator2EditMode:
+			m.tracker.Tracks[m.tracker.CursorTrack].Oscillator2 = msg.Oscillator
+		}
+	case ui.EnvelopeUpdated:
+		// TODO: Refactor to allow updating via a method instead of direct field access
+		switch m.mode {
+		case Envelope1EditMode:
+			m.tracker.Tracks[m.tracker.CursorTrack].Envelope1 = msg.Envelope
+		case Envelope2EditMode:
+			m.tracker.Tracks[m.tracker.CursorTrack].Envelope2 = msg.Envelope
+		}
+	case ui.MixerUpdated:
+		m.tracker.Tracks[m.tracker.CursorTrack].Mixer = msg.Balance
 	}
 
 	return m, nil

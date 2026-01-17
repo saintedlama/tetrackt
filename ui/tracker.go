@@ -170,7 +170,17 @@ func (m *TrackerModel) View() string {
 	return tracks.String()
 }
 
+type TrackChanged struct {
+	Oscillator1 audio.OscillatorType
+	Envelope1   audio.Envelope
+	Oscillator2 audio.OscillatorType
+	Envelope2   audio.Envelope
+	Mixer       float64
+}
+
 func (m *TrackerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		keyStr := msg.String()
@@ -182,8 +192,19 @@ func (m *TrackerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.CursorTrack > 0 {
 				m.CursorTrack--
 
+				// TODO: Extract to common function
 				// TODO: solve sync problem between tracker and osc, env, mixer models
 				//m.oscillator1.Oscillator = m.pattern.tracks[m.cursorTrack].oscillator1
+				currentTrack := m.Tracks[m.CursorTrack]
+				cmd = func() tea.Msg {
+					return TrackChanged{
+						Oscillator1: currentTrack.Oscillator1,
+						Envelope1:   currentTrack.Envelope1,
+						Oscillator2: currentTrack.Oscillator2,
+						Envelope2:   currentTrack.Envelope2,
+						Mixer:       currentTrack.Mixer,
+					}
+				}
 			}
 		case "right":
 			// Move cursor right (next track)
@@ -191,6 +212,16 @@ func (m *TrackerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.CursorTrack++
 				// TODO: solve sync problem between tracker and osc, env, mixer models
 				//m.oscillator1.Oscillator = m.pattern.tracks[m.cursorTrack].oscillator1
+				currentTrack := m.Tracks[m.CursorTrack]
+				cmd = func() tea.Msg {
+					return TrackChanged{
+						Oscillator1: currentTrack.Oscillator1,
+						Envelope1:   currentTrack.Envelope1,
+						Oscillator2: currentTrack.Oscillator2,
+						Envelope2:   currentTrack.Envelope2,
+						Mixer:       currentTrack.Mixer,
+					}
+				}
 			}
 		case "up":
 			// Move cursor up (previous row)
@@ -223,7 +254,7 @@ func (m *TrackerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return m, nil
+	return m, cmd
 }
 
 func (m *TrackerModel) visibleRows() int {
