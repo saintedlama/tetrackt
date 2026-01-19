@@ -36,8 +36,8 @@ type Envelope struct {
 	Attack, Decay, Sustain, Release float64
 }
 
-// NewEnvelope creates a beep.Streamer that applies ADSR envelope to the provided streamer
-func (s *Synth) NewEnvelope(streamer beep.Streamer, samples int, envelope Envelope) beep.Streamer {
+// Creates a beep.Streamer that applies ADSR envelope to the provided streamer
+func NewEnvelope(streamer beep.Streamer, samples int, envelope Envelope) beep.Streamer {
 	attackSamples := int(envelope.Attack * float64(samples))
 	decaySamples := int(envelope.Decay * float64(samples))
 	releaseSamples := int(envelope.Release * float64(samples))

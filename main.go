@@ -471,9 +471,10 @@ func (m *model) playNote(frequency float64) {
 
 	duration := m.synth.SampleRate.N(time.Millisecond * 250)
 
-	streamer1 := m.synth.NewEnvelope(
+	streamer1 := audio.NewEnvelope(
 		oscillator1,
-		duration, audio.Envelope{
+		duration,
+		audio.Envelope{
 			Attack:  envelope1.Attack,
 			Decay:   envelope1.Decay,
 			Sustain: envelope1.Sustain,
@@ -481,9 +482,10 @@ func (m *model) playNote(frequency float64) {
 		},
 	)
 
-	streamer2 := m.synth.NewEnvelope(
+	streamer2 := audio.NewEnvelope(
 		oscillator2,
-		duration, audio.Envelope{
+		duration,
+		audio.Envelope{
 			Attack:  envelope2.Attack,
 			Decay:   envelope2.Decay,
 			Sustain: envelope2.Sustain,
