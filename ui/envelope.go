@@ -75,7 +75,7 @@ func (m *EnvelopeModel) Update(msg tea.Msg) (*EnvelopeModel, tea.Cmd) {
 				}
 
 				return m, cmd
-			case "esc", "p":
+			case "esc":
 				m.ShowModal = false
 				return m, nil
 			}
@@ -105,7 +105,7 @@ func (m *EnvelopeModel) Update(msg tea.Msg) (*EnvelopeModel, tea.Cmd) {
 		case "shift+right":
 			// Increase value by 10%
 			m.adjustEnvelopeValue(0.10)
-		case "p":
+		case ".":
 			m.ShowModal = !m.ShowModal
 		}
 	}

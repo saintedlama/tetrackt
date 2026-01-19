@@ -23,12 +23,12 @@ func TestSaveAndLoad(t *testing.T) {
 		Release: 0.3,
 	}
 	tracker.Tracks[0].Rows[0] = ui.TrackRow{
-		Note:   "C-4",
+		Note:   audio.NewNote("C", 4),
 		Volume: 64,
 		Effect: "---",
 	}
 	tracker.Tracks[0].Rows[1] = ui.TrackRow{
-		Note:   "E-4",
+		Note:   audio.NewNote("E", 4),
 		Volume: 80,
 		Effect: "---",
 	}
@@ -73,14 +73,14 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 
 	// Verify row data
-	if newTracker.Tracks[0].Rows[0].Note != "C-4" {
-		t.Errorf("Expected Note=C-4, got %s", newTracker.Tracks[0].Rows[0].Note)
+	if newTracker.Tracks[0].Rows[0].Note != audio.NewNote("C", 4) {
+		t.Errorf("Expected Note=C-4, got %s", newTracker.Tracks[0].Rows[0].Note.String())
 	}
 	if newTracker.Tracks[0].Rows[0].Volume != 64 {
 		t.Errorf("Expected Volume=64, got %d", newTracker.Tracks[0].Rows[0].Volume)
 	}
-	if newTracker.Tracks[0].Rows[1].Note != "E-4" {
-		t.Errorf("Expected Note=E-4, got %s", newTracker.Tracks[0].Rows[1].Note)
+	if newTracker.Tracks[0].Rows[1].Note != audio.NewNote("E", 4) {
+		t.Errorf("Expected Note=E-4, got %s", newTracker.Tracks[0].Rows[1].Note.String())
 	}
 	if newTracker.Tracks[0].Rows[1].Volume != 80 {
 		t.Errorf("Expected Volume=80, got %d", newTracker.Tracks[0].Rows[1].Volume)
