@@ -9,39 +9,15 @@ import (
 	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/persistence"
 	"github.com/tetrackt/tetrackt/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/goccy/go-yaml"
 	"github.com/gopxl/beep/v2"
 	"github.com/gopxl/beep/v2/effects"
 	"github.com/gopxl/beep/v2/speaker"
 )
-
-// SavedTrackRow is the YAML-serializable form of TrackRow
-type SavedTrackRow struct {
-	Note   string `yaml:"note"`
-	Volume int    `yaml:"volume"`
-	Effect string `yaml:"effect"`
-}
-
-// SavedTrack is the YAML-serializable form of Track
-type SavedTrack struct {
-	Oscillator1 string          `yaml:"oscillator1"`
-	Envelope1   audio.Envelope  `yaml:"envelope1"`
-	Oscillator2 string          `yaml:"oscillator2"`
-	Envelope2   audio.Envelope  `yaml:"envelope2"`
-	Mixer       float64         `yaml:"mixer"`
-	Rows        []SavedTrackRow `yaml:"rows"`
-}
-
-// SavedSong is the complete song structure for YAML serialization
-type SavedSong struct {
-	NumRows   int          `yaml:"num_rows"`
-	NumTracks int          `yaml:"num_tracks"`
-	Tracks    []SavedTrack `yaml:"tracks"`
-}
 
 // InputMode represents the current input mode
 type InputMode int
@@ -56,12 +32,6 @@ const (
 )
 
 var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#00e5ff")).
-			Background(lipgloss.Color("#0f0f0f")).
-			Padding(0, 1)
-
 	infoStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#ffa726")).
 			Padding(0, 1)
@@ -114,10 +84,8 @@ type model struct {
 	octave       int
 	globalVolume float64
 
-	// file dialog state
-	fileDialogMode  int // 0: none, 1: save, 2: load
-	fileDialogInput string
-	fileDialogError string
+	// file dialog
+	fileDialog *ui.FileDialogModel
 	// current loaded/saved filename (prefill on save)
 	currentFilename string
 }
@@ -146,85 +114,6 @@ var noteKeyToName = map[string]string{
 	"7": "B",
 }
 
-// tracksToSong converts the runtime Pattern to a SavedSong for YAML serialization
-func tracksToSong(p *ui.TrackerModel) SavedSong {
-	saved := SavedSong{
-		NumRows:   p.NumRows,
-		NumTracks: p.NumTracks,
-		Tracks:    make([]SavedTrack, p.NumTracks),
-	}
-
-	for i, track := range p.Tracks {
-		rows := make([]SavedTrackRow, len(track.Rows))
-		for j, row := range track.Rows {
-			rows[j] = SavedTrackRow{
-				Note:   row.Note,
-				Volume: row.Volume,
-				Effect: row.Effect,
-			}
-		}
-		saved.Tracks[i] = SavedTrack{
-			Oscillator1: string(track.Oscillator1),
-			Envelope1:   track.Envelope1,
-			Oscillator2: string(track.Oscillator2),
-			Envelope2:   track.Envelope2,
-			Mixer:       track.Mixer,
-			Rows:        rows,
-		}
-	}
-	return saved
-}
-
-// TODO: This should NOT create a new model but new tracks inside the tracker model!
-
-// songToTracks converts a SavedSong back to a runtime Pattern
-func songToTracks(saved SavedSong) *ui.TrackerModel {
-	p := ui.NewTracker(saved.NumTracks, saved.NumRows, 0, 0)
-	for i, savedTrack := range saved.Tracks {
-		track := &p.Tracks[i]
-		track.Oscillator1 = audio.OscillatorType(savedTrack.Oscillator1)
-		track.Envelope1 = savedTrack.Envelope1
-		track.Oscillator2 = audio.OscillatorType(savedTrack.Oscillator2)
-		track.Envelope2 = savedTrack.Envelope2
-		track.Mixer = savedTrack.Mixer
-		for j, row := range savedTrack.Rows {
-			if j < len(track.Rows) {
-				track.Rows[j] = ui.TrackRow{
-					Note:   row.Note,
-					Volume: row.Volume,
-					Effect: row.Effect,
-				}
-			}
-		}
-	}
-	return p
-}
-
-// saveSongToFile writes the pattern as YAML
-func saveSongToFile(p *ui.TrackerModel, filename string) error {
-	song := tracksToSong(p)
-	data, err := yaml.Marshal(song)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filename, data, 0644)
-}
-
-// loadSongFromFile reads a YAML file and returns a Pattern
-func loadSongFromFile(filename string) (*ui.TrackerModel, error) {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	var saved SavedSong
-	err = yaml.Unmarshal(data, &saved)
-	if err != nil {
-		return nil, err
-	}
-	return songToTracks(saved), nil
-}
-
-// Init initializes the application
 func (m model) Init() tea.Cmd {
 	// Initialize speaker with sample rate
 	sampleRate := m.synth.SampleRate
@@ -240,86 +129,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// Handle file dialog input first
-		if m.fileDialogMode > 0 {
-			switch msg.String() {
-			case "enter":
-				if m.fileDialogMode == 1 {
-					// Save
-					filename := m.fileDialogInput
-					if !strings.HasSuffix(filename, ".yaml") {
-						filename += ".yaml"
-					}
-					err := saveSongToFile(m.tracker, filename)
-					if err != nil {
-						m.fileDialogError = fmt.Sprintf("Save failed: %v", err)
-					} else {
-						m.currentFilename = filename
-						m.fileDialogMode = 0
-						m.fileDialogInput = ""
-						m.fileDialogError = ""
-					}
-				} else if m.fileDialogMode == 2 {
-					// Load
-					filename := m.fileDialogInput
-					if !strings.HasSuffix(filename, ".yaml") {
-						filename += ".yaml"
-					}
-					p, err := loadSongFromFile(filename)
-					if err != nil {
-						m.fileDialogError = fmt.Sprintf("Load failed: %v", err)
-					} else {
-						// TODO: This should NOT create a new model but new tracks inside the tracker model!
-						m.tracker = p
-						m.currentFilename = filename
-						m.fileDialogMode = 0
-						m.fileDialogInput = ""
-						m.fileDialogError = ""
-					}
-				}
-				return m, nil
-			case "esc":
-				m.fileDialogMode = 0
-				m.fileDialogInput = ""
-				m.fileDialogError = ""
-				return m, nil
-			case "backspace":
-				if len(m.fileDialogInput) > 0 {
-					m.fileDialogInput = m.fileDialogInput[:len(m.fileDialogInput)-1]
-				}
-				return m, nil
-			default:
-				// Type into the input field
-				if len(msg.String()) == 1 && msg.String() >= " " && msg.String() <= "~" {
-					m.fileDialogInput += msg.String()
-				}
-				return m, nil
-			}
+		if m.fileDialog.IsVisible() {
+			var cmd tea.Cmd
+			*m.fileDialog, cmd = m.fileDialog.Update(msg)
+			return m, cmd
 		}
 
 		// Global mode switching
 		switch keyStr := msg.String(); keyStr {
 		case "s":
 			// Open save dialog
-			m.fileDialogMode = 1
+			prefill := "song"
 			if m.currentFilename != "" {
-				m.fileDialogInput = m.currentFilename
-			} else {
-				m.fileDialogInput = "song"
+				prefill = m.currentFilename
 			}
-			m.fileDialogError = ""
+			m.fileDialog.Show(ui.ModeSave, prefill)
 			return m, nil
 		case "l":
 			// Open load dialog
-			m.fileDialogMode = 2
-			m.fileDialogInput = ""
-			m.fileDialogError = ""
+			m.fileDialog.Show(ui.ModeLoad, "")
 			return m, nil
 		case "o":
-			if m.mode == Oscillator1EditMode {
+			switch m.mode {
+			case Oscillator1EditMode:
 				m.mode = Oscillator2EditMode
-			} else if m.mode == Oscillator2EditMode {
+			case Oscillator2EditMode:
 				m.mode = Oscillator1EditMode
-			} else {
+			default:
 				m.mode = Oscillator1EditMode
 			}
 
@@ -328,51 +164,43 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = TrackMode
 			return m, nil
 		case "e":
-			if m.mode == Envelope1EditMode {
+			switch m.mode {
+			case Envelope1EditMode:
 				m.mode = Envelope2EditMode
-			} else if m.mode == Envelope2EditMode {
+			case Envelope2EditMode:
 				m.mode = Envelope1EditMode
-			} else {
+			default:
 				m.mode = Envelope1EditMode
 			}
 
 			return m, nil
 		case "+":
-			// change octave for current note
-			if m.mode == TrackMode {
-				note := m.tracker.CurrentTrack().CurrentRow().Note
-				if note != "---" && note != "" {
-					if newNote, freq, ok := changeNoteOctave(note, 1); ok {
-						trackRow := m.tracker.CurrentTrack().CurrentRow()
-						trackRow.Note = newNote
-
-						m.playNote(freq)
-						return m, nil
-					}
-				}
-			}
-
 			if m.octave < maxOctave {
 				m.octave++
 			}
-			return m, nil
-		case "-":
-			// change octave for current note
-			if m.mode == TrackMode {
-				note := m.tracker.CurrentTrack().CurrentRow().Note
-				if note != "---" && note != "" {
-					if newNote, freq, ok := changeNoteOctave(note, -1); ok {
-						trackRow := m.tracker.CurrentTrack().CurrentRow()
-						trackRow.Note = newNote
-						m.playNote(freq)
-						return m, nil
-					}
-				}
+
+			note := m.tracker.CurrentTrack().CurrentRow().Note
+			// TODO: Note is a bit tricky - it's text but stores octave info as well in tracker. Reconsider data model?
+			if newNote, freq, ok := changeNoteOctave(note, -1); ok {
+				m.tracker.SetNote(newNote, m.octave)
+				m.playNote(freq)
+				return m, nil
 			}
 
+			return m, nil
+		case "-":
 			if m.octave > minOctave {
 				m.octave--
 			}
+
+			note := m.tracker.CurrentTrack().CurrentRow().Note
+			// TODO: Note is a bit tricky - it's text but stores octave info as well in tracker. Reconsider data model?
+			if newNote, freq, ok := changeNoteOctave(note, -1); ok {
+				m.tracker.SetNote(newNote, m.octave)
+				m.playNote(freq)
+				return m, nil
+			}
+
 			return m, nil
 		// volume
 		case "[", "alt+[": // decrease volume, for german keyboard layout we need to consider the alt+combo
@@ -450,32 +278,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Handle oscillator edit mode
 		if m.mode == Oscillator1EditMode {
-			switch msg.String() {
-			case "esc":
-				m.mode = TrackMode
-				return m, nil
-			}
-
 			var _, cmd = m.oscillator1.Update(msg)
 			return m, cmd
 		}
 
 		if m.mode == Oscillator2EditMode {
-			switch msg.String() {
-			case "esc":
-				m.mode = TrackMode
-				return m, nil
-			}
-
 			var _, cmd = m.oscillator2.Update(msg)
 			return m, cmd
 		}
 
 		if m.mode == MixerEditMode {
 			var _, cmd = m.mixer.Update(msg)
-			track := m.tracker.CurrentTrack()
-			track.Mixer = m.mixer.MixBalance
-
 			return m, cmd
 		}
 
@@ -539,6 +352,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.oscillator2.Oscillator = msg.Oscillator2
 
 		m.mixer.MixBalance = msg.Mixer
+
+	case ui.FileDialogConfirmed:
+		// Handle file dialog confirmation
+		filename := msg.Filename
+		switch m.fileDialog.Mode {
+		case ui.ModeSave:
+			// Save song
+			song := persistence.TracksToSong(m.tracker)
+			err := persistence.SaveToFile(filename, song)
+			if err != nil {
+				m.fileDialog.SetError(fmt.Sprintf("Save failed: %v", err))
+			} else {
+				m.currentFilename = filename
+				m.fileDialog.Hide()
+			}
+		case ui.ModeLoad:
+			// Load song
+			song, err := persistence.LoadFromFile(filename)
+			if err != nil {
+				m.fileDialog.SetError(fmt.Sprintf("Load failed: %v", err))
+			} else {
+				// Update existing tracker model instead of creating new one
+				persistence.SongToTracks(song, m.tracker)
+				m.currentFilename = filename
+				m.fileDialog.Hide()
+			}
+		}
+		return m, nil
+
+	case ui.FileDialogCancelled:
+		// Handle file dialog cancellation
+		m.fileDialog.Hide()
+		return m, nil
+
 	case ui.OscillatorUpdated:
 		// TODO: Refactor to allow updating via a method instead of direct field access
 		switch m.mode {
@@ -779,17 +626,8 @@ func (m model) View() string {
 	}
 
 	// File dialog modal
-	if m.fileDialogMode > 0 {
-		dialogTitle := "Save Song"
-		if m.fileDialogMode == 2 {
-			dialogTitle = "Load Song"
-		}
-		dialogContent := fmt.Sprintf("%s\n\nFilename: %s_\n\n", dialogTitle, m.fileDialogInput)
-		if m.fileDialogError != "" {
-			dialogContent += fmt.Sprintf("Error: %s\n", m.fileDialogError)
-		}
-		dialogContent += "[Enter to confirm, Esc to cancel]"
-		modalView := modalBorderStyle.Render(dialogContent)
+	if m.fileDialog.IsVisible() {
+		modalView := m.fileDialog.View()
 		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modalView)
 	}
 
@@ -855,6 +693,7 @@ func main() {
 			mode:         TrackMode,
 			octave:       4,
 			globalVolume: 1.0,
+			fileDialog:   ui.NewFileDialog(modalBorderStyle),
 		},
 
 		tea.WithAltScreen(),
