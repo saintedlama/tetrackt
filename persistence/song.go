@@ -10,7 +10,8 @@ import (
 
 // SavedTrackRow is the YAML-serializable form of TrackRow
 type SavedTrackRow struct {
-	Note   string `yaml:"note"`
+	Base   string `yaml:"base"`
+	Octave int    `yaml:"octave"`
 	Volume int    `yaml:"volume"`
 	Effect string `yaml:"effect"`
 }
@@ -44,7 +45,8 @@ func TracksToSong(tracker *ui.TrackerModel) *SavedSong {
 		rows := make([]SavedTrackRow, len(track.Rows))
 		for j, row := range track.Rows {
 			rows[j] = SavedTrackRow{
-				Note:   row.Note,
+				Base:   string(row.Note.Base),
+				Octave: int(row.Note.Octave),
 				Volume: row.Volume,
 				Effect: row.Effect,
 			}
@@ -91,7 +93,7 @@ func SongToTracks(saved *SavedSong, tracker *ui.TrackerModel) {
 		for j, row := range savedTrack.Rows {
 			if j < len(track.Rows) {
 				track.Rows[j] = ui.TrackRow{
-					Note:   row.Note,
+					Note:   audio.Note{Base: audio.Base(row.Base), Octave: audio.Octave(row.Octave)},
 					Volume: row.Volume,
 					Effect: row.Effect,
 				}

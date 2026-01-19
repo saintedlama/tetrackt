@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -93,23 +92,7 @@ type model struct {
 // tickMsg is sent to advance playback
 type tickMsg time.Time
 
-// Base note data (octave-agnostic)
-var noteBaseFrequencies = map[string]float64{
-	"C":  261.63, // C4
-	"C#": 277.18, // C#4 (Db4)
-	"D":  293.66, // D4
-	"D#": 311.13, // D#4 (Eb4)
-	"E":  329.63, // E4
-	"F":  349.23, // F4
-	"F#": 369.99, // F#4 (Gb4)
-	"G":  392.00, // G4
-	"G#": 415.30, // G#4 (Ab4)
-	"A":  440.00, // A4
-	"A#": 466.16, // A#4 (Bb4)
-	"B":  493.88, // B4
-}
-
-var noteKeyToName = map[string]string{
+var noteKeyToName = map[string]audio.Base{
 	"1":  "C",
 	"!":  "C#",
 	"2":  "D",
@@ -191,11 +174,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.octave++
 			}
 
-			note := m.tracker.CurrentTrack().CurrentRow().Note
-			// TODO: Note is a bit tricky - it's text but stores octave info as well in tracker. Reconsider data model?
-			if newNote, freq, ok := changeNoteOctave(note, -1); ok {
-				m.tracker.SetNote(newNote, m.octave)
-				m.playNote(freq)
+			note := m.tracker.GetNote()
+			if newNote, ok := note.Transpose(-1); ok {
+				m.tracker.SetNote(newNote)
+				m.playNote(newNote.Frequency())
 				return m, nil
 			}
 
@@ -206,10 +188,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			note := m.tracker.CurrentTrack().CurrentRow().Note
-			// TODO: Note is a bit tricky - it's text but stores octave info as well in tracker. Reconsider data model?
-			if newNote, freq, ok := changeNoteOctave(note, -1); ok {
-				m.tracker.SetNote(newNote, m.octave)
-				m.playNote(freq)
+			if newNote, ok := note.Transpose(-1); ok {
+				m.tracker.SetNote(newNote)
+				m.playNote(newNote.Frequency())
 				return m, nil
 			}
 
@@ -221,7 +202,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.globalVolume = 0.0
 			}
 
-			// TODO: Refactor to avoid syncing state with models
 			m.mixer.GlobalVolume = m.globalVolume
 			return m, nil
 		case "]", "alt+]": // increase volume, for german keyboard layout we need to consider the alt+combo
@@ -230,10 +210,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.globalVolume = 1.0
 			}
 
-			// TODO: Refactor to avoid syncing state with models
 			m.mixer.GlobalVolume = m.globalVolume
 			return m, nil
-		// TODO: Use int based logic with modes for cycling!
 		case "tab":
 			m.mode = InputMode((int(m.mode) + 1) % 6) // Cycle through 6 modes
 			return m, nil
@@ -268,11 +246,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Global note playing (available in any mode)
 		if base, ok := noteKeyToName[msg.String()]; ok {
-			freq := noteFrequency(base, m.octave)
-			m.playNote(freq)
+			note := audio.Note{Base: base, Octave: audio.Octave(m.octave)}
+			m.playNote(note.Frequency())
 
 			if m.mode == TrackMode {
-				m.tracker.SetNote(base, m.octave)
+				m.tracker.SetNote(note)
 			}
 
 			return m, nil
@@ -306,7 +284,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.mode == TrackMode {
 			var _, cmd = m.tracker.Update(msg)
-
 			return m, cmd
 		}
 
@@ -441,12 +418,12 @@ func (m *model) playRowNotes(row int) {
 		trackRow := m.tracker.Tracks[trackIdx].Rows[row]
 
 		// Skip empty notes
-		if trackRow.Note == "---" || trackRow.Note == "" {
+		if audio.IsOff(trackRow.Note) {
 			continue
 		}
 
 		// Parse note to frequency (simple mapping for now)
-		freq := m.noteToFrequency(trackRow.Note)
+		freq := trackRow.Note.Frequency()
 		if freq > 0 {
 			inst := m.tracker.Tracks[trackIdx].Oscillator1
 			gen := m.synth.NewOscillator(inst, freq)
@@ -481,65 +458,6 @@ func volumeToDecibels(volume float64) float64 {
 	return math.Log2(volume) * 6
 }
 
-func changeNoteOctave(note string, delta int) (string, float64, bool) {
-	if note == "---" {
-		return "", 0, false
-	}
-
-	// Split on the last dash to handle "C#-4" correctly
-	dashIndex := strings.LastIndex(note, "-")
-	if dashIndex == -1 {
-		return "", 0, false
-	}
-
-	base := note[:dashIndex]
-	octave, err := strconv.Atoi(note[dashIndex+1:])
-	if err != nil {
-		return "", 0, false
-	}
-
-	newOctave := octave + delta
-	if newOctave < minOctave || newOctave > maxOctave {
-		return "", 0, false
-	}
-
-	newNote := fmt.Sprintf("%s-%d", base, newOctave)
-	freq := noteFrequency(base, newOctave)
-	return newNote, freq, true
-}
-
-// noteFrequency returns the frequency for a base note name (C..B) at an octave.
-func noteFrequency(base string, octave int) float64 {
-	baseFreq, ok := noteBaseFrequencies[base]
-	if !ok {
-		return 0
-	}
-	// Reference octave is 4 in noteBaseFrequencies
-	offset := float64(octave - 4)
-	return baseFreq * math.Pow(2, offset)
-}
-
-// noteToFrequency converts a note name like "C-4" or "C#-4" to frequency.
-func (m *model) noteToFrequency(note string) float64 {
-	// Handle notes like "C-4", "C#-4", "---"
-	if note == "---" {
-		return 0
-	}
-
-	// Split on the last dash to handle "C#-4" correctly
-	dashIndex := strings.LastIndex(note, "-")
-	if dashIndex == -1 {
-		return 0
-	}
-
-	base := note[:dashIndex]
-	oct, err := strconv.Atoi(note[dashIndex+1:])
-	if err != nil {
-		return 0
-	}
-	return noteFrequency(base, oct)
-}
-
 // playNote plays a note at the given frequency using the current oscillator
 func (m *model) playNote(frequency float64) {
 	// TODO: This is synth arrangement coupled with playback functionality. Refactor to a synth method in audio that takes oscillator type, envelope, frequency and combines this into a playable note or streamer?
@@ -553,7 +471,7 @@ func (m *model) playNote(frequency float64) {
 
 	duration := m.synth.SampleRate.N(time.Millisecond * 250)
 
-	streamer1 := m.synth.NewADSREnvelope(
+	streamer1 := m.synth.NewEnvelope(
 		oscillator1,
 		duration, audio.Envelope{
 			Attack:  envelope1.Attack,
@@ -563,7 +481,7 @@ func (m *model) playNote(frequency float64) {
 		},
 	)
 
-	streamer2 := m.synth.NewADSREnvelope(
+	streamer2 := m.synth.NewEnvelope(
 		oscillator2,
 		duration, audio.Envelope{
 			Attack:  envelope2.Attack,

@@ -68,8 +68,7 @@ type Track struct {
 
 // TrackRow represents a single row in a track
 type TrackRow struct {
-	Note   string // e.g., "C-4", "C#-5", "D#5", "---" for empty
-	Octave int    // octave number
+	Note   audio.Note
 	Volume int    // 0-64
 	Effect string // effect command
 }
@@ -89,8 +88,7 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 		// Initialize all rows with empty data
 		for j := range numRows {
 			tracks[i].Rows[j] = TrackRow{
-				Note:   "",
-				Octave: 4,
+				Note:   audio.Off(),
 				Volume: 0,
 				Effect: "",
 			}
@@ -157,7 +155,7 @@ func (m *TrackerModel) View() string {
 		// Track cells
 		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
 			trackRow := m.Tracks[trackIdx].Rows[row]
-			cellContent := fmt.Sprintf("%-3s %2s %3s", formatNote(trackRow.Note, trackRow.Octave), formatVolume(trackRow.Volume), trackRow.Effect)
+			cellContent := fmt.Sprintf("%-3s %2s %3s", formatNote(trackRow.Note), formatVolume(trackRow.Volume), trackRow.Effect)
 
 			if row == m.CursorRow && trackIdx == m.CursorTrack {
 				tracks.WriteString(cursorCellStyle.Render(cellContent))
@@ -264,16 +262,16 @@ func (m *TrackerModel) visibleRows() int {
 	return m.Viewport.Height - chromeRows
 }
 
-func formatNote(note string, octave int) string {
-	if note == "" {
+func formatNote(note audio.Note) string {
+	if note.Base == audio.BaseOff {
 		return "---"
 	}
 
-	if len(note) < 2 {
-		note = note + "-"
+	if len(string(note.Base)) < 2 {
+		return fmt.Sprintf("%s-%d", note.Base, note.Octave)
 	}
 
-	return fmt.Sprintf("%s%d", note, octave)
+	return fmt.Sprintf("%s%d", note.Base, note.Octave)
 }
 
 // formatVolume formats volume value for display
@@ -292,10 +290,14 @@ func (m *TrackerModel) CurrentTrack() Track {
 	return m.Tracks[m.CursorTrack]
 }
 
-func (m *TrackerModel) SetNote(base string, octave int) TrackRow {
+func (m *TrackerModel) SetNote(note audio.Note) TrackRow {
 	trackCell := &m.Tracks[m.CursorTrack].Rows[m.CursorRow]
-	trackCell.Note = base
-	trackCell.Octave = octave
+	trackCell.Note = note
 
 	return *trackCell
+}
+
+func (m *TrackerModel) GetNote() audio.Note {
+	trackCell := &m.Tracks[m.CursorTrack].Rows[m.CursorRow]
+	return trackCell.Note
 }
