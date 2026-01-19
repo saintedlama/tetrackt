@@ -21,6 +21,8 @@ jobs:
       - name: Setup build prerequisites
         run: sudo apt install libasound2-dev
 
-      # You can test your matrix by printing the current Go version
       - name: Build
         run: go build -v
+
+      - name: Test
+        run: go test ./...

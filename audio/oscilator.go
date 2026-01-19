@@ -7,6 +7,10 @@ import (
 	"github.com/gopxl/beep/v2"
 )
 
+type Oscillator struct {
+	Type OscillatorType
+}
+
 // OscillatorType represents the type of oscillator waveform to generate
 type OscillatorType string
 
@@ -20,21 +24,21 @@ const (
 )
 
 // NewOscillator creates a beep.Streamer that generates the specified oscillator waveform
-func (s *Synth) NewOscillator(waveType OscillatorType, frequency float64) beep.Streamer {
+func (s *Synth) NewOscillator(oscillatorType OscillatorType, frequency float64) beep.Streamer {
 	return &oscillatorGenerator{
-		waveType:   waveType,
-		frequency:  frequency,
-		sampleRate: s.SampleRate,
-		phase:      0,
+		oscillatorType: oscillatorType,
+		frequency:      frequency,
+		sampleRate:     s.SampleRate,
+		phase:          0,
 	}
 }
 
 // oscillatorGenerator implements beep.Streamer for oscillator waveform generation
 type oscillatorGenerator struct {
-	waveType   OscillatorType
-	frequency  float64
-	sampleRate beep.SampleRate
-	phase      float64
+	oscillatorType OscillatorType
+	frequency      float64
+	sampleRate     beep.SampleRate
+	phase          float64
 }
 
 // Stream fills the samples buffer with oscillator waveform data
@@ -44,7 +48,7 @@ func (g *oscillatorGenerator) Stream(samples [][2]float64) (n int, ok bool) {
 	for i := range samples {
 		var sample float64
 
-		switch g.waveType {
+		switch g.oscillatorType {
 		case Sine:
 			sample = math.Sin(2 * math.Pi * g.phase)
 
