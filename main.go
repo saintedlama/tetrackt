@@ -95,23 +95,35 @@ type tickMsg time.Time
 
 // Base note data (octave-agnostic)
 var noteBaseFrequencies = map[string]float64{
-	"C": 261.63, // C4
-	"D": 293.66, // D4
-	"E": 329.63, // E4
-	"F": 349.23, // F4
-	"G": 392.00, // G4
-	"A": 440.00, // A4
-	"B": 493.88, // B4
+	"C":  261.63, // C4
+	"C#": 277.18, // C#4 (Db4)
+	"D":  293.66, // D4
+	"D#": 311.13, // D#4 (Eb4)
+	"E":  329.63, // E4
+	"F":  349.23, // F4
+	"F#": 369.99, // F#4 (Gb4)
+	"G":  392.00, // G4
+	"G#": 415.30, // G#4 (Ab4)
+	"A":  440.00, // A4
+	"A#": 466.16, // A#4 (Bb4)
+	"B":  493.88, // B4
 }
 
 var noteKeyToName = map[string]string{
-	"1": "C",
-	"2": "D",
-	"3": "E",
-	"4": "F",
-	"5": "G",
-	"6": "A",
-	"7": "B",
+	"1":  "C",
+	"!":  "C#",
+	"2":  "D",
+	"@":  "D#",
+	"\"": "D#", // german keyboard layout
+	"3":  "E",
+	"4":  "F",
+	"$":  "F#",
+	"5":  "G",
+	"%":  "G#",
+	"6":  "A",
+	"^":  "A#",
+	"&":  "A#", // german keyboard layout
+	"7":  "B",
 }
 
 func (m model) Init() tea.Cmd {
@@ -470,12 +482,18 @@ func volumeToDecibels(volume float64) float64 {
 }
 
 func changeNoteOctave(note string, delta int) (string, float64, bool) {
-	parts := strings.Split(note, "-")
-	if len(parts) != 2 {
+	if note == "---" {
 		return "", 0, false
 	}
-	base := parts[0]
-	octave, err := strconv.Atoi(parts[1])
+
+	// Split on the last dash to handle "C#-4" correctly
+	dashIndex := strings.LastIndex(note, "-")
+	if dashIndex == -1 {
+		return "", 0, false
+	}
+
+	base := note[:dashIndex]
+	octave, err := strconv.Atoi(note[dashIndex+1:])
 	if err != nil {
 		return "", 0, false
 	}
@@ -501,14 +519,21 @@ func noteFrequency(base string, octave int) float64 {
 	return baseFreq * math.Pow(2, offset)
 }
 
-// noteToFrequency converts a note name like "C-4" to frequency.
+// noteToFrequency converts a note name like "C-4" or "C#-4" to frequency.
 func (m *model) noteToFrequency(note string) float64 {
-	parts := strings.Split(note, "-")
-	if len(parts) != 2 {
+	// Handle notes like "C-4", "C#-4", "---"
+	if note == "---" {
 		return 0
 	}
-	base := parts[0]
-	oct, err := strconv.Atoi(parts[1])
+
+	// Split on the last dash to handle "C#-4" correctly
+	dashIndex := strings.LastIndex(note, "-")
+	if dashIndex == -1 {
+		return 0
+	}
+
+	base := note[:dashIndex]
+	oct, err := strconv.Atoi(note[dashIndex+1:])
 	if err != nil {
 		return 0
 	}
@@ -614,7 +639,7 @@ func (m model) View() string {
 	body := lipgloss.JoinVertical(lipgloss.Left, synthView, trackerViewWithBorder)
 
 	// Footer help
-	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | +/-: Octave | [/]: Volume | W: Oscillator | E: Envelope | T: Track | p: Play/Pause | P: Loop | S: Save | L: Load | Q: Quit")
+	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | Shift+1-6: Sharp Notes | +/-: Octave | [/]: Volume | W: Oscillator | E: Envelope | T: Track | p: Play/Pause | P: Loop | S: Save | L: Load | Q: Quit")
 
 	// TODO: More generic modal handling, use commands?
 	if m.envelope1.ShowModal && m.mode == Envelope1EditMode {
