@@ -10,8 +10,8 @@ type Note struct {
 	Octave Octave
 }
 
-func NewNote(base Note, octave Octave) Note {
-	return Note{Base: base.Base, Octave: octave}
+func NewNote(base Base, octave Octave) Note {
+	return Note{Base: base, Octave: octave}
 }
 
 func Off() Note {

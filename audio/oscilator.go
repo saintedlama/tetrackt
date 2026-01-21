@@ -23,6 +23,7 @@ const (
 	Noise           OscillatorType = "noise"
 )
 
+// TODO: Confusing that NewOscillator returns a generator (streamer) and not the Oscillator type in this package
 // NewOscillator creates a beep.Streamer that generates the specified oscillator waveform
 func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate) beep.Streamer {
 	return &oscillatorGenerator{
