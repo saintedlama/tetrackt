@@ -6,21 +6,22 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tetrackt/tetrackt/audio"
 )
 
 type Mixer struct {
 	BalanceBar   Bar
-	MixBalance   float64
+	Mixer        audio.Mixer
 	GlobalVolume float64 // Global output volume (0.0 to 1.0), set by main
 }
 
 type MixerUpdated struct {
-	Balance float64
+	Mixer audio.Mixer
 }
 
 func NewMixer(balance float64) *Mixer {
 	return &Mixer{
-		MixBalance:   balance,
+		Mixer:        audio.Mixer{Balance: balance},
 		BalanceBar:   NewBar(0, 1, balance, 10),
 		GlobalVolume: 1.0,
 	}
@@ -34,7 +35,7 @@ func (m *Mixer) View() string {
 	envView := strings.Builder{}
 	envView.WriteString("Mixer:\n")
 
-	v := m.MixBalance
+	v := m.Mixer.Balance
 
 	fmt.Fprintf(&envView, "%3d%% ", int(math.Round((1-v)*100)))
 	envView.WriteString(m.BalanceBar.View())
@@ -50,30 +51,29 @@ func (m *Mixer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "left":
-			m.MixBalance -= 0.01
+			m.Mixer.Balance -= 0.01
 		case "shift+left":
-			m.MixBalance -= 0.1
+			m.Mixer.Balance -= 0.1
 		case "right":
-			m.MixBalance += 0.01
+			m.Mixer.Balance += 0.01
 		case "shift+right":
-			m.MixBalance += 0.1
+			m.Mixer.Balance += 0.1
 		}
 	}
 
-	m.MixBalance = math.Round(m.MixBalance*100) / 100
-
-	if m.MixBalance < 0 {
-		m.MixBalance = 0
-	} else if m.MixBalance > 1 {
-		m.MixBalance = 1
+	m.Mixer.Balance = math.Round(m.Mixer.Balance*100) / 100
+	if m.Mixer.Balance < 0 {
+		m.Mixer.Balance = 0
+	} else if m.Mixer.Balance > 1 {
+		m.Mixer.Balance = 1
 	}
 
-	m.BalanceBar.Value = m.MixBalance
+	m.BalanceBar.Value = m.Mixer.Balance
 
 	// TODO: Optimize to only send update when value changes
 	return m, func() tea.Msg {
 		return MixerUpdated{
-			Balance: m.MixBalance,
+			Mixer: m.Mixer,
 		}
 	}
 }

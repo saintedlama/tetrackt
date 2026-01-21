@@ -58,11 +58,11 @@ type TrackerModel struct {
 // Track represents a single track in the pattern
 type Track struct {
 	number      int
-	Oscillator1 audio.OscillatorType
+	Oscillator1 audio.Oscillator
 	Envelope1   audio.Envelope
-	Oscillator2 audio.OscillatorType
+	Oscillator2 audio.Oscillator
 	Envelope2   audio.Envelope
-	Mixer       float64
+	Mixer       audio.Mixer
 	Rows        []TrackRow
 }
 
@@ -79,10 +79,11 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 	for i := range numTracks {
 		tracks[i] = Track{
 			number:      i,
-			Oscillator1: audio.Sine,
+			Oscillator1: audio.Oscillator{Type: audio.Sine},
 			Envelope1:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
-			Oscillator2: audio.Sine,
+			Oscillator2: audio.Oscillator{Type: audio.Sine},
 			Envelope2:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
+			Mixer:       audio.Mixer{Balance: 0.5},
 			Rows:        make([]TrackRow, numRows),
 		}
 		// Initialize all rows with empty data
@@ -90,7 +91,7 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 			tracks[i].Rows[j] = TrackRow{
 				Note:   audio.Off(),
 				Volume: 0,
-				Effect: "",
+				Effect: "---",
 			}
 		}
 	}
@@ -171,11 +172,11 @@ func (m *TrackerModel) View() string {
 }
 
 type TrackChanged struct {
-	Oscillator1 audio.OscillatorType
+	Oscillator1 audio.Oscillator
 	Envelope1   audio.Envelope
-	Oscillator2 audio.OscillatorType
+	Oscillator2 audio.Oscillator
 	Envelope2   audio.Envelope
-	Mixer       float64
+	Mixer       audio.Mixer
 }
 
 func (m *TrackerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

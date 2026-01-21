@@ -52,11 +52,11 @@ func TracksToSong(tracker *ui.TrackerModel) *SavedSong {
 			}
 		}
 		saved.Tracks[i] = SavedTrack{
-			Oscillator1: string(track.Oscillator1),
+			Oscillator1: string(track.Oscillator1.Type),
 			Envelope1:   track.Envelope1,
-			Oscillator2: string(track.Oscillator2),
+			Oscillator2: string(track.Oscillator2.Type),
 			Envelope2:   track.Envelope2,
-			Mixer:       track.Mixer,
+			Mixer:       track.Mixer.Balance,
 			Rows:        rows,
 		}
 	}
@@ -78,11 +78,11 @@ func SongToTracks(saved *SavedSong, tracker *ui.TrackerModel) {
 	// Update each track with saved data
 	for i, savedTrack := range saved.Tracks {
 		track := &tracker.Tracks[i]
-		track.Oscillator1 = audio.OscillatorType(savedTrack.Oscillator1)
+		track.Oscillator1 = audio.Oscillator{Type: audio.OscillatorType(savedTrack.Oscillator1)}
 		track.Envelope1 = savedTrack.Envelope1
-		track.Oscillator2 = audio.OscillatorType(savedTrack.Oscillator2)
+		track.Oscillator2 = audio.Oscillator{Type: audio.OscillatorType(savedTrack.Oscillator2)}
 		track.Envelope2 = savedTrack.Envelope2
-		track.Mixer = savedTrack.Mixer
+		track.Mixer = audio.Mixer{Balance: savedTrack.Mixer}
 
 		// Resize rows slice if needed
 		if len(track.Rows) != saved.NumRows {

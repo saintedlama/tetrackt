@@ -24,11 +24,11 @@ const (
 )
 
 // NewOscillator creates a beep.Streamer that generates the specified oscillator waveform
-func (s *Synth) NewOscillator(oscillatorType OscillatorType, frequency float64) beep.Streamer {
+func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate) beep.Streamer {
 	return &oscillatorGenerator{
 		oscillatorType: oscillatorType,
 		frequency:      frequency,
-		sampleRate:     s.SampleRate,
+		sampleRate:     sampleRate,
 		phase:          0,
 	}
 }

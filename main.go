@@ -70,7 +70,7 @@ const (
 type model struct {
 	width       int
 	height      int
-	synth       *audio.Synth
+	sampleRate  beep.SampleRate
 	oscillator1 *ui.OscillatorModel
 	envelope1   *ui.EnvelopeModel
 	oscillator2 *ui.OscillatorModel
@@ -111,7 +111,7 @@ var noteKeyToName = map[string]audio.Base{
 
 func (m model) Init() tea.Cmd {
 	// Initialize speaker with sample rate
-	sampleRate := m.synth.SampleRate
+	sampleRate := m.sampleRate
 	buffersize := sampleRate.N(time.Millisecond * 250)
 
 	speaker.Init(sampleRate, buffersize)
@@ -169,6 +169,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			return m, nil
+		case "delete":
+			// TODO: KeyMsg should be handled by the tracker
+			m.tracker.SetNote(audio.Off())
+
 		case "+":
 			if m.octave < maxOctave {
 				m.octave++
@@ -177,7 +181,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			note := m.tracker.GetNote()
 			if newNote, ok := note.Transpose(-1); ok {
 				m.tracker.SetNote(newNote)
-				m.playNote(newNote.Frequency())
+				m.playNote(newNote)
 				return m, nil
 			}
 
@@ -190,7 +194,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			note := m.tracker.CurrentTrack().CurrentRow().Note
 			if newNote, ok := note.Transpose(-1); ok {
 				m.tracker.SetNote(newNote)
-				m.playNote(newNote.Frequency())
+				m.playNote(newNote)
 				return m, nil
 			}
 
@@ -247,7 +251,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global note playing (available in any mode)
 		if base, ok := noteKeyToName[msg.String()]; ok {
 			note := audio.Note{Base: base, Octave: audio.Octave(m.octave)}
-			m.playNote(note.Frequency())
+			m.playNote(note)
 
 			if m.mode == TrackMode {
 				m.tracker.SetNote(note)
@@ -327,20 +331,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ui.TrackChanged:
 		// Update synth parameters based on current track
-		// TODO: Refactor to avoid to know about knob design at this stage - model should allow updating the envelope values
-		m.envelope1.Attack = msg.Envelope1.Attack
-		m.envelope1.Decay = msg.Envelope1.Decay
-		m.envelope1.Sustain = msg.Envelope1.Sustain
-		m.envelope1.Release = msg.Envelope1.Release
+		m.envelope1.Envelope = msg.Envelope1
 		m.oscillator1.Oscillator = msg.Oscillator1
-
-		m.envelope2.Attack = msg.Envelope2.Attack
-		m.envelope2.Decay = msg.Envelope2.Decay
-		m.envelope2.Sustain = msg.Envelope2.Sustain
-		m.envelope2.Release = msg.Envelope2.Release
+		m.envelope2.Envelope = msg.Envelope2
 		m.oscillator2.Oscillator = msg.Oscillator2
-
-		m.mixer.MixBalance = msg.Mixer
+		m.mixer.Mixer = msg.Mixer
 
 	case ui.FileDialogConfirmed:
 		// Handle file dialog confirmation
@@ -392,7 +387,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tracker.Tracks[m.tracker.CursorTrack].Envelope2 = msg.Envelope
 		}
 	case ui.MixerUpdated:
-		m.tracker.Tracks[m.tracker.CursorTrack].Mixer = msg.Balance
+		m.tracker.Tracks[m.tracker.CursorTrack].Mixer = msg.Mixer
 	}
 
 	return m, nil
@@ -405,35 +400,67 @@ func (m *model) tick() tea.Cmd {
 	})
 }
 
+// playNote plays a note at the given frequency using the current oscillator
+func (m *model) playNote(note audio.Note) {
+	// TODO: duration should be adjustable
+	duration := time.Millisecond * 250
+
+	synth := audio.NewSynth(
+		m.sampleRate,
+		m.oscillator1.Oscillator,
+		m.envelope1.Envelope,
+		m.oscillator2.Oscillator,
+		m.envelope2.Envelope,
+		m.mixer.Mixer)
+
+	synthStreamer := synth.Streamer(note, duration)
+	volumeAdjusted := &effects.Volume{
+		Streamer: synthStreamer,
+		Base:     2,
+		Volume:   volumeToDecibels(m.globalVolume),
+		Silent:   m.globalVolume == 0,
+	}
+
+	// Clear previous sound and play the new note
+	speaker.Play(volumeAdjusted)
+}
+
 // playRowNotes plays all notes in the specified row across all tracks
 func (m *model) playRowNotes(row int) {
 	if row < 0 || row >= m.tracker.NumRows {
 		return
 	}
 
-	var generators []beep.Streamer
+	// TODO: duration should be adjustable
+	duration := time.Millisecond * 250
+	var streamers []beep.Streamer
 
 	// Collect all note generators for this row
 	for trackIdx := 0; trackIdx < m.tracker.NumTracks; trackIdx++ {
-		trackRow := m.tracker.Tracks[trackIdx].Rows[row]
+		track := m.tracker.Tracks[trackIdx]
+		trackRow := track.Rows[row]
 
 		// Skip empty notes
 		if audio.IsOff(trackRow.Note) {
 			continue
 		}
 
-		// Parse note to frequency (simple mapping for now)
-		freq := trackRow.Note.Frequency()
-		if freq > 0 {
-			inst := m.tracker.Tracks[trackIdx].Oscillator1
-			gen := m.synth.NewOscillator(inst, freq)
-			generators = append(generators, gen)
-		}
+		synth := audio.NewSynth(
+			m.sampleRate,
+			m.oscillator1.Oscillator,
+			m.envelope1.Envelope,
+			m.oscillator2.Oscillator,
+			m.envelope2.Envelope,
+			m.mixer.Mixer,
+		)
+
+		synthStreamer := synth.Streamer(trackRow.Note, duration)
+		streamers = append(streamers, synthStreamer)
 	}
 
 	// If we have any notes to play, mix and play them
-	if len(generators) > 0 {
-		mixed := beep.Mix(generators...)
+	if len(streamers) > 0 {
+		mixed := beep.Mix(streamers...)
 
 		// global vol
 		volumeAdjusted := &effects.Volume{
@@ -443,11 +470,7 @@ func (m *model) playRowNotes(row int) {
 			Silent:   m.globalVolume == 0,
 		}
 
-		duration := beep.SampleRate(44100).N(time.Millisecond * 150)
-		limited := beep.Take(duration, volumeAdjusted)
-
-		//speaker.Clear()
-		speaker.Play(limited)
+		speaker.Play(volumeAdjusted)
 	}
 }
 
@@ -456,62 +479,6 @@ func volumeToDecibels(volume float64) float64 {
 		return -999
 	}
 	return math.Log2(volume) * 6
-}
-
-// playNote plays a note at the given frequency using the current oscillator
-func (m *model) playNote(frequency float64) {
-	// TODO: This is synth arrangement coupled with playback functionality. Refactor to a synth method in audio that takes oscillator type, envelope, frequency and combines this into a playable note or streamer?
-	oscillatorType1 := m.tracker.CurrentTrack().Oscillator1
-	oscillator1 := m.synth.NewOscillator(oscillatorType1, frequency)
-	envelope1 := m.tracker.CurrentTrack().Envelope1
-
-	oscillatorType2 := m.tracker.CurrentTrack().Oscillator2
-	oscillator2 := m.synth.NewOscillator(oscillatorType2, frequency)
-	envelope2 := m.tracker.CurrentTrack().Envelope2
-
-	duration := m.synth.SampleRate.N(time.Millisecond * 250)
-
-	streamer1 := audio.NewEnvelope(
-		oscillator1,
-		duration,
-		audio.Envelope{
-			Attack:  envelope1.Attack,
-			Decay:   envelope1.Decay,
-			Sustain: envelope1.Sustain,
-			Release: envelope1.Release,
-		},
-	)
-
-	streamer2 := audio.NewEnvelope(
-		oscillator2,
-		duration,
-		audio.Envelope{
-			Attack:  envelope2.Attack,
-			Decay:   envelope2.Decay,
-			Sustain: envelope2.Sustain,
-			Release: envelope2.Release,
-		},
-	)
-
-	v := (m.mixer.MixBalance - 0.5) * 2 // Scale to -1 to 1
-	mix1 := &effects.Volume{Streamer: streamer1, Base: 2, Volume: -v, Silent: v >= 1}
-	mix2 := &effects.Volume{Streamer: streamer2, Base: 2, Volume: v, Silent: v <= -1}
-
-	mixed := beep.Mix(mix1, mix2)
-
-	volumeAdjusted := &effects.Volume{
-		Streamer: mixed,
-		Base:     2,
-		Volume:   volumeToDecibels(m.globalVolume),
-		Silent:   m.globalVolume == 0,
-	}
-
-	// Take only 0.3 seconds of the generated tone
-	limited := beep.Take(duration, volumeAdjusted)
-
-	// Clear previous sound and play the new note
-	//speaker.Clear()
-	speaker.Play(limited)
 }
 
 // View renders the UI
@@ -620,7 +587,6 @@ func (m model) synthView() string {
 func main() {
 	// Initialize synthesizer
 	sampleRate := beep.SampleRate(44100)
-	synth := audio.NewSynth(sampleRate)
 
 	// Create pattern with 8 tracks and 64 rows
 	tracker := ui.NewTracker(8, 64, 0, 0)
@@ -628,12 +594,12 @@ func main() {
 
 	p := tea.NewProgram(
 		model{
-			synth:        synth,
-			oscillator1:  ui.NewOscillatorModel(selectedStyle, track.Oscillator1),
+			sampleRate:   sampleRate,
+			oscillator1:  ui.NewOscillatorModel(selectedStyle, track.Oscillator1.Type),
 			envelope1:    ui.NewEnvelopeModel(selectedStyle, track.Envelope1),
-			oscillator2:  ui.NewOscillatorModel(selectedStyle, track.Oscillator2),
+			oscillator2:  ui.NewOscillatorModel(selectedStyle, track.Oscillator2.Type),
 			envelope2:    ui.NewEnvelopeModel(selectedStyle, track.Envelope2),
-			mixer:        ui.NewMixer(track.Mixer),
+			mixer:        ui.NewMixer(track.Mixer.Balance),
 			tracker:      tracker,
 			mode:         TrackMode,
 			octave:       4,
