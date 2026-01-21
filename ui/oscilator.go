@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 
@@ -10,23 +9,35 @@ import (
 	"github.com/tetrackt/tetrackt/audio"
 )
 
+type editField int
+
+const (
+	oscillatorType editField = iota
+	oscillatorPhase
+)
+
 type OscillatorModel struct {
-	Oscillator     audio.Oscillator
-	oscillatorList []audio.OscillatorType
-	selectedStyle  lipgloss.Style
+	Oscillator          audio.Oscillator
+	oscillatorList      []audio.OscillatorType
+	selectedStyle       lipgloss.Style
+	oscillatorTypeStyle lipgloss.Style
+	editField           editField // 0 = type, 1 = phase
 }
 
 type OscillatorUpdated struct {
 	Oscillator audio.Oscillator
 }
 
-func NewOscillatorModel(selectedStyle lipgloss.Style, oscillator audio.OscillatorType) *OscillatorModel {
-	oscillatorList := []audio.OscillatorType{audio.Sine, audio.Square, audio.Triangle, audio.Sawtooth, audio.SawtoothReverse, audio.Noise}
+func NewOscillatorModel(selectedStyle lipgloss.Style, oscillator audio.Oscillator) *OscillatorModel {
+	oscillatorList := []audio.OscillatorType{audio.Sine, audio.Square, audio.Triangle, audio.Sawtooth, audio.SawtoothReverse, audio.Noise, audio.Silent}
+
+	oscillatorTypeStyle := lipgloss.NewStyle().Width(calcOscWidth(oscillatorList))
 
 	return &OscillatorModel{
-		Oscillator:     audio.Oscillator{Type: oscillator},
-		oscillatorList: oscillatorList,
-		selectedStyle:  selectedStyle,
+		Oscillator:          oscillator,
+		oscillatorList:      oscillatorList,
+		selectedStyle:       selectedStyle,
+		oscillatorTypeStyle: oscillatorTypeStyle,
 	}
 }
 
@@ -36,19 +47,16 @@ func (m *OscillatorModel) Init() tea.Cmd {
 
 func (m *OscillatorModel) View() string {
 	var oscillatorView strings.Builder
-	oscillatorView.WriteString("Oscillator:\n")
+	oscillatorView.WriteString("Oscillator ")
 
-	for i, osc := range m.oscillatorList {
-		if osc == m.Oscillator.Type {
-			oscillatorView.WriteString(m.selectedStyle.Render(fmt.Sprintf("%s", osc)))
-		} else {
-			fmt.Fprint(&oscillatorView, osc)
-		}
+	oscillatorView.WriteString(RenderOnOff(m.Oscillator.Type != audio.Silent))
 
-		if i < len(m.oscillatorList)-1 {
-			oscillatorView.WriteString("\n")
-		}
-	}
+	oscillatorView.WriteString("\n")
+	oscType := renderFieldSelected(string(m.Oscillator.Type), m.editField == oscillatorType, m.selectedStyle)
+	oscillatorView.WriteString(m.oscillatorTypeStyle.Render(oscType))
+
+	oscillatorView.WriteString("\n")
+	oscillatorView.WriteString(renderFieldSelected(RenderKnob("Phase", m.Oscillator.Phase), m.editField == oscillatorPhase, m.selectedStyle))
 
 	return oscillatorView.String()
 }
@@ -58,30 +66,64 @@ func (m *OscillatorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "up", "left":
-			// Move to previous oscillator
-			idx := slices.Index(m.oscillatorList, m.Oscillator.Type)
-			idx = (idx - 1 + len(m.oscillatorList)) % len(m.oscillatorList)
-			m.Oscillator.Type = m.oscillatorList[idx]
-
-			cmd = func() tea.Msg {
-				return OscillatorUpdated{
-					Oscillator: m.Oscillator,
+		case "up":
+			// Move to previous oscillator field
+			m.editField = (m.editField - 1 + 2) % 2
+		case "down":
+			// Move to next oscillator field
+			m.editField = (m.editField + 1) % 2
+		case "left":
+			switch m.editField {
+			case oscillatorType:
+				m.Oscillator.Type = cycle(m.oscillatorList, m.Oscillator.Type, -1)
+			case oscillatorPhase:
+				// decrease phase
+				m.Oscillator.Phase -= 0.05
+				if m.Oscillator.Phase < 0.0 {
+					m.Oscillator.Phase = 0.0
 				}
 			}
-		case "down", "right":
-			// Move to next oscillator
-			idx := slices.Index(m.oscillatorList, m.Oscillator.Type)
-			idx = (idx + 1) % len(m.oscillatorList)
-			m.Oscillator.Type = m.oscillatorList[idx]
-
-			cmd = func() tea.Msg {
-				return OscillatorUpdated{
-					Oscillator: m.Oscillator,
+			cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
+		case "right":
+			switch m.editField {
+			case oscillatorType:
+				m.Oscillator.Type = cycle(m.oscillatorList, m.Oscillator.Type, 1)
+			case oscillatorPhase:
+				// decrease phase
+				m.Oscillator.Phase += 0.05
+				if m.Oscillator.Phase > 1.0 {
+					m.Oscillator.Phase = 1.0
 				}
 			}
+			cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
 		}
 	}
 
 	return m, cmd
+}
+
+func renderFieldSelected(content string, selected bool, style lipgloss.Style) string {
+	if selected {
+		return style.Render(content)
+	}
+
+	return content
+}
+
+func cycle(oscillatorList []audio.OscillatorType, current audio.OscillatorType, step int) audio.OscillatorType {
+	nextIdx := slices.Index(oscillatorList, current) + step
+
+	if nextIdx < 0 {
+		return oscillatorList[len(oscillatorList)-1]
+	}
+
+	return oscillatorList[nextIdx%len(oscillatorList)]
+}
+
+func calcOscWidth(oscillatorList []audio.OscillatorType) int {
+	oscWidth := 0
+	for _, osc := range oscillatorList {
+		oscWidth = max(oscWidth, len(osc))
+	}
+	return oscWidth
 }

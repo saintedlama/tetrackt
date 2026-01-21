@@ -595,9 +595,9 @@ func main() {
 	p := tea.NewProgram(
 		model{
 			sampleRate:   sampleRate,
-			oscillator1:  ui.NewOscillatorModel(selectedStyle, track.Oscillator1.Type),
+			oscillator1:  ui.NewOscillatorModel(selectedStyle, track.Oscillator1),
 			envelope1:    ui.NewEnvelopeModel(selectedStyle, track.Envelope1),
-			oscillator2:  ui.NewOscillatorModel(selectedStyle, track.Oscillator2.Type),
+			oscillator2:  ui.NewOscillatorModel(selectedStyle, track.Oscillator2),
 			envelope2:    ui.NewEnvelopeModel(selectedStyle, track.Envelope2),
 			mixer:        ui.NewMixer(track.Mixer.Balance),
 			tracker:      tracker,

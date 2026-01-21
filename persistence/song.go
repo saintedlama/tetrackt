@@ -18,12 +18,14 @@ type SavedTrackRow struct {
 
 // SavedTrack is the YAML-serializable form of Track
 type SavedTrack struct {
-	Oscillator1 string          `yaml:"oscillator1"`
-	Envelope1   audio.Envelope  `yaml:"envelope1"`
-	Oscillator2 string          `yaml:"oscillator2"`
-	Envelope2   audio.Envelope  `yaml:"envelope2"`
-	Mixer       float64         `yaml:"mixer"`
-	Rows        []SavedTrackRow `yaml:"rows"`
+	Oscillator1      string          `yaml:"oscillator1"`
+	Oscillator1Phase float64         `yaml:"oscillator1_phase"`
+	Envelope1        audio.Envelope  `yaml:"envelope1"`
+	Oscillator2      string          `yaml:"oscillator2"`
+	Oscillator2Phase float64         `yaml:"oscillator2_phase"`
+	Envelope2        audio.Envelope  `yaml:"envelope2"`
+	Mixer            float64         `yaml:"mixer"`
+	Rows             []SavedTrackRow `yaml:"rows"`
 }
 
 // SavedSong is the complete song structure for YAML serialization
@@ -52,12 +54,14 @@ func TracksToSong(tracker *ui.TrackerModel) *SavedSong {
 			}
 		}
 		saved.Tracks[i] = SavedTrack{
-			Oscillator1: string(track.Oscillator1.Type),
-			Envelope1:   track.Envelope1,
-			Oscillator2: string(track.Oscillator2.Type),
-			Envelope2:   track.Envelope2,
-			Mixer:       track.Mixer.Balance,
-			Rows:        rows,
+			Oscillator1:      string(track.Oscillator1.Type),
+			Oscillator1Phase: track.Oscillator1.Phase,
+			Envelope1:        track.Envelope1,
+			Oscillator2:      string(track.Oscillator2.Type),
+			Oscillator2Phase: track.Oscillator2.Phase,
+			Envelope2:        track.Envelope2,
+			Mixer:            track.Mixer.Balance,
+			Rows:             rows,
 		}
 	}
 	return saved
@@ -78,9 +82,9 @@ func SongToTracks(saved *SavedSong, tracker *ui.TrackerModel) {
 	// Update each track with saved data
 	for i, savedTrack := range saved.Tracks {
 		track := &tracker.Tracks[i]
-		track.Oscillator1 = audio.Oscillator{Type: audio.OscillatorType(savedTrack.Oscillator1)}
+		track.Oscillator1 = audio.Oscillator{Type: audio.OscillatorType(savedTrack.Oscillator1), Phase: savedTrack.Oscillator1Phase}
 		track.Envelope1 = savedTrack.Envelope1
-		track.Oscillator2 = audio.Oscillator{Type: audio.OscillatorType(savedTrack.Oscillator2)}
+		track.Oscillator2 = audio.Oscillator{Type: audio.OscillatorType(savedTrack.Oscillator2), Phase: savedTrack.Oscillator2Phase}
 		track.Envelope2 = savedTrack.Envelope2
 		track.Mixer = audio.Mixer{Balance: savedTrack.Mixer}
 

@@ -8,7 +8,8 @@ import (
 )
 
 type Oscillator struct {
-	Type OscillatorType
+	Type  OscillatorType
+	Phase float64 // normalized initial phase [0..1)
 }
 
 // OscillatorType represents the type of oscillator waveform to generate
@@ -21,16 +22,18 @@ const (
 	Sawtooth        OscillatorType = "sawtooth"
 	SawtoothReverse OscillatorType = "sawtooth_reverse"
 	Noise           OscillatorType = "noise"
+	Silent          OscillatorType = "silent"
 )
 
 // TODO: Confusing that NewOscillator returns a generator (streamer) and not the Oscillator type in this package
 // NewOscillator creates a beep.Streamer that generates the specified oscillator waveform
-func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate) beep.Streamer {
+// initialPhase is normalized [0..1) and independent of sample rate
+func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate, initialPhase float64) beep.Streamer {
 	return &oscillatorGenerator{
 		oscillatorType: oscillatorType,
 		frequency:      frequency,
 		sampleRate:     sampleRate,
-		phase:          0,
+		phase:          math.Mod(initialPhase, 1.0),
 	}
 }
 
@@ -75,6 +78,9 @@ func (g *oscillatorGenerator) Stream(samples [][2]float64) (n int, ok bool) {
 
 		case Noise:
 			sample = rand.Float64()*2 - 1
+
+		case Silent:
+			sample = 0
 		}
 
 		samples[i][0] = sample

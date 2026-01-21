@@ -36,8 +36,8 @@ func NewSynth(sampleRate beep.SampleRate, oscillator1 Oscillator, envelope1 Enve
 func (s *Synth) Streamer(note Note, d time.Duration) beep.Streamer {
 	frequency := note.Frequency()
 
-	oscillator1 := NewOscillator(s.oscillator1.Type, frequency, s.sampleRate)
-	oscillator2 := NewOscillator(s.oscillator2.Type, frequency, s.sampleRate)
+	oscillator1 := NewOscillator(s.oscillator1.Type, frequency, s.sampleRate, s.oscillator1.Phase)
+	oscillator2 := NewOscillator(s.oscillator2.Type, frequency, s.sampleRate, s.oscillator2.Phase)
 
 	sampleDuration := s.sampleRate.N(d)
 
