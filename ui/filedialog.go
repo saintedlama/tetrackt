@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // FileDialogMode represents the current state of the file dialog
@@ -133,9 +133,9 @@ func (m FileDialogModel) Update(msg tea.Msg) (FileDialogModel, tea.Cmd) {
 }
 
 // View renders the file dialog as a modal overlay
-func (m FileDialogModel) View() string {
+func (m FileDialogModel) View() tea.View {
 	if !m.IsVisible() {
-		return ""
+		return tea.NewView("")
 	}
 
 	var dialogTitle string
@@ -161,5 +161,5 @@ func (m FileDialogModel) View() string {
 	content.WriteString("[Enter to confirm, Esc to cancel]")
 
 	// Render with border
-	return m.borderStyle.Render(content.String())
+	return tea.NewView(m.borderStyle.Render(content.String()))
 }

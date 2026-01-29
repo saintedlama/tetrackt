@@ -1,6 +1,6 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import "charm.land/lipgloss/v2"
 
 var (
 	offStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))

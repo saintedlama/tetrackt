@@ -3,8 +3,8 @@ package ui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
 )
 
@@ -141,9 +141,9 @@ func (m *EnvelopeModel) adjustEnvelopeValue(delta float64) {
 	}
 }
 
-func (m *EnvelopeModel) View() string {
+func (m *EnvelopeModel) View() tea.View {
 	if m.ShowModal {
-		return m.PresetModel.View()
+		return tea.NewView(m.PresetModel.View())
 	}
 
 	envView := strings.Builder{}
@@ -154,7 +154,7 @@ func (m *EnvelopeModel) View() string {
 	envView.WriteString(RenderKnobSelected("Sustain", m.Envelope.Sustain, m.envelopeField == EnvelopeSustain, m.selectedStyle) + "\n")
 	envView.WriteString(RenderKnobSelected("Release", m.Envelope.Release, m.envelopeField == EnvelopeRelease, m.selectedStyle))
 
-	return envView.String()
+	return tea.NewView(envView.String())
 }
 
 func RenderKnobSelected(label string, value float64, selected bool, selectedStyle lipgloss.Style) string {
