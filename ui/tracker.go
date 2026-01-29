@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
 )
 
@@ -113,7 +113,7 @@ func (m *TrackerModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m *TrackerModel) View() string {
+func (m *TrackerModel) View() tea.View {
 	// Track editor section
 	var tracks strings.Builder
 
@@ -168,7 +168,7 @@ func (m *TrackerModel) View() string {
 		tracks.WriteString("\n")
 	}
 
-	return tracks.String()
+	return tea.NewView(tracks.String())
 }
 
 type TrackChanged struct {

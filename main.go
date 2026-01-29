@@ -11,8 +11,8 @@ import (
 	"github.com/tetrackt/tetrackt/persistence"
 	"github.com/tetrackt/tetrackt/ui"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/gopxl/beep/v2"
 	"github.com/gopxl/beep/v2/effects"
 	"github.com/gopxl/beep/v2/speaker"
@@ -482,7 +482,7 @@ func volumeToDecibels(volume float64) float64 {
 }
 
 // View renders the UI
-func (m model) View() string {
+func (m model) View() tea.View {
 	// Build header
 	var header strings.Builder
 
@@ -522,7 +522,7 @@ func (m model) View() string {
 		trackerBorder = activePanelBorderStyle
 	}
 
-	trackerViewWithBorder := trackerBorder.Render(trackerView)
+	trackerViewWithBorder := trackerBorder.Render(trackerView.Content)
 	body := lipgloss.JoinVertical(lipgloss.Left, synthView, trackerViewWithBorder)
 
 	// Footer help
@@ -530,20 +530,22 @@ func (m model) View() string {
 
 	// TODO: More generic modal handling, use commands?
 	if m.envelope1.ShowModal && m.mode == Envelope1EditMode {
-		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.envelope1.View())
+		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.envelope1.View().Content)
 	}
 
 	if m.envelope2.ShowModal && m.mode == Envelope2EditMode {
-		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.envelope2.View())
+		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.envelope2.View().Content)
 	}
 
 	// File dialog modal
 	if m.fileDialog.IsVisible() {
 		modalView := m.fileDialog.View()
-		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modalView)
+		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modalView.Content)
 	}
 
-	return header.String() + body + "\n" + footer
+	v := tea.NewView(header.String() + body + "\n" + footer)
+
+	return v
 }
 
 func (m model) synthView() string {
@@ -575,12 +577,13 @@ func (m model) synthView() string {
 		mixerBorder = activePanelBorderStyle
 	}
 
+	// TODO: Components need their own view interface - the tea.View is well suited for "main screens" but not for subcomponents
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		oscillator1Border.Render(oscillatorView1),
-		envelope1Border.Render(envelopeView1),
-		oscillator2Border.Render(oscillatorView2),
-		envelope2Border.Render(envelopeView2),
-		mixerBorder.Render(m.mixer.View()),
+		oscillator1Border.Render(oscillatorView1.Content),
+		envelope1Border.Render(envelopeView1.Content),
+		oscillator2Border.Render(oscillatorView2.Content),
+		envelope2Border.Render(envelopeView2.Content),
+		mixerBorder.Render(m.mixer.View().Content),
 	)
 }
 
@@ -606,8 +609,6 @@ func main() {
 			globalVolume: 1.0,
 			fileDialog:   ui.NewFileDialog(modalBorderStyle),
 		},
-
-		tea.WithAltScreen(),
 	)
 
 	if _, err := p.Run(); err != nil {

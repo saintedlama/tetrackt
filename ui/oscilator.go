@@ -4,8 +4,8 @@ import (
 	"slices"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
 )
 
@@ -45,7 +45,7 @@ func (m *OscillatorModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m *OscillatorModel) View() string {
+func (m *OscillatorModel) View() tea.View {
 	var oscillatorView strings.Builder
 	oscillatorView.WriteString("Oscillator ")
 
@@ -58,7 +58,7 @@ func (m *OscillatorModel) View() string {
 	oscillatorView.WriteString("\n")
 	oscillatorView.WriteString(renderFieldSelected(RenderKnob("Phase", m.Oscillator.Phase), m.editField == oscillatorPhase, m.selectedStyle))
 
-	return oscillatorView.String()
+	return tea.NewView(oscillatorView.String())
 }
 
 func (m *OscillatorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

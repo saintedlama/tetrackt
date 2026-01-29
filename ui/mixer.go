@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/tetrackt/tetrackt/audio"
 )
 
@@ -31,7 +31,7 @@ func (m *Mixer) Init() tea.Cmd {
 	return nil
 }
 
-func (m *Mixer) View() string {
+func (m *Mixer) View() tea.View {
 	envView := strings.Builder{}
 	envView.WriteString("Mixer:\n")
 
@@ -43,7 +43,7 @@ func (m *Mixer) View() string {
 	envView.WriteString("\n")
 	envView.WriteString(fmt.Sprintf("Volume:  %3d%%", int(m.GlobalVolume*100)))
 
-	return envView.String()
+	return tea.NewView(envView.String())
 }
 
 func (m *Mixer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
