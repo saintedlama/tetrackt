@@ -105,3 +105,14 @@ func (note Note) Frequency() float64 {
 	offset := float64(note.Octave - 4)
 	return baseFreq * math.Pow(2, offset)
 }
+
+// FrequencyWithSemitoneOffset returns the frequency with a semitone offset applied
+// Useful for arpeggiator effects
+func (note Note) FrequencyWithSemitoneOffset(semitones int) float64 {
+	baseFreq := note.Frequency()
+	if baseFreq == 0 {
+		return 0
+	}
+	// Each semitone is 2^(1/12) frequency ratio
+	return baseFreq * math.Pow(2, float64(semitones)/12.0)
+}

@@ -34,8 +34,11 @@ func NewSynth(sampleRate beep.SampleRate, oscillator1 Oscillator, envelope1 Enve
 }
 
 func (s *Synth) Streamer(note Note, d time.Duration) beep.Streamer {
-	frequency := note.Frequency()
+	return s.StreamerWithFrequency(note, note.Frequency(), d)
+}
 
+// StreamerWithFrequency creates a streamer with a custom frequency (for effects like arpeggio)
+func (s *Synth) StreamerWithFrequency(note Note, frequency float64, d time.Duration) beep.Streamer {
 	oscillator1 := NewOscillator(s.oscillator1.Type, frequency, s.sampleRate, s.oscillator1.Phase)
 	oscillator2 := NewOscillator(s.oscillator2.Type, frequency, s.sampleRate, s.oscillator2.Phase)
 

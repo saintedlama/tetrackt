@@ -1,0 +1,499 @@
+num_rows: 16
+num_tracks: 8
+tracks:
+- oscillator1: square
+  envelope1:
+    attack: 0.0
+    decay: 0.1
+    sustain: 0.7
+    release: 0.2
+  oscillator2: silent
+  envelope2:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  mixer: 0.0
+  rows:
+  - note: C-4
+    volume: 0
+    effect: 0C7
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: F-4
+    volume: 0
+    effect: 0C7
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: G-4
+    volume: 0
+    effect: 047
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: C-4
+    volume: 0
+    effect: 0C3
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: C-4
+    volume: 0
+    effect: 0C7
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: F-4
+    volume: 0
+    effect: 0C7
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: G-4
+    volume: 0
+    effect: 047
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: C-5
+    volume: 0
+    effect: 000
+  - note: ---
+    volume: 0
+    effect: ---
+- oscillator1: triangle
+  envelope1:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.1
+  oscillator2: silent
+  envelope2:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  mixer: 0.0
+  rows:
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: C-3
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: F-3
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: G-3
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: C-3
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: C-3
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: F-3
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: G-3
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: C-3
+    volume: 0
+    effect: ---
+- oscillator1: sine
+  envelope1:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  oscillator2: silent
+  envelope2:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  mixer: 0.0
+  rows:
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+- oscillator1: sine
+  envelope1:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  oscillator2: silent
+  envelope2:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  mixer: 0.0
+  rows:
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+- oscillator1: sine
+  envelope1:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  oscillator2: silent
+  envelope2:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  mixer: 0.0
+  rows:
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+- oscillator1: sine
+  envelope1:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  oscillator2: silent
+  envelope2:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  mixer: 0.0
+  rows:
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+- oscillator1: sine
+  envelope1:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  oscillator2: silent
+  envelope2:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  mixer: 0.0
+  rows:
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+- oscillator1: sine
+  envelope1:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  oscillator2: silent
+  envelope2:
+    attack: 0.0
+    decay: 0.0
+    sustain: 1.0
+    release: 0.0
+  mixer: 0.0
+  rows:
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---
+  - note: ---
+    volume: 0
+    effect: ---

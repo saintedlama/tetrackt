@@ -47,10 +47,13 @@ type TrackerModel struct {
 	NumTracks   int
 	CursorTrack int
 	CursorRow   int
+	CursorCol   int // 0=note, 1=volume, 2=effect
 	IsPlaying   bool
 	LoopToRow   bool
 	LoopEndRow  int
 	PlaybackRow int
+	PlaybackTick int // Current tick within the row
+	TicksPerRow int // Number of ticks per row (default 6)
 	viewportRow int
 	Viewport    Viewport
 }
@@ -96,16 +99,19 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 		}
 	}
 	return &TrackerModel{
-		Tracks:      tracks,
-		NumRows:     numRows,
-		NumTracks:   numTracks,
-		CursorTrack: 0,
-		IsPlaying:   false,
-		LoopToRow:   false,
-		PlaybackRow: 0,
-		CursorRow:   0,
-		viewportRow: 0,
-		Viewport:    Viewport{Width: viewportWidth, Height: viewportHeight},
+		Tracks:       tracks,
+		NumRows:      numRows,
+		NumTracks:    numTracks,
+		CursorTrack:  0,
+		CursorCol:    0,
+		IsPlaying:    false,
+		LoopToRow:    false,
+		PlaybackRow:  0,
+		PlaybackTick: 0,
+		TicksPerRow:  6, // Default to 6 ticks per row
+		CursorRow:    0,
+		viewportRow:  0,
+		Viewport:     Viewport{Width: viewportWidth, Height: viewportHeight},
 	}
 }
 
@@ -156,11 +162,30 @@ func (m *TrackerModel) View() string {
 		// Track cells
 		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
 			trackRow := m.Tracks[trackIdx].Rows[row]
-			cellContent := fmt.Sprintf("%-3s %2s %3s", formatNote(trackRow.Note), formatVolume(trackRow.Volume), trackRow.Effect)
+			
+			noteStr := fmt.Sprintf("%-3s", formatNote(trackRow.Note))
+			volStr := fmt.Sprintf("%2s", formatVolume(trackRow.Volume))
+			effStr := fmt.Sprintf("%3s", trackRow.Effect)
 
 			if row == m.CursorRow && trackIdx == m.CursorTrack {
-				tracks.WriteString(cursorCellStyle.Render(cellContent))
+				// Highlight current cell with column indicator
+				switch m.CursorCol {
+				case 0: // Note column
+					noteStr = cursorCellStyle.Render(noteStr)
+					volStr = cellStyle.Render(volStr)
+					effStr = cellStyle.Render(effStr)
+				case 1: // Volume column
+					noteStr = cellStyle.Render(noteStr)
+					volStr = cursorCellStyle.Render(volStr)
+					effStr = cellStyle.Render(effStr)
+				case 2: // Effect column
+					noteStr = cellStyle.Render(noteStr)
+					volStr = cellStyle.Render(volStr)
+					effStr = cursorCellStyle.Render(effStr)
+				}
+				tracks.WriteString(noteStr + " " + volStr + " " + effStr)
 			} else {
+				cellContent := noteStr + " " + volStr + " " + effStr
 				tracks.WriteString(cellStyle.Render(cellContent))
 			}
 			tracks.WriteString(" ")
@@ -188,6 +213,12 @@ func (m *TrackerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Track mode key handling
 		switch keyStr {
+		case "tab":
+			// Move to next column
+			m.CursorCol = (m.CursorCol + 1) % 3
+		case "shift+tab":
+			// Move to previous column
+			m.CursorCol = (m.CursorCol + 2) % 3
 		case "left":
 			// Move cursor left (previous track)
 			if m.CursorTrack > 0 {
@@ -301,4 +332,14 @@ func (m *TrackerModel) SetNote(note audio.Note) TrackRow {
 func (m *TrackerModel) GetNote() audio.Note {
 	trackCell := &m.Tracks[m.CursorTrack].Rows[m.CursorRow]
 	return trackCell.Note
+}
+
+func (m *TrackerModel) SetEffect(effect string) {
+	trackCell := &m.Tracks[m.CursorTrack].Rows[m.CursorRow]
+	trackCell.Effect = effect
+}
+
+func (m *TrackerModel) GetEffect() string {
+	trackCell := &m.Tracks[m.CursorTrack].Rows[m.CursorRow]
+	return trackCell.Effect
 }

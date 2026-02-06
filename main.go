@@ -250,6 +250,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
+		// Effect column hex input (0-9, A-F)
+		if m.mode == TrackMode && m.tracker.CursorCol == 2 {
+			keyStr := msg.String()
+			// Check if it's a hex character
+			if len(keyStr) == 1 && ((keyStr[0] >= '0' && keyStr[0] <= '9') || 
+				(keyStr[0] >= 'a' && keyStr[0] <= 'f') || 
+				(keyStr[0] >= 'A' && keyStr[0] <= 'F')) {
+				
+				currentEffect := m.tracker.GetEffect()
+				if currentEffect == "---" || currentEffect == "..." {
+					currentEffect = "000"
+				}
+				
+				// Shift existing characters left and add new one
+				if len(currentEffect) >= 3 {
+					// Convert to uppercase for consistency
+					newChar := strings.ToUpper(keyStr)
+					currentEffect = currentEffect[1:] + newChar
+					m.tracker.SetEffect(currentEffect)
+				}
+				return m, nil
+			}
+		}
+
 		// Global note playing (available in any mode)
 		if base, ok := noteKeyToName[msg.String()]; ok {
 			note := audio.Note{Base: base, Octave: audio.Octave(m.octave)}
@@ -486,14 +510,25 @@ func (m *model) playRowNotes(row int) {
 
 		synth := audio.NewSynth(
 			m.sampleRate,
-			m.oscillator1.Oscillator,
-			m.envelope1.Envelope,
-			m.oscillator2.Oscillator,
-			m.envelope2.Envelope,
-			m.mixer.Mixer,
+			track.Oscillator1,
+			track.Envelope1,
+			track.Oscillator2,
+			track.Envelope2,
+			track.Mixer,
 		)
 
-		synthStreamer := synth.Streamer(trackRow.Note, duration)
+		// Parse effect and check for arpeggio
+		effect, err := audio.ParseEffect(trackRow.Effect)
+		var synthStreamer beep.Streamer
+
+		if err == nil && effect.IsArpeggio() {
+			// Use arpeggio streamer
+			synthStreamer = audio.NewArpeggioStreamer(synth, trackRow.Note, effect, duration, m.tracker.TicksPerRow)
+		} else {
+			// Normal note playback
+			synthStreamer = synth.Streamer(trackRow.Note, duration)
+		}
+
 		streamers = append(streamers, synthStreamer)
 	}
 
