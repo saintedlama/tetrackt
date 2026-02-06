@@ -42,20 +42,20 @@ type Viewport struct {
 
 // TrackerModel represents the state of the tracker pattern editor
 type TrackerModel struct {
-	Tracks      []Track
-	NumRows     int
-	NumTracks   int
-	CursorTrack int
-	CursorRow   int
-	CursorCol   int // 0=note, 1=volume, 2=effect
-	IsPlaying   bool
-	LoopToRow   bool
-	LoopEndRow  int
-	PlaybackRow int
+	Tracks       []Track
+	NumRows      int
+	NumTracks    int
+	CursorTrack  int
+	CursorRow    int
+	CursorCol    int // 0=note, 1=volume, 2=effect
+	IsPlaying    bool
+	LoopToRow    bool
+	LoopEndRow   int
+	PlaybackRow  int
 	PlaybackTick int // Current tick within the row
-	TicksPerRow int // Number of ticks per row (default 6)
-	viewportRow int
-	Viewport    Viewport
+	TicksPerRow  int // Number of ticks per row (default 6)
+	viewportRow  int
+	Viewport     Viewport
 }
 
 // Track represents a single track in the pattern
@@ -162,7 +162,7 @@ func (m *TrackerModel) View() string {
 		// Track cells
 		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
 			trackRow := m.Tracks[trackIdx].Rows[row]
-			
+
 			noteStr := fmt.Sprintf("%-3s", formatNote(trackRow.Note))
 			volStr := fmt.Sprintf("%2s", formatVolume(trackRow.Volume))
 			effStr := fmt.Sprintf("%3s", trackRow.Effect)
@@ -213,10 +213,10 @@ func (m *TrackerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Track mode key handling
 		switch keyStr {
-		case "tab":
+		case "ctrl+l":
 			// Move to next column
 			m.CursorCol = (m.CursorCol + 1) % 3
-		case "shift+tab":
+		case "ctrl+h":
 			// Move to previous column
 			m.CursorCol = (m.CursorCol + 2) % 3
 		case "left":
