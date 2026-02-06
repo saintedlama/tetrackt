@@ -19,6 +19,9 @@ import (
 )
 
 // InputMode represents the current input mode
+
+var instrumentPanel = ui.NewInstrumentPanel()
+
 type InputMode int
 
 const (
