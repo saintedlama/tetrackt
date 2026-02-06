@@ -89,6 +89,8 @@ type model struct {
 	fileDialog *ui.FileDialogModel
 	// current loaded/saved filename (prefill on save)
 	currentFilename string
+
+	logo *ui.Logo
 }
 
 // tickMsg is sent to advance playback
@@ -592,7 +594,7 @@ func (m model) synthView() string {
 	oscillatorView2 := m.oscillator2.View()
 	envelopeView2 := m.envelope2.View()
 
-	m.instrument.MaxHeight = maxInt(
+	m.instrument.MaxHeight = max(
 		lipgloss.Height(oscillatorView1),
 		lipgloss.Height(envelopeView1),
 		lipgloss.Height(oscillatorView2),
@@ -626,7 +628,10 @@ func (m model) synthView() string {
 		instrumentBorder = activePanelBorderStyle
 	}
 
+	logoView := m.logo.View()
+
 	return lipgloss.JoinHorizontal(lipgloss.Top,
+		logoView,
 		oscillator1Border.Render(oscillatorView1),
 		envelope1Border.Render(envelopeView1),
 		oscillator2Border.Render(oscillatorView2),
@@ -634,21 +639,6 @@ func (m model) synthView() string {
 		mixerBorder.Render(m.mixer.View()),
 		instrumentBorder.Render(instrumentView),
 	)
-}
-
-func maxInt(values ...int) int {
-	if len(values) == 0 {
-		return 0
-	}
-
-	maxValue := values[0]
-	for _, value := range values[1:] {
-		if value > maxValue {
-			maxValue = value
-		}
-	}
-
-	return maxValue
 }
 
 func main() {
@@ -673,6 +663,7 @@ func main() {
 			octave:       4,
 			globalVolume: 1.0,
 			fileDialog:   ui.NewFileDialog(modalBorderStyle),
+			logo:         ui.NewLogo(),
 		},
 
 		tea.WithAltScreen(),
