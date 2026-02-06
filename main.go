@@ -19,9 +19,6 @@ import (
 )
 
 // InputMode represents the current input mode
-
-var instrumentPanel = ui.NewInstrumentPanel()
-
 type InputMode int
 
 const (
@@ -31,6 +28,7 @@ const (
 	Oscillator2EditMode
 	Envelope2EditMode
 	MixerEditMode
+	InstrumentMode
 )
 
 var (
@@ -80,6 +78,7 @@ type model struct {
 	envelope2   *ui.EnvelopeModel
 	mixer       *ui.Mixer
 	tracker     *ui.TrackerModel
+	instrument  *ui.InstrumentView
 
 	mode InputMode
 
@@ -220,12 +219,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mixer.GlobalVolume = m.globalVolume
 			return m, nil
 		case "tab":
-			m.mode = InputMode((int(m.mode) + 1) % 6) // Cycle through 6 modes
+			m.mode = InputMode((int(m.mode) + 1) % 7) // Cycle through 7 modes
 			return m, nil
 		case "shift+tab":
-			m.mode = InputMode((int(m.mode) - 1) % 6) // Cycle through 6 modes
+			m.mode = InputMode((int(m.mode) - 1) % 7) // Cycle through 7 modes
 			if m.mode < 0 {
-				m.mode += 6
+				m.mode += 7
 			}
 			return m, nil
 		case "p", "P":
@@ -294,6 +293,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		if m.mode == InstrumentMode {
+			var cmd tea.Cmd
+			m.instrument, cmd = m.instrument.Update(msg)
+			return m, cmd
+		}
+
 	case tickMsg:
 		if !m.tracker.IsPlaying {
 			return m, nil
@@ -339,6 +344,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.envelope2.Envelope = msg.Envelope2
 		m.oscillator2.Oscillator = msg.Oscillator2
 		m.mixer.Mixer = msg.Mixer
+		m.instrument.CurrentTrackNum = m.tracker.CursorTrack
 
 	case ui.FileDialogConfirmed:
 		// Handle file dialog confirmation
@@ -391,6 +397,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case ui.MixerUpdated:
 		m.tracker.Tracks[m.tracker.CursorTrack].Mixer = msg.Mixer
+
+	case ui.InstrumentApplied:
+		m.oscillator1.Oscillator = msg.Instrument.Oscillator1
+		m.envelope1.Envelope = msg.Instrument.Envelope1
+		m.oscillator2.Oscillator = msg.Instrument.Oscillator2
+		m.envelope2.Envelope = msg.Instrument.Envelope2
+		m.mixer.Mixer = msg.Instrument.Mixer
+
+		track := &m.tracker.Tracks[m.tracker.CursorTrack]
+		track.Oscillator1 = msg.Instrument.Oscillator1
+		track.Envelope1 = msg.Instrument.Envelope1
+		track.Oscillator2 = msg.Instrument.Oscillator2
+		track.Envelope2 = msg.Instrument.Envelope2
+		track.Mixer = msg.Instrument.Mixer
 	}
 
 	return m, nil
@@ -408,13 +428,29 @@ func (m *model) playNote(note audio.Note) {
 	// TODO: duration should be adjustable
 	duration := time.Millisecond * 250
 
+	oscillator1 := m.oscillator1.Oscillator
+	envelope1 := m.envelope1.Envelope
+	oscillator2 := m.oscillator2.Oscillator
+	envelope2 := m.envelope2.Envelope
+	mixer := m.mixer.Mixer
+
+	if m.mode == InstrumentMode {
+		if preset := m.instrument.GetPreset(m.instrument.SelectedPreset); preset != nil {
+			oscillator1 = preset.Oscillator1
+			envelope1 = preset.Envelope1
+			oscillator2 = preset.Oscillator2
+			envelope2 = preset.Envelope2
+			mixer = preset.Mixer
+		}
+	}
+
 	synth := audio.NewSynth(
 		m.sampleRate,
-		m.oscillator1.Oscillator,
-		m.envelope1.Envelope,
-		m.oscillator2.Oscillator,
-		m.envelope2.Envelope,
-		m.mixer.Mixer)
+		oscillator1,
+		envelope1,
+		oscillator2,
+		envelope2,
+		mixer)
 
 	synthStreamer := synth.Streamer(note, duration)
 	volumeAdjusted := &effects.Volume{
@@ -556,6 +592,15 @@ func (m model) synthView() string {
 	oscillatorView2 := m.oscillator2.View()
 	envelopeView2 := m.envelope2.View()
 
+	m.instrument.MaxHeight = maxInt(
+		lipgloss.Height(oscillatorView1),
+		lipgloss.Height(envelopeView1),
+		lipgloss.Height(oscillatorView2),
+		lipgloss.Height(envelopeView2),
+		lipgloss.Height(m.mixer.View()),
+	)
+	instrumentView := m.instrument.View()
+
 	m.mixer.GlobalVolume = m.globalVolume
 
 	// Apply active border to the current mode panel
@@ -564,6 +609,7 @@ func (m model) synthView() string {
 	oscillator2Border := panelBorderStyle
 	envelope2Border := panelBorderStyle
 	mixerBorder := panelBorderStyle
+	instrumentBorder := panelBorderStyle
 
 	switch m.mode {
 	case Oscillator1EditMode:
@@ -576,6 +622,8 @@ func (m model) synthView() string {
 		envelope2Border = activePanelBorderStyle
 	case MixerEditMode:
 		mixerBorder = activePanelBorderStyle
+	case InstrumentMode:
+		instrumentBorder = activePanelBorderStyle
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
@@ -584,7 +632,23 @@ func (m model) synthView() string {
 		oscillator2Border.Render(oscillatorView2),
 		envelope2Border.Render(envelopeView2),
 		mixerBorder.Render(m.mixer.View()),
+		instrumentBorder.Render(instrumentView),
 	)
+}
+
+func maxInt(values ...int) int {
+	if len(values) == 0 {
+		return 0
+	}
+
+	maxValue := values[0]
+	for _, value := range values[1:] {
+		if value > maxValue {
+			maxValue = value
+		}
+	}
+
+	return maxValue
 }
 
 func main() {
@@ -604,6 +668,7 @@ func main() {
 			envelope2:    ui.NewEnvelopeModel(selectedStyle, track.Envelope2),
 			mixer:        ui.NewMixer(track.Mixer.Balance),
 			tracker:      tracker,
+			instrument:   ui.NewInstrumentView(selectedStyle),
 			mode:         TrackMode,
 			octave:       4,
 			globalVolume: 1.0,
