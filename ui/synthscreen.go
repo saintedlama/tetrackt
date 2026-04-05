@@ -65,11 +65,6 @@ func (s *SynthScreen) ApplyTrackChange(msg TrackChanged) {
 	s.GetMixer().Mixer = msg.Mixer
 }
 
-// SetGlobalVolume updates the mixer panel's global volume display.
-func (s *SynthScreen) SetGlobalVolume(v float64) {
-	s.GetMixer().GlobalVolume = v
-}
-
 // Title returns the tab label for the SynthScreen.
 func (s *SynthScreen) Title() string { return "Synth" }
 
@@ -91,7 +86,7 @@ func (s *SynthScreen) View() string {
 
 // Footer returns the help text shown in the footer bar on the Synth screen.
 func (s *SynthScreen) Footer() string {
-	return "Tab/Shift+Tab: Switch panel | ↑↓: Select | ←→: Adjust | +/-: Octave | [/]: Volume | I: Instruments | p: Play/Pause | P: Loop | S: Save | L: Load | T: Tracker | Q: Quit"
+	return "Tab/Shift+Tab: Switch panel | ↑↓: Select | ←→: Adjust | +/-: Octave | I: Instruments | p: Play/Pause | P: Loop | S: Save | L: Load | T: Tracker | Q: Quit"
 }
 
 // GetActiveSynthParams returns the oscillator/envelope/mixer settings for audio playback.

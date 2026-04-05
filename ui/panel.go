@@ -66,7 +66,7 @@ func RenderPanel(title string, titleColor color.Color, content string, active bo
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Padding(0, 2)
+		Padding(1, 2, 1, 2)
 
 	bordered := borderStyle.Render(content)
 

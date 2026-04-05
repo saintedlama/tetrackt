@@ -23,10 +23,6 @@ const (
 )
 
 var (
-	infoStyle = lipgloss.NewStyle().
-			Foreground(ui.ColorAccentEnvelope).
-			Padding(0, 1)
-
 	helpStyle = lipgloss.NewStyle().
 			Foreground(ui.ColorTextDisabled).
 			Padding(1, 1)
@@ -73,6 +69,11 @@ type model struct {
 // synth returns the SynthScreen (always screens[synthScreenIdx]).
 func (m model) synth() *ui.SynthScreen {
 	return m.screens[synthScreenIdx].(*ui.SynthScreen)
+}
+
+// tracker returns the TrackerScreen (always screens[trackerScreenIdx]).
+func (m model) tracker() *ui.TrackerScreen {
+	return m.screens[trackerScreenIdx].(*ui.TrackerScreen)
 }
 
 // trackerModel returns the TrackerModel owned by the TrackerScreen.
@@ -141,21 +142,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			return m, nil
-		// volume
-		case "[", "alt+[": // decrease volume, for german keyboard layout we need to consider the alt+combo
-			m.globalVolume -= 0.05
-			if m.globalVolume < 0.0 {
-				m.globalVolume = 0.0
-			}
-			m.synth().SetGlobalVolume(m.globalVolume)
-			return m, nil
-		case "]", "alt+]": // increase volume, for german keyboard layout we need to consider the alt+combo
-			m.globalVolume += 0.05
-			if m.globalVolume > 1.0 {
-				m.globalVolume = 1.0
-			}
-			m.synth().SetGlobalVolume(m.globalVolume)
 			return m, nil
 		case "p", "P":
 			// Toggle play/pause
@@ -298,6 +284,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ui.MixerUpdated:
 		m.trackerModel().Tracks[m.trackerModel().CursorTrack].Mixer = msg.Mixer
 
+	case ui.VolumeChanged:
+		m.globalVolume = msg.Volume
+
 	case ui.PlayInstrumentNoteMsg:
 		m.playNoteWithInstrument(msg.Note, msg.Instrument)
 		return m, nil
@@ -437,17 +426,6 @@ func volumeToDecibels(volume float64) float64 {
 
 // View renders the UI
 func (m model) View() tea.View {
-	tracker := m.trackerModel()
-
-	playStatus := "STOPPED"
-	if tracker.IsPlaying {
-		if tracker.LoopToRow {
-			playStatus = fmt.Sprintf("LOOP 0-%d (Row %d)", tracker.LoopEndRow, tracker.PlaybackRow)
-		} else {
-			playStatus = fmt.Sprintf("PLAYING (Row %d)", tracker.PlaybackRow)
-		}
-	}
-
 	// Tab bar
 	tabs := make([]string, len(m.screens))
 	for i, s := range m.screens {
@@ -459,10 +437,7 @@ func (m model) View() tea.View {
 	}
 	tabBar := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
 
-	statusBar := infoStyle.Render(fmt.Sprintf("%s | Track: %d | Row: %d | Octave: %d",
-		playStatus, tracker.CursorTrack, tracker.CursorRow, m.octave))
-
-	header := lipgloss.JoinHorizontal(lipgloss.Top, tabBar, statusBar) + "\n\n"
+	header := tabBar + "\n\n"
 
 	body := m.screens[m.activeScreen].View()
 	footer := helpStyle.Render(m.screens[m.activeScreen].Footer())
