@@ -1,4 +1,4 @@
-# Tetrackt
+# TeTrackT
 
 The terminal music tracker for chiptune and retro-style music with a great typo.
 
