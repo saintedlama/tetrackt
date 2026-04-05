@@ -3,6 +3,7 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/tetrackt/tetrackt/ui/widgets"
 )
 
 var dialogBorderStyle = lipgloss.NewStyle().
@@ -14,6 +15,10 @@ var dialogBorderStyle = lipgloss.NewStyle().
 // If Payload is non-nil it is forwarded to the background model as a result.
 // A nil Payload means the dialog was cancelled.
 type CloseDialogMsg struct{ Payload tea.Msg }
+
+// PassThroughMsg wraps a payload that should be forwarded to the background
+// model while keeping the dialog open (e.g. note previews inside a picker).
+type PassThroughMsg struct{ Payload tea.Msg }
 
 // dialogModel wraps a dialog content model on top of a background model.
 // All messages are forwarded to the dialog; CloseDialogMsg dismisses the dialog
@@ -48,10 +53,16 @@ func (m dialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.main, cmd
 		}
 		return m.main, nil
+	case PassThroughMsg:
+		// Forward to background model; dialog stays open
+		var cmd tea.Cmd
+		m.main, cmd = m.main.Update(msg.Payload)
+		return m, cmd
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.main, _ = m.main.Update(msg)
+		m.dialog, _ = m.dialog.Update(msg)
 		return m, nil
 	}
 
@@ -64,7 +75,7 @@ func (m dialogModel) View() tea.View {
 	bg := m.main.View().Content
 	dialogContent := dialogBorderStyle.Render(m.dialog.View().Content)
 
-	v := tea.NewView(OverlayCenter(m.width, m.height, dialogContent, bg, WithDim()))
+	v := tea.NewView(widgets.OverlayCenter(m.width, m.height, dialogContent, bg, widgets.WithDim()))
 	v.AltScreen = true
 	return v
 }

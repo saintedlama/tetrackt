@@ -7,10 +7,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/ui/widgets"
 )
 
 type Mixer struct {
-	BalanceBar   Bar
+	BalanceBar   widgets.Bar
 	Mixer        audio.Mixer
 	GlobalVolume float64 // Global output volume (0.0 to 1.0), set by main
 }
@@ -22,7 +23,7 @@ type MixerUpdated struct {
 func NewMixer(balance float64) *Mixer {
 	return &Mixer{
 		Mixer:        audio.Mixer{Balance: balance},
-		BalanceBar:   NewBar(0, 1, balance, 10),
+		BalanceBar:   widgets.NewBar(0, 1, balance, 10),
 		GlobalVolume: 1.0,
 	}
 }

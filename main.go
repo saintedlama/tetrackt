@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
@@ -18,17 +17,9 @@ import (
 	"github.com/gopxl/beep/v2/speaker"
 )
 
-// InputMode represents the current input mode
-type InputMode int
-
 const (
-	TrackMode InputMode = iota
-	Oscillator1EditMode
-	Envelope1EditMode
-	Oscillator2EditMode
-	Envelope2EditMode
-	MixerEditMode
-	InstrumentMode
+	trackerScreenIdx = 0
+	synthScreenIdx   = 1
 )
 
 var (
@@ -44,6 +35,17 @@ var (
 			Background(ui.ColorAccentInstrument).
 			Foreground(ui.ColorWhite).
 			Bold(true)
+
+	tabActiveStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(ui.ColorBackground).
+			Background(ui.ColorAccentPrimary).
+			Padding(0, 2)
+
+	tabInactiveStyle = lipgloss.NewStyle().
+				Foreground(ui.ColorTextMuted).
+				Background(ui.ColorSurface).
+				Padding(0, 2)
 )
 
 const (
@@ -53,13 +55,13 @@ const (
 
 // model represents the application state
 type model struct {
-	width       int
-	height      int
-	sampleRate  beep.SampleRate
-	synthPanels []ui.Panel
-	tracker     *ui.TrackerModel
+	width        int
+	height       int
+	sampleRate   beep.SampleRate
+	screens      []ui.Screen
+	activeScreen int
 
-	mode InputMode
+	instrumentView *ui.InstrumentView // persistent across dialog opens
 
 	octave       int
 	globalVolume float64
@@ -68,33 +70,20 @@ type model struct {
 	currentFilename string
 }
 
-// Accessors for synth panel children (synthPanels order: osc1, env1, osc2, env2, mixer, instrument)
-func (m model) osc1() *ui.OscillatorModel { return m.synthPanels[0].Child.(*ui.OscillatorModel) }
-func (m model) env1() *ui.EnvelopeModel   { return m.synthPanels[1].Child.(*ui.EnvelopeModel) }
-func (m model) osc2() *ui.OscillatorModel { return m.synthPanels[2].Child.(*ui.OscillatorModel) }
-func (m model) env2() *ui.EnvelopeModel   { return m.synthPanels[3].Child.(*ui.EnvelopeModel) }
-func (m model) mixer() *ui.Mixer          { return m.synthPanels[4].Child.(*ui.Mixer) }
-func (m model) instr() *ui.InstrumentView { return m.synthPanels[5].Child.(*ui.InstrumentView) }
+// synth returns the SynthScreen (always screens[synthScreenIdx]).
+func (m model) synth() *ui.SynthScreen {
+	return m.screens[synthScreenIdx].(*ui.SynthScreen)
+}
+
+// trackerModel returns the TrackerModel owned by the TrackerScreen.
+func (m model) trackerModel() *ui.TrackerModel {
+	return m.screens[trackerScreenIdx].(*ui.TrackerScreen).Tracker
+}
 
 // tickMsg is sent to advance playback
 type tickMsg time.Time
 
-var noteKeyToName = map[string]audio.Base{
-	"1":  "C",
-	"!":  "C#",
-	"2":  "D",
-	"@":  "D#",
-	"\"": "D#", // german keyboard layout
-	"3":  "E",
-	"4":  "F",
-	"$":  "F#",
-	"5":  "G",
-	"%":  "G#",
-	"6":  "A",
-	"^":  "A#",
-	"&":  "A#", // german keyboard layout
-	"7":  "B",
-}
+var noteKeyToName = ui.NoteKeys
 
 func (m model) Init() tea.Cmd {
 	// Initialize speaker with sample rate
@@ -122,43 +111,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "l":
 			// Open load dialog
 			return ui.NewDialogModel(ui.NewFileDialog(ui.ModeLoad, ""), m, m.width, m.height), nil
-		case "o":
-			switch m.mode {
-			case Oscillator1EditMode:
-				m.mode = Oscillator2EditMode
-			case Oscillator2EditMode:
-				m.mode = Oscillator1EditMode
-			default:
-				m.mode = Oscillator1EditMode
-			}
-
-			return m, nil
+		case "i":
+			return ui.NewDialogModel(ui.NewInstrumentDialog(m.instrumentView, m.octave), m, m.width, m.height), nil
 		case "t":
-			m.mode = TrackMode
+			m.activeScreen = (m.activeScreen + 1) % len(m.screens)
 			return m, nil
-		case "e":
-			switch m.mode {
-			case Envelope1EditMode:
-				m.mode = Envelope2EditMode
-			case Envelope2EditMode:
-				m.mode = Envelope1EditMode
-			default:
-				m.mode = Envelope1EditMode
-			}
-
-			return m, nil
-		case "delete":
-			// TODO: KeyMsg should be handled by the tracker
-			m.tracker.SetNote(audio.Off())
-
 		case "+":
 			if m.octave < maxOctave {
 				m.octave++
 			}
 
-			note := m.tracker.GetNote()
+			note := m.trackerModel().GetNote()
 			if newNote, ok := note.Transpose(-1); ok {
-				m.tracker.SetNote(newNote)
+				m.trackerModel().SetNote(newNote)
 				m.playNote(newNote)
 				return m, nil
 			}
@@ -169,9 +134,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.octave--
 			}
 
-			note := m.tracker.CurrentTrack().CurrentRow().Note
+			note := m.trackerModel().CurrentTrack().CurrentRow().Note
 			if newNote, ok := note.Transpose(-1); ok {
-				m.tracker.SetNote(newNote)
+				m.trackerModel().SetNote(newNote)
 				m.playNote(newNote)
 				return m, nil
 			}
@@ -183,37 +148,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.globalVolume < 0.0 {
 				m.globalVolume = 0.0
 			}
-
-			m.mixer().GlobalVolume = m.globalVolume
+			m.synth().SetGlobalVolume(m.globalVolume)
 			return m, nil
 		case "]", "alt+]": // increase volume, for german keyboard layout we need to consider the alt+combo
 			m.globalVolume += 0.05
 			if m.globalVolume > 1.0 {
 				m.globalVolume = 1.0
 			}
-
-			m.mixer().GlobalVolume = m.globalVolume
-			return m, nil
-		case "tab":
-			m.mode = InputMode((int(m.mode) + 1) % 7) // Cycle through 7 modes
-			return m, nil
-		case "shift+tab":
-			m.mode = InputMode((int(m.mode) - 1) % 7) // Cycle through 7 modes
-			if m.mode < 0 {
-				m.mode += 7
-			}
+			m.synth().SetGlobalVolume(m.globalVolume)
 			return m, nil
 		case "p", "P":
 			// Toggle play/pause
-			m.tracker.IsPlaying = !m.tracker.IsPlaying
-			m.tracker.LoopToRow = false // normal play toggles off loop mode
-			if m.tracker.IsPlaying {
-				m.tracker.PlaybackRow = 0
+			tracker := m.trackerModel()
+			tracker.IsPlaying = !tracker.IsPlaying
+			tracker.LoopToRow = false // normal play toggles off loop mode
+			if tracker.IsPlaying {
+				tracker.PlaybackRow = 0
 
 				// TODO: Loop to row is just a special play mode, that does not use 0..numRows range
 				if "P" == keyStr {
-					m.tracker.LoopToRow = true
-					m.tracker.LoopEndRow = m.tracker.CursorRow
+					tracker.LoopToRow = true
+					tracker.LoopEndRow = tracker.CursorRow
 				}
 
 				// TODO: Refactor to have a play command returned from tracker.Update
@@ -231,42 +186,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			note := audio.Note{Base: base, Octave: audio.Octave(m.octave)}
 			m.playNote(note)
 
-			if m.mode == TrackMode {
-				m.tracker.SetNote(note)
+			if m.activeScreen == trackerScreenIdx {
+				m.trackerModel().SetNote(note)
 			}
 
 			return m, nil
 		}
 
-		if m.mode == TrackMode {
-			var _, cmd = m.tracker.Update(msg)
-			return m, cmd
-		}
-
-		// Route to the active synth panel (modes 1-6 map to synthPanels[0-5])
-		idx := int(m.mode) - 1
+		// Forward remaining key events to the active screen
 		var cmd tea.Cmd
-		m.synthPanels[idx], cmd = m.synthPanels[idx].Update(msg)
+		m.screens[m.activeScreen], cmd = m.screens[m.activeScreen].Update(msg)
 		return m, cmd
 
 	case tickMsg:
-		if !m.tracker.IsPlaying {
+		tracker := m.trackerModel()
+		if !tracker.IsPlaying {
 			return m, nil
 		}
 
 		// Play all notes at current playback row
-		m.playRowNotes(m.tracker.PlaybackRow)
+		m.playRowNotes(tracker.PlaybackRow)
 
 		// Advance to next row
-		m.tracker.PlaybackRow++
-		if m.tracker.LoopToRow {
+		tracker.PlaybackRow++
+		if tracker.LoopToRow {
 			// Wrap within 0..loopEndRow inclusive
-			if m.tracker.PlaybackRow > m.tracker.LoopEndRow {
-				m.tracker.PlaybackRow = 0
+			if tracker.PlaybackRow > tracker.LoopEndRow {
+				tracker.PlaybackRow = 0
 			}
 		} else {
-			if m.tracker.PlaybackRow >= m.tracker.NumRows {
-				m.tracker.PlaybackRow = 0 // Loop back to start
+			if tracker.PlaybackRow >= tracker.NumRows {
+				tracker.PlaybackRow = 0 // Loop back to start
 			}
 		}
 
@@ -277,24 +227,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// TODO: Could be more generic rendering the chrome and calculate chrome height
-		synthViewHeight := lipgloss.Height(m.synthView())
-
-		m.tracker.Viewport = ui.Viewport{
-			Height: m.height - (synthViewHeight + 4),
+		m.trackerModel().Viewport = ui.Viewport{
+			Height: m.height - 7, // tab bar (1) + blank line (1) + newline (1) + footer padding+text (2) + panel border (2)
 			Width:  m.width,
 		}
 
 		return m, nil
 
 	case ui.TrackChanged:
-		// Update synth parameters based on current track
-		m.env1().Envelope = msg.Envelope1
-		m.osc1().Oscillator = msg.Oscillator1
-		m.env2().Envelope = msg.Envelope2
-		m.osc2().Oscillator = msg.Oscillator2
-		m.mixer().Mixer = msg.Mixer
-		m.instr().CurrentTrackNum = m.tracker.CursorTrack
+		// Sync synth panels with the newly selected track
+		m.synth().ApplyTrackChange(msg)
 
 	case ui.FileDialogConfirmed:
 		// Handle file dialog confirmation
@@ -302,7 +244,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Mode {
 		case ui.ModeSave:
 			// Save song
-			song := persistence.TracksToSong(m.tracker)
+			song := persistence.TracksToSong(m.trackerModel())
 			err := persistence.SaveToFile(filename, song)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Save failed: %v\n", err)
@@ -316,7 +258,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				fmt.Fprintf(os.Stderr, "Load failed: %v\n", err)
 			} else {
 				// Update existing tracker model instead of creating new one
-				persistence.SongToTracks(song, m.tracker)
+				persistence.SongToTracks(song, m.trackerModel())
 				m.currentFilename = filename
 			}
 		}
@@ -326,43 +268,50 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return ui.NewDialogModel(ui.NewEnvelopePresetDialog(), m, m.width, m.height), nil
 
 	case ui.EnvelopePresetSelected:
-		switch m.mode {
-		case Envelope1EditMode:
-			m.env1().Envelope = msg.Envelope
-			m.tracker.Tracks[m.tracker.CursorTrack].Envelope1 = msg.Envelope
-		case Envelope2EditMode:
-			m.env2().Envelope = msg.Envelope
-			m.tracker.Tracks[m.tracker.CursorTrack].Envelope2 = msg.Envelope
+		tracker := m.trackerModel()
+		switch m.synth().ActivePanel {
+		case 1: // Env1
+			m.synth().Env1().Envelope = msg.Envelope
+			tracker.Tracks[tracker.CursorTrack].Envelope1 = msg.Envelope
+		case 3: // Env2
+			m.synth().Env2().Envelope = msg.Envelope
+			tracker.Tracks[tracker.CursorTrack].Envelope2 = msg.Envelope
 		}
 		return m, nil
 
 	case ui.OscillatorUpdated:
-		// TODO: Refactor to allow updating via a method instead of direct field access
-		switch m.mode {
-		case Oscillator1EditMode:
-			m.tracker.Tracks[m.tracker.CursorTrack].Oscillator1 = msg.Oscillator
-		case Oscillator2EditMode:
-			m.tracker.Tracks[m.tracker.CursorTrack].Oscillator2 = msg.Oscillator
+		tracker := m.trackerModel()
+		switch m.synth().ActivePanel {
+		case 0: // Osc1
+			tracker.Tracks[tracker.CursorTrack].Oscillator1 = msg.Oscillator
+		case 2: // Osc2
+			tracker.Tracks[tracker.CursorTrack].Oscillator2 = msg.Oscillator
 		}
 	case ui.EnvelopeUpdated:
-		// TODO: Refactor to allow updating via a method instead of direct field access
-		switch m.mode {
-		case Envelope1EditMode:
-			m.tracker.Tracks[m.tracker.CursorTrack].Envelope1 = msg.Envelope
-		case Envelope2EditMode:
-			m.tracker.Tracks[m.tracker.CursorTrack].Envelope2 = msg.Envelope
+		tracker := m.trackerModel()
+		switch m.synth().ActivePanel {
+		case 1: // Env1
+			tracker.Tracks[tracker.CursorTrack].Envelope1 = msg.Envelope
+		case 3: // Env2
+			tracker.Tracks[tracker.CursorTrack].Envelope2 = msg.Envelope
 		}
 	case ui.MixerUpdated:
-		m.tracker.Tracks[m.tracker.CursorTrack].Mixer = msg.Mixer
+		m.trackerModel().Tracks[m.trackerModel().CursorTrack].Mixer = msg.Mixer
+
+	case ui.PlayInstrumentNoteMsg:
+		m.playNoteWithInstrument(msg.Note, msg.Instrument)
+		return m, nil
 
 	case ui.InstrumentApplied:
-		m.osc1().Oscillator = msg.Instrument.Oscillator1
-		m.env1().Envelope = msg.Instrument.Envelope1
-		m.osc2().Oscillator = msg.Instrument.Oscillator2
-		m.env2().Envelope = msg.Instrument.Envelope2
-		m.mixer().Mixer = msg.Instrument.Mixer
+		synth := m.synth()
+		synth.Osc1().Oscillator = msg.Instrument.Oscillator1
+		synth.Env1().Envelope = msg.Instrument.Envelope1
+		synth.Osc2().Oscillator = msg.Instrument.Oscillator2
+		synth.Env2().Envelope = msg.Instrument.Envelope2
+		synth.GetMixer().Mixer = msg.Instrument.Mixer
 
-		track := &m.tracker.Tracks[m.tracker.CursorTrack]
+		tracker := m.trackerModel()
+		track := &tracker.Tracks[tracker.CursorTrack]
 		track.Oscillator1 = msg.Instrument.Oscillator1
 		track.Envelope1 = msg.Instrument.Envelope1
 		track.Oscillator2 = msg.Instrument.Oscillator2
@@ -380,26 +329,32 @@ func (m *model) tick() tea.Cmd {
 	})
 }
 
+// playNoteWithInstrument plays a note using the given instrument's parameters.
+func (m *model) playNoteWithInstrument(note audio.Note, instr ui.Instrument) {
+	duration := time.Millisecond * 250
+	synth := audio.NewSynth(
+		m.sampleRate,
+		instr.Oscillator1,
+		instr.Envelope1,
+		instr.Oscillator2,
+		instr.Envelope2,
+		instr.Mixer,
+	)
+	volumeAdjusted := &effects.Volume{
+		Streamer: synth.Streamer(note, duration),
+		Base:     2,
+		Volume:   volumeToDecibels(m.globalVolume),
+		Silent:   m.globalVolume == 0,
+	}
+	speaker.Play(volumeAdjusted)
+}
+
 // playNote plays a note at the given frequency using the current oscillator
 func (m *model) playNote(note audio.Note) {
 	// TODO: duration should be adjustable
 	duration := time.Millisecond * 250
 
-	oscillator1 := m.osc1().Oscillator
-	envelope1 := m.env1().Envelope
-	oscillator2 := m.osc2().Oscillator
-	envelope2 := m.env2().Envelope
-	mixer := m.mixer().Mixer
-
-	if m.mode == InstrumentMode {
-		if preset := m.instr().GetPreset(m.instr().SelectedPreset); preset != nil {
-			oscillator1 = preset.Oscillator1
-			envelope1 = preset.Envelope1
-			oscillator2 = preset.Oscillator2
-			envelope2 = preset.Envelope2
-			mixer = preset.Mixer
-		}
-	}
+	oscillator1, envelope1, oscillator2, envelope2, mixer := m.synth().GetActiveSynthParams()
 
 	synth := audio.NewSynth(
 		m.sampleRate,
@@ -423,7 +378,8 @@ func (m *model) playNote(note audio.Note) {
 
 // playRowNotes plays all notes in the specified row across all tracks
 func (m *model) playRowNotes(row int) {
-	if row < 0 || row >= m.tracker.NumRows {
+	tracker := m.trackerModel()
+	if row < 0 || row >= tracker.NumRows {
 		return
 	}
 
@@ -431,9 +387,11 @@ func (m *model) playRowNotes(row int) {
 	duration := time.Millisecond * 250
 	var streamers []beep.Streamer
 
+	synth := m.synth()
+
 	// Collect all note generators for this row
-	for trackIdx := 0; trackIdx < m.tracker.NumTracks; trackIdx++ {
-		track := m.tracker.Tracks[trackIdx]
+	for trackIdx := 0; trackIdx < tracker.NumTracks; trackIdx++ {
+		track := tracker.Tracks[trackIdx]
 		trackRow := track.Rows[row]
 
 		// Skip empty notes
@@ -441,16 +399,16 @@ func (m *model) playRowNotes(row int) {
 			continue
 		}
 
-		synth := audio.NewSynth(
+		audioSynth := audio.NewSynth(
 			m.sampleRate,
-			m.osc1().Oscillator,
-			m.env1().Envelope,
-			m.osc2().Oscillator,
-			m.env2().Envelope,
-			m.mixer().Mixer,
+			synth.Osc1().Oscillator,
+			synth.Env1().Envelope,
+			synth.Osc2().Oscillator,
+			synth.Env2().Envelope,
+			synth.GetMixer().Mixer,
 		)
 
-		synthStreamer := synth.Streamer(trackRow.Note, duration)
+		synthStreamer := audioSynth.Streamer(trackRow.Note, duration)
 		streamers = append(streamers, synthStreamer)
 	}
 
@@ -479,89 +437,39 @@ func volumeToDecibels(volume float64) float64 {
 
 // View renders the UI
 func (m model) View() tea.View {
-	// Build header
-	var header strings.Builder
-
-	modeStr := "TRACK"
-	switch m.mode {
-	case Envelope1EditMode:
-		modeStr = "ENVELOPE1"
-	case Envelope2EditMode:
-		modeStr = "ENVELOPE2"
-	case MixerEditMode:
-		modeStr = "MIXER"
-	case Oscillator1EditMode:
-		modeStr = "OSCILLATOR1"
-	case Oscillator2EditMode:
-		modeStr = "OSCILLATOR2"
-	}
+	tracker := m.trackerModel()
 
 	playStatus := "STOPPED"
-	if m.tracker.IsPlaying {
-		if m.tracker.LoopToRow {
-			playStatus = fmt.Sprintf("LOOP 0-%d (Row %d)", m.tracker.LoopEndRow, m.tracker.PlaybackRow)
+	if tracker.IsPlaying {
+		if tracker.LoopToRow {
+			playStatus = fmt.Sprintf("LOOP 0-%d (Row %d)", tracker.LoopEndRow, tracker.PlaybackRow)
 		} else {
-			playStatus = fmt.Sprintf("PLAYING (Row %d)", m.tracker.PlaybackRow)
+			playStatus = fmt.Sprintf("PLAYING (Row %d)", tracker.PlaybackRow)
 		}
 	}
 
-	header.WriteString(infoStyle.Render(fmt.Sprintf("Mode: %s | %s | Track: %d | Row: %d | Octave: %d",
-		modeStr, playStatus, m.tracker.CursorTrack, m.tracker.CursorRow, m.octave)))
-	header.WriteString("\n\n")
+	// Tab bar
+	tabs := make([]string, len(m.screens))
+	for i, s := range m.screens {
+		if i == m.activeScreen {
+			tabs[i] = tabActiveStyle.Render(s.Title())
+		} else {
+			tabs[i] = tabInactiveStyle.Render(s.Title())
+		}
+	}
+	tabBar := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
 
-	synthView := m.synthView()
-	trackerView := m.tracker.View()
+	statusBar := infoStyle.Render(fmt.Sprintf("%s | Track: %d | Row: %d | Octave: %d",
+		playStatus, tracker.CursorTrack, tracker.CursorRow, m.octave))
 
-	trackerViewWithBorder := ui.RenderPanel("Tracker", ui.ColorAccentPrimary, trackerView, m.mode == TrackMode)
-	body := lipgloss.JoinVertical(lipgloss.Left, synthView, trackerViewWithBorder)
+	header := lipgloss.JoinHorizontal(lipgloss.Top, tabBar, statusBar) + "\n\n"
 
-	// Footer help
-	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | Shift+1-6: Sharp Notes | +/-: Octave | [/]: Volume | W: Oscillator | E: Envelope | T: Track | p: Play/Pause | P: Loop | S: Save | L: Load | Q: Quit")
+	body := m.screens[m.activeScreen].View()
+	footer := helpStyle.Render(m.screens[m.activeScreen].Footer())
 
-	v := tea.NewView(header.String() + body + "\n" + footer)
+	v := tea.NewView(header + body + "\n" + footer)
 	v.AltScreen = true
 	return v
-}
-
-func (m model) synthView() string {
-	// Pre-render child views to compute MaxHeight for the instrument panel
-	childViews := make([]string, len(m.synthPanels))
-	for i, p := range m.synthPanels {
-		if i != 5 {
-			childViews[i] = p.Child.View()
-		}
-	}
-	maxH := 0
-	for i, v := range childViews {
-		if i != 5 {
-			maxH = max(maxH, lipgloss.Height(v))
-		}
-	}
-	m.instr().MaxHeight = maxH
-	m.mixer().GlobalVolume = m.globalVolume
-	childViews[5] = m.instr().View()
-
-	panelViews := make([]string, len(m.synthPanels))
-	for i, p := range m.synthPanels {
-		active := m.mode != TrackMode && i == int(m.mode)-1
-		panelViews[i] = ui.RenderPanel(p.Title, p.Color, childViews[i], active)
-	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, panelViews...)
-}
-
-func maxInt(values ...int) int {
-	if len(values) == 0 {
-		return 0
-	}
-
-	maxValue := values[0]
-	for _, value := range values[1:] {
-		if value > maxValue {
-			maxValue = value
-		}
-	}
-
-	return maxValue
 }
 
 func main() {
@@ -572,21 +480,25 @@ func main() {
 	tracker := ui.NewTracker(8, 64, 0, 0)
 	track := tracker.CurrentTrack()
 
+	synthPanels := []ui.Panel{
+		ui.NewPanel("Oscillator 1", ui.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator1)),
+		ui.NewPanel("Envelope 1", ui.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope1)),
+		ui.NewPanel("Oscillator 2", ui.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator2)),
+		ui.NewPanel("Envelope 2", ui.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope2)),
+		ui.NewPanel("Mixer", ui.ColorAccentModulation, ui.NewMixer(track.Mixer.Balance)),
+	}
+
 	p := tea.NewProgram(
 		model{
 			sampleRate: sampleRate,
-			synthPanels: []ui.Panel{
-				ui.NewPanel("Oscillator 1", ui.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator1)),
-				ui.NewPanel("Envelope 1", ui.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope1)),
-				ui.NewPanel("Oscillator 2", ui.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator2)),
-				ui.NewPanel("Envelope 2", ui.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope2)),
-				ui.NewPanel("Mixer", ui.ColorAccentModulation, ui.NewMixer(track.Mixer.Balance)),
-				ui.NewPanel("Instruments", ui.ColorAccentInstrument, ui.NewInstrumentView(selectedStyle)),
+			screens: []ui.Screen{
+				ui.NewTrackerScreen(tracker),
+				ui.NewSynthScreen(synthPanels),
 			},
-			tracker:      tracker,
-			mode:         TrackMode,
-			octave:       4,
-			globalVolume: 1.0,
+			activeScreen:   trackerScreenIdx,
+			instrumentView: ui.NewInstrumentView(selectedStyle),
+			octave:         4,
+			globalVolume:   1.0,
 		},
 	)
 

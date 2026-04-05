@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/ui/widgets"
 )
 
 // EnvelopeEditField represents which envelope parameter is being edited
@@ -113,20 +114,10 @@ func (m *EnvelopeModel) adjustEnvelopeValue(delta float64) {
 func (m *EnvelopeModel) View() string {
 	envView := strings.Builder{}
 
-	envView.WriteString(RenderKnobSelected("Attack", m.Envelope.Attack, m.envelopeField == EnvelopeAttack, m.selectedStyle) + "\n")
-	envView.WriteString(RenderKnobSelected("Decay", m.Envelope.Decay, m.envelopeField == EnvelopeDecay, m.selectedStyle) + "\n")
-	envView.WriteString(RenderKnobSelected("Sustain", m.Envelope.Sustain, m.envelopeField == EnvelopeSustain, m.selectedStyle) + "\n")
-	envView.WriteString(RenderKnobSelected("Release", m.Envelope.Release, m.envelopeField == EnvelopeRelease, m.selectedStyle))
+	envView.WriteString(widgets.RenderKnobSelected("Attack", m.Envelope.Attack, m.envelopeField == EnvelopeAttack, m.selectedStyle) + "\n")
+	envView.WriteString(widgets.RenderKnobSelected("Decay", m.Envelope.Decay, m.envelopeField == EnvelopeDecay, m.selectedStyle) + "\n")
+	envView.WriteString(widgets.RenderKnobSelected("Sustain", m.Envelope.Sustain, m.envelopeField == EnvelopeSustain, m.selectedStyle) + "\n")
+	envView.WriteString(widgets.RenderKnobSelected("Release", m.Envelope.Release, m.envelopeField == EnvelopeRelease, m.selectedStyle))
 
 	return envView.String()
-}
-
-func RenderKnobSelected(label string, value float64, selected bool, selectedStyle lipgloss.Style) string {
-	knobChar := RenderKnob(label, value)
-
-	if selected {
-		return selectedStyle.Render(knobChar)
-	} else {
-		return knobChar
-	}
 }

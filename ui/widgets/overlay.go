@@ -1,4 +1,4 @@
-package ui
+package widgets
 
 import (
 	"strings"
@@ -6,7 +6,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// OverlayOption configures overlay behavior.
+// OverlayOption configures overlay behaviour.
 type OverlayOption func(*overlayOptions)
 
 type overlayOptions struct {
@@ -15,13 +15,11 @@ type overlayOptions struct {
 
 // WithDim dims the background behind the overlay.
 func WithDim() OverlayOption {
-	return func(o *overlayOptions) {
-		o.dim = true
-	}
+	return func(o *overlayOptions) { o.dim = true }
 }
 
 func dimContent(s string) string {
-	dimStyle := lipgloss.NewStyle().Foreground(ColorTextDisabled)
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#5a5a5a"))
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
 		lines[i] = dimStyle.Render(line)
@@ -29,7 +27,7 @@ func dimContent(s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// OverlayCenter places fg centered on top of bg within the given dimensions.
+// OverlayCenter places fg centred on top of bg within the given terminal dimensions.
 // Uses lipgloss's built-in cell-based compositor for ANSI-aware compositing.
 func OverlayCenter(width, height int, fg, bg string, opts ...OverlayOption) string {
 	var o overlayOptions

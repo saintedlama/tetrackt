@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/ui/widgets"
 )
 
 type editField int
@@ -51,7 +52,7 @@ func (m *OscillatorModel) View() string {
 	oscillatorView.WriteString(m.oscillatorTypeStyle.Render(oscType))
 
 	oscillatorView.WriteString("\n")
-	oscillatorView.WriteString(renderFieldSelected(RenderKnob("Phase", m.Oscillator.Phase), m.editField == oscillatorPhase, m.selectedStyle))
+	oscillatorView.WriteString(renderFieldSelected(widgets.RenderKnob("Phase", m.Oscillator.Phase), m.editField == oscillatorPhase, m.selectedStyle))
 
 	return oscillatorView.String()
 }
