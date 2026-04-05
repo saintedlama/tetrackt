@@ -3,8 +3,8 @@ package ui
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 func TestFileDialogVisibility(t *testing.T) {
@@ -42,17 +42,17 @@ func TestFileDialogInput(t *testing.T) {
 	dialog.Show(ModeSave, "")
 
 	// Type some characters
-	*dialog, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
-	*dialog, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
-	*dialog, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
-	*dialog, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	*dialog, _ = dialog.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
+	*dialog, _ = dialog.Update(tea.KeyPressMsg{Code: 'e', Text: "e"})
+	*dialog, _ = dialog.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
+	*dialog, _ = dialog.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
 
 	if dialog.Input != "test" {
 		t.Errorf("Expected Input='test', got '%s'", dialog.Input)
 	}
 
 	// Test backspace
-	*dialog, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	*dialog, _ = dialog.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	if dialog.Input != "tes" {
 		t.Errorf("Expected Input='tes' after backspace, got '%s'", dialog.Input)
 	}
@@ -63,7 +63,7 @@ func TestFileDialogConfirm(t *testing.T) {
 	dialog.Show(ModeSave, "test")
 
 	// Press enter
-	_, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := dialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if cmd == nil {
 		t.Fatal("Expected command to be returned")
@@ -85,7 +85,7 @@ func TestFileDialogCancel(t *testing.T) {
 	dialog.Show(ModeSave, "test")
 
 	// Press escape
-	_, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd := dialog.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 
 	if cmd == nil {
 		t.Fatal("Expected command to be returned")
@@ -103,7 +103,7 @@ func TestFileDialogEmptyFilename(t *testing.T) {
 	dialog.Show(ModeSave, "")
 
 	// Try to confirm with empty filename
-	*dialog, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	*dialog, _ = dialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if dialog.Error == "" {
 		t.Error("Expected error for empty filename")

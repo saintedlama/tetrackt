@@ -4,8 +4,8 @@ import (
 	"slices"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
 )
 
@@ -61,10 +61,10 @@ func (m *OscillatorModel) View() string {
 	return oscillatorView.String()
 }
 
-func (m *OscillatorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *OscillatorModel) Update(msg tea.Msg) (*OscillatorModel, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "up":
 			// Move to previous oscillator field

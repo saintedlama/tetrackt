@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/tetrackt/tetrackt/audio"
 )
 
@@ -46,9 +46,9 @@ func (m *Mixer) View() string {
 	return envView.String()
 }
 
-func (m *Mixer) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Mixer) Update(msg tea.Msg) (*Mixer, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "left":
 			m.Mixer.Balance -= 0.01

@@ -11,8 +11,8 @@ import (
 	"github.com/tetrackt/tetrackt/persistence"
 	"github.com/tetrackt/tetrackt/ui"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/gopxl/beep/v2"
 	"github.com/gopxl/beep/v2/effects"
 	"github.com/gopxl/beep/v2/speaker"
@@ -124,7 +124,7 @@ func (m model) Init() tea.Cmd {
 // Update handles messages and updates the model
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// Handle file dialog input first
 		if m.fileDialog.IsVisible() {
 			var cmd tea.Cmd
@@ -521,7 +521,7 @@ func volumeToDecibels(volume float64) float64 {
 }
 
 // View renders the UI
-func (m model) View() string {
+func (m model) View() tea.View {
 	// Build header
 	var header strings.Builder
 
@@ -582,7 +582,9 @@ func (m model) View() string {
 		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modalView)
 	}
 
-	return header.String() + body + "\n" + footer
+	v := tea.NewView(header.String() + body + "\n" + footer)
+	v.AltScreen = true
+	return v
 }
 
 func (m model) synthView() string {
@@ -674,8 +676,6 @@ func main() {
 			globalVolume: 1.0,
 			fileDialog:   ui.NewFileDialog(modalBorderStyle),
 		},
-
-		tea.WithAltScreen(),
 	)
 
 	if _, err := p.Run(); err != nil {
