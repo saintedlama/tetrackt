@@ -37,16 +37,3 @@ var (
 	ColorAccentInstrument = ColorPink        // Instrument / preset selection highlight
 	ColorAccentWarning    = ColorYellow      // Errors, warnings, unsaved-changes indicator
 )
-
-var (
-	PanelBorderStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(ColorBorder).
-				Padding(0, 2)
-
-	ActivePanelBorderStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(ColorBorderActive).
-				Bold(true).
-				Padding(0, 2)
-)

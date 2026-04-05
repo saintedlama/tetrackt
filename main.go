@@ -535,13 +535,7 @@ func (m model) View() tea.View {
 	synthView := m.synthView()
 	trackerView := m.tracker.View()
 
-	// Apply border to track view with conditional highlighting
-	trackerBorder := ui.PanelBorderStyle
-	if m.mode == TrackMode {
-		trackerBorder = ui.ActivePanelBorderStyle
-	}
-
-	trackerViewWithBorder := trackerBorder.Render(trackerView)
+	trackerViewWithBorder := ui.RenderPanel("Tracker", ui.ColorAccentPrimary, trackerView, m.mode == TrackMode)
 	body := lipgloss.JoinVertical(lipgloss.Left, synthView, trackerViewWithBorder)
 
 	// Footer help
@@ -570,36 +564,13 @@ func (m model) synthView() string {
 
 	m.mixer.GlobalVolume = m.globalVolume
 
-	// Apply active border to the current mode panel
-	oscillator1Border := ui.PanelBorderStyle
-	envelope1Border := ui.PanelBorderStyle
-	oscillator2Border := ui.PanelBorderStyle
-	envelope2Border := ui.PanelBorderStyle
-	mixerBorder := ui.PanelBorderStyle
-	instrumentBorder := ui.PanelBorderStyle
-
-	switch m.mode {
-	case Oscillator1EditMode:
-		oscillator1Border = ui.ActivePanelBorderStyle
-	case Envelope1EditMode:
-		envelope1Border = ui.ActivePanelBorderStyle
-	case Oscillator2EditMode:
-		oscillator2Border = ui.ActivePanelBorderStyle
-	case Envelope2EditMode:
-		envelope2Border = ui.ActivePanelBorderStyle
-	case MixerEditMode:
-		mixerBorder = ui.ActivePanelBorderStyle
-	case InstrumentMode:
-		instrumentBorder = ui.ActivePanelBorderStyle
-	}
-
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		oscillator1Border.Render(oscillatorView1),
-		envelope1Border.Render(envelopeView1),
-		oscillator2Border.Render(oscillatorView2),
-		envelope2Border.Render(envelopeView2),
-		mixerBorder.Render(m.mixer.View()),
-		instrumentBorder.Render(instrumentView),
+		ui.RenderPanel("Oscillator 1", ui.ColorAccentOscillator, oscillatorView1, m.mode == Oscillator1EditMode),
+		ui.RenderPanel("Envelope 1", ui.ColorAccentEnvelope, envelopeView1, m.mode == Envelope1EditMode),
+		ui.RenderPanel("Oscillator 2", ui.ColorAccentOscillator, oscillatorView2, m.mode == Oscillator2EditMode),
+		ui.RenderPanel("Envelope 2", ui.ColorAccentEnvelope, envelopeView2, m.mode == Envelope2EditMode),
+		ui.RenderPanel("Mixer", ui.ColorAccentModulation, m.mixer.View(), m.mode == MixerEditMode),
+		ui.RenderPanel("Instruments", ui.ColorAccentInstrument, instrumentView, m.mode == InstrumentMode),
 	)
 }
 
