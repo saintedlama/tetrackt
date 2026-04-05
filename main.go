@@ -69,12 +69,12 @@ type model struct {
 }
 
 // Accessors for synth panel children (synthPanels order: osc1, env1, osc2, env2, mixer, instrument)
-func (m model) osc1() *ui.OscillatorModel  { return m.synthPanels[0].Child.(*ui.OscillatorModel) }
-func (m model) env1() *ui.EnvelopeModel    { return m.synthPanels[1].Child.(*ui.EnvelopeModel) }
-func (m model) osc2() *ui.OscillatorModel  { return m.synthPanels[2].Child.(*ui.OscillatorModel) }
-func (m model) env2() *ui.EnvelopeModel    { return m.synthPanels[3].Child.(*ui.EnvelopeModel) }
-func (m model) mixer() *ui.Mixer           { return m.synthPanels[4].Child.(*ui.Mixer) }
-func (m model) instr() *ui.InstrumentView  { return m.synthPanels[5].Child.(*ui.InstrumentView) }
+func (m model) osc1() *ui.OscillatorModel { return m.synthPanels[0].Child.(*ui.OscillatorModel) }
+func (m model) env1() *ui.EnvelopeModel   { return m.synthPanels[1].Child.(*ui.EnvelopeModel) }
+func (m model) osc2() *ui.OscillatorModel { return m.synthPanels[2].Child.(*ui.OscillatorModel) }
+func (m model) env2() *ui.EnvelopeModel   { return m.synthPanels[3].Child.(*ui.EnvelopeModel) }
+func (m model) mixer() *ui.Mixer          { return m.synthPanels[4].Child.(*ui.Mixer) }
+func (m model) instr() *ui.InstrumentView { return m.synthPanels[5].Child.(*ui.InstrumentView) }
 
 // tickMsg is sent to advance playback
 type tickMsg time.Time
