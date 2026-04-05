@@ -9,6 +9,59 @@ import (
 	"github.com/tetrackt/tetrackt/audio"
 )
 
+// OpenPresetDialogMsg is emitted by EnvelopeModel when the user presses "." to open the preset picker.
+type OpenPresetDialogMsg struct{}
+
+// EnvelopePresetSelected is the result payload when the user confirms a preset selection.
+type EnvelopePresetSelected struct {
+	Envelope audio.Envelope
+}
+
+var presetDialogSelectedStyle = lipgloss.NewStyle().
+	Background(lipgloss.Color("#d81b60")).
+	Foreground(lipgloss.Color("#ffffff")).
+	Bold(true)
+
+// EnvelopePresetDialog is a standalone tea.Model dialog for selecting envelope presets.
+type EnvelopePresetDialog struct {
+	presetModel PresetModel
+}
+
+// NewEnvelopePresetDialog creates a new preset picker dialog.
+func NewEnvelopePresetDialog() *EnvelopePresetDialog {
+	return &EnvelopePresetDialog{
+		presetModel: NewPresetModel(presetDialogSelectedStyle),
+	}
+}
+
+func (m *EnvelopePresetDialog) Init() tea.Cmd {
+	return nil
+}
+
+func (m *EnvelopePresetDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "enter":
+			env := m.presetModel.envelope
+			return m, func() tea.Msg {
+				return CloseDialogMsg{Payload: EnvelopePresetSelected{Envelope: env}}
+			}
+		case "esc":
+			return m, func() tea.Msg {
+				return CloseDialogMsg{}
+			}
+		default:
+			m.presetModel = m.presetModel.Update(msg)
+		}
+	}
+	return m, nil
+}
+
+func (m *EnvelopePresetDialog) View() tea.View {
+	return tea.NewView(m.presetModel.View())
+}
+
 type envelopePreset struct {
 	Name    string
 	Type    string

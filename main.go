@@ -55,11 +55,6 @@ var (
 				BorderForeground(lipgloss.Color("#00e5ff")).
 				Bold(true).
 				Padding(0, 2)
-
-	modalBorderStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("#ff9800")).
-				Padding(0, 2)
 )
 
 const (
@@ -85,8 +80,6 @@ type model struct {
 	octave       int
 	globalVolume float64
 
-	// file dialog
-	fileDialog *ui.FileDialogModel
 	// current loaded/saved filename (prefill on save)
 	currentFilename string
 }
@@ -125,13 +118,6 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		// Handle file dialog input first
-		if m.fileDialog.IsVisible() {
-			var cmd tea.Cmd
-			*m.fileDialog, cmd = m.fileDialog.Update(msg)
-			return m, cmd
-		}
-
 		// Global mode switching
 		switch keyStr := msg.String(); keyStr {
 		case "s":
@@ -140,12 +126,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.currentFilename != "" {
 				prefill = m.currentFilename
 			}
-			m.fileDialog.Show(ui.ModeSave, prefill)
-			return m, nil
+			return ui.NewDialogModel(ui.NewFileDialog(ui.ModeSave, prefill), m, m.width, m.height), nil
 		case "l":
 			// Open load dialog
-			m.fileDialog.Show(ui.ModeLoad, "")
-			return m, nil
+			return ui.NewDialogModel(ui.NewFileDialog(ui.ModeLoad, ""), m, m.width, m.height), nil
 		case "o":
 			switch m.mode {
 			case Oscillator1EditMode:
@@ -349,34 +333,41 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ui.FileDialogConfirmed:
 		// Handle file dialog confirmation
 		filename := msg.Filename
-		switch m.fileDialog.Mode {
+		switch msg.Mode {
 		case ui.ModeSave:
 			// Save song
 			song := persistence.TracksToSong(m.tracker)
 			err := persistence.SaveToFile(filename, song)
 			if err != nil {
-				m.fileDialog.SetError(fmt.Sprintf("Save failed: %v", err))
+				fmt.Fprintf(os.Stderr, "Save failed: %v\n", err)
 			} else {
 				m.currentFilename = filename
-				m.fileDialog.Hide()
 			}
 		case ui.ModeLoad:
 			// Load song
 			song, err := persistence.LoadFromFile(filename)
 			if err != nil {
-				m.fileDialog.SetError(fmt.Sprintf("Load failed: %v", err))
+				fmt.Fprintf(os.Stderr, "Load failed: %v\n", err)
 			} else {
 				// Update existing tracker model instead of creating new one
 				persistence.SongToTracks(song, m.tracker)
 				m.currentFilename = filename
-				m.fileDialog.Hide()
 			}
 		}
 		return m, nil
 
-	case ui.FileDialogCancelled:
-		// Handle file dialog cancellation
-		m.fileDialog.Hide()
+	case ui.OpenPresetDialogMsg:
+		return ui.NewDialogModel(ui.NewEnvelopePresetDialog(), m, m.width, m.height), nil
+
+	case ui.EnvelopePresetSelected:
+		switch m.mode {
+		case Envelope1EditMode:
+			m.envelope1.Envelope = msg.Envelope
+			m.tracker.Tracks[m.tracker.CursorTrack].Envelope1 = msg.Envelope
+		case Envelope2EditMode:
+			m.envelope2.Envelope = msg.Envelope
+			m.tracker.Tracks[m.tracker.CursorTrack].Envelope2 = msg.Envelope
+		}
 		return m, nil
 
 	case ui.OscillatorUpdated:
@@ -567,21 +558,6 @@ func (m model) View() tea.View {
 	// Footer help
 	footer := helpStyle.Render("↑↓←→: Navigate | J: Jump | 1-7: Notes | Shift+1-6: Sharp Notes | +/-: Octave | [/]: Volume | W: Oscillator | E: Envelope | T: Track | p: Play/Pause | P: Loop | S: Save | L: Load | Q: Quit")
 
-	// TODO: More generic modal handling, use commands?
-	if m.envelope1.ShowModal && m.mode == Envelope1EditMode {
-		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.envelope1.View())
-	}
-
-	if m.envelope2.ShowModal && m.mode == Envelope2EditMode {
-		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, m.envelope2.View())
-	}
-
-	// File dialog modal
-	if m.fileDialog.IsVisible() {
-		modalView := m.fileDialog.View()
-		body = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modalView)
-	}
-
 	v := tea.NewView(header.String() + body + "\n" + footer)
 	v.AltScreen = true
 	return v
@@ -674,7 +650,6 @@ func main() {
 			mode:         TrackMode,
 			octave:       4,
 			globalVolume: 1.0,
-			fileDialog:   ui.NewFileDialog(modalBorderStyle),
 		},
 	)
 

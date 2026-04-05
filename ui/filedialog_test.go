@@ -4,31 +4,17 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
-func TestFileDialogVisibility(t *testing.T) {
-	dialog := NewFileDialog(lipgloss.NewStyle())
-
-	if dialog.IsVisible() {
-		t.Error("Dialog should be hidden initially")
-	}
-
-	dialog.Show(ModeSave, "test.yaml")
-	if !dialog.IsVisible() {
-		t.Error("Dialog should be visible after Show()")
-	}
-
-	dialog.Hide()
-	if dialog.IsVisible() {
-		t.Error("Dialog should be hidden after Hide()")
+func TestFileDialogModeSet(t *testing.T) {
+	dialog := NewFileDialog(ModeSave, "")
+	if dialog.Mode != ModeSave {
+		t.Errorf("Expected Mode=ModeSave, got %v", dialog.Mode)
 	}
 }
 
 func TestFileDialogPrefill(t *testing.T) {
-	dialog := NewFileDialog(lipgloss.NewStyle())
-
-	dialog.Show(ModeSave, "mysong.yaml")
+	dialog := NewFileDialog(ModeSave, "mysong.yaml")
 	if dialog.Input != "mysong.yaml" {
 		t.Errorf("Expected Input='mysong.yaml', got '%s'", dialog.Input)
 	}
@@ -38,31 +24,33 @@ func TestFileDialogPrefill(t *testing.T) {
 }
 
 func TestFileDialogInput(t *testing.T) {
-	dialog := NewFileDialog(lipgloss.NewStyle())
-	dialog.Show(ModeSave, "")
+	dialog := NewFileDialog(ModeSave, "")
 
 	// Type some characters
-	*dialog, _ = dialog.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
-	*dialog, _ = dialog.Update(tea.KeyPressMsg{Code: 'e', Text: "e"})
-	*dialog, _ = dialog.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
-	*dialog, _ = dialog.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
+	model, _ := dialog.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
+	dialog = model.(*FileDialogModel)
+	model, _ = dialog.Update(tea.KeyPressMsg{Code: 'e', Text: "e"})
+	dialog = model.(*FileDialogModel)
+	model, _ = dialog.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
+	dialog = model.(*FileDialogModel)
+	model, _ = dialog.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
+	dialog = model.(*FileDialogModel)
 
 	if dialog.Input != "test" {
 		t.Errorf("Expected Input='test', got '%s'", dialog.Input)
 	}
 
 	// Test backspace
-	*dialog, _ = dialog.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	model, _ = dialog.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	dialog = model.(*FileDialogModel)
 	if dialog.Input != "tes" {
 		t.Errorf("Expected Input='tes' after backspace, got '%s'", dialog.Input)
 	}
 }
 
 func TestFileDialogConfirm(t *testing.T) {
-	dialog := NewFileDialog(lipgloss.NewStyle())
-	dialog.Show(ModeSave, "test")
+	dialog := NewFileDialog(ModeSave, "test")
 
-	// Press enter
 	_, cmd := dialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if cmd == nil {
@@ -70,21 +58,27 @@ func TestFileDialogConfirm(t *testing.T) {
 	}
 
 	msg := cmd()
-	confirmed, ok := msg.(FileDialogConfirmed)
+	closeMsg, ok := msg.(CloseDialogMsg)
 	if !ok {
-		t.Fatal("Expected FileDialogConfirmed message")
+		t.Fatal("Expected CloseDialogMsg")
+	}
+
+	confirmed, ok := closeMsg.Payload.(FileDialogConfirmed)
+	if !ok {
+		t.Fatal("Expected FileDialogConfirmed payload")
 	}
 
 	if confirmed.Filename != "test.yaml" {
 		t.Errorf("Expected Filename='test.yaml', got '%s'", confirmed.Filename)
 	}
+	if confirmed.Mode != ModeSave {
+		t.Errorf("Expected Mode=ModeSave, got %v", confirmed.Mode)
+	}
 }
 
 func TestFileDialogCancel(t *testing.T) {
-	dialog := NewFileDialog(lipgloss.NewStyle())
-	dialog.Show(ModeSave, "test")
+	dialog := NewFileDialog(ModeSave, "test")
 
-	// Press escape
 	_, cmd := dialog.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 
 	if cmd == nil {
@@ -92,18 +86,21 @@ func TestFileDialogCancel(t *testing.T) {
 	}
 
 	msg := cmd()
-	_, ok := msg.(FileDialogCancelled)
+	closeMsg, ok := msg.(CloseDialogMsg)
 	if !ok {
-		t.Fatal("Expected FileDialogCancelled message")
+		t.Fatal("Expected CloseDialogMsg")
+	}
+
+	if closeMsg.Payload != nil {
+		t.Error("Expected nil Payload for cancel")
 	}
 }
 
 func TestFileDialogEmptyFilename(t *testing.T) {
-	dialog := NewFileDialog(lipgloss.NewStyle())
-	dialog.Show(ModeSave, "")
+	dialog := NewFileDialog(ModeSave, "")
 
-	// Try to confirm with empty filename
-	*dialog, _ = dialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	model, _ := dialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	dialog = model.(*FileDialogModel)
 
 	if dialog.Error == "" {
 		t.Error("Expected error for empty filename")

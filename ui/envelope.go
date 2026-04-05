@@ -21,10 +21,7 @@ const (
 type EnvelopeModel struct {
 	envelopeField EnvelopeEditField
 	Envelope      audio.Envelope
-
-	ShowModal     bool
 	selectedStyle lipgloss.Style
-	PresetModel   PresetModel
 }
 
 type EnvelopeUpdated struct {
@@ -35,62 +32,30 @@ func NewEnvelopeModel(selectedStyle lipgloss.Style, envelope audio.Envelope) *En
 	return &EnvelopeModel{
 		envelopeField: EnvelopeAttack,
 		Envelope:      envelope,
-
 		selectedStyle: selectedStyle,
-		PresetModel:   NewPresetModel(selectedStyle),
 	}
 }
 
 func (m *EnvelopeModel) Update(msg tea.Msg) (*EnvelopeModel, tea.Cmd) {
 	var cmd tea.Cmd
 
-	if m.ShowModal {
-		switch msg := msg.(type) {
-		case tea.KeyPressMsg:
-			switch msg.String() {
-			case "enter":
-				m.Envelope = m.PresetModel.envelope
-				m.ShowModal = false
-
-				cmd = func() tea.Msg {
-					return EnvelopeUpdated{
-						Envelope: m.Envelope,
-					}
-				}
-
-				return m, cmd
-			case "esc":
-				m.ShowModal = false
-				return m, nil
-			}
-
-			m.PresetModel = m.PresetModel.Update(msg)
-			return m, nil
-		}
-	}
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "up":
-			// Move to previous envelope field
 			m.envelopeField = (m.envelopeField - 1 + 4) % 4
 		case "down":
-			// Move to next envelope field
 			m.envelopeField = (m.envelopeField + 1) % 4
 		case "left":
-			// Decrease value by 1%
 			m.adjustEnvelopeValue(-0.01)
 		case "shift+left":
-			// Decrease value by 10%
 			m.adjustEnvelopeValue(-0.10)
 		case "right":
-			// Increase value by 1%
 			m.adjustEnvelopeValue(0.01)
 		case "shift+right":
-			// Increase value by 10%
 			m.adjustEnvelopeValue(0.10)
 		case ".":
-			m.ShowModal = !m.ShowModal
+			return m, func() tea.Msg { return OpenPresetDialogMsg{} }
 		}
 	}
 
@@ -142,10 +107,6 @@ func (m *EnvelopeModel) adjustEnvelopeValue(delta float64) {
 }
 
 func (m *EnvelopeModel) View() string {
-	if m.ShowModal {
-		return m.PresetModel.View()
-	}
-
 	envView := strings.Builder{}
 	envView.WriteString("Envelope:\n")
 

@@ -5,114 +5,78 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 )
 
-// FileDialogMode represents the current state of the file dialog
+// FileDialogMode represents whether the dialog is saving or loading.
 type FileDialogMode int
 
 const (
-	ModeHidden FileDialogMode = iota
-	ModeSave
+	ModeSave FileDialogMode = iota
 	ModeLoad
 )
 
-// FileDialogModel represents the file dialog component state
+// FileDialogModel represents the file dialog component state.
+// It is always visible when instantiated; use NewDialogModel to overlay it.
 type FileDialogModel struct {
 	Mode           FileDialogMode
 	Input          string
 	Error          string
-	PrefillPath    string
 	cursorPosition int
-	borderStyle    lipgloss.Style
 }
 
-// FileDialogConfirmed is sent when the user confirms the file dialog
+// FileDialogConfirmed is the result payload when the user confirms the file dialog.
 type FileDialogConfirmed struct {
 	Filename string
+	Mode     FileDialogMode
 }
 
-// FileDialogCancelled is sent when the user cancels the file dialog
-type FileDialogCancelled struct{}
-
-// NewFileDialog creates a new file dialog model
-func NewFileDialog(borderStyle lipgloss.Style) *FileDialogModel {
+// NewFileDialog creates a file dialog in the given mode with an optional prefill.
+func NewFileDialog(mode FileDialogMode, prefill string) *FileDialogModel {
 	return &FileDialogModel{
-		Mode:        ModeHidden,
-		Input:       "",
-		Error:       "",
-		PrefillPath: "",
-		borderStyle: borderStyle,
+		Mode:           mode,
+		Input:          prefill,
+		Error:          "",
+		cursorPosition: len(prefill),
 	}
 }
 
-// Show displays the file dialog in the specified mode
-func (m *FileDialogModel) Show(mode FileDialogMode, prefillPath string) {
-	m.Mode = mode
-	m.Input = prefillPath
-	m.Error = ""
-	m.cursorPosition = len(prefillPath)
-}
-
-// Hide closes the file dialog
-func (m *FileDialogModel) Hide() {
-	m.Mode = ModeHidden
-	m.Input = ""
-	m.Error = ""
-	m.cursorPosition = 0
-}
-
-// SetError sets an error message to display in the dialog
+// SetError sets an error message to display in the dialog.
 func (m *FileDialogModel) SetError(err string) {
 	m.Error = err
 }
 
-// IsVisible returns true if the dialog is currently visible
-func (m *FileDialogModel) IsVisible() bool {
-	return m.Mode != ModeHidden
-}
-
-// Init initializes the file dialog (required by Bubble Tea)
-func (m FileDialogModel) Init() tea.Cmd {
+// Init initializes the file dialog (required by Bubble Tea).
+func (m *FileDialogModel) Init() tea.Cmd {
 	return nil
 }
 
-// Update handles keyboard input for the file dialog
-func (m FileDialogModel) Update(msg tea.Msg) (FileDialogModel, tea.Cmd) {
-	// Only process messages if dialog is visible
-	if !m.IsVisible() {
-		return m, nil
-	}
-
+// Update handles keyboard input for the file dialog.
+func (m *FileDialogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "enter":
-			// Confirm and send filename
 			filename := m.Input
 			if filename == "" {
 				m.Error = "Filename cannot be empty"
 				return m, nil
 			}
 
-			// Auto-append .yaml extension if not present
 			if !strings.HasSuffix(filename, ".yaml") {
 				filename += ".yaml"
 			}
 
-			// Clear dialog state and return confirmation message
+			mode := m.Mode
 			return m, func() tea.Msg {
-				return FileDialogConfirmed{Filename: filename}
+				return CloseDialogMsg{Payload: FileDialogConfirmed{Filename: filename, Mode: mode}}
 			}
 
 		case "esc":
-			// Cancel and return cancellation message
 			return m, func() tea.Msg {
-				return FileDialogCancelled{}
+				return CloseDialogMsg{}
 			}
 
 		case "backspace":
-			// Remove last character
 			if len(m.Input) > 0 {
 				m.Input = m.Input[:len(m.Input)-1]
 				m.cursorPosition = len(m.Input)
@@ -120,7 +84,6 @@ func (m FileDialogModel) Update(msg tea.Msg) (FileDialogModel, tea.Cmd) {
 			return m, nil
 
 		default:
-			// Type into the input field (only printable ASCII characters)
 			if len(msg.String()) == 1 && msg.String()[0] >= ' ' && msg.String()[0] <= '~' {
 				m.Input += msg.String()
 				m.cursorPosition = len(m.Input)
@@ -132,12 +95,8 @@ func (m FileDialogModel) Update(msg tea.Msg) (FileDialogModel, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the file dialog as a modal overlay
-func (m FileDialogModel) View() string {
-	if !m.IsVisible() {
-		return ""
-	}
-
+// View renders the file dialog content (border is added by dialogModel).
+func (m *FileDialogModel) View() tea.View {
 	var dialogTitle string
 	switch m.Mode {
 	case ModeSave:
@@ -148,18 +107,15 @@ func (m FileDialogModel) View() string {
 		dialogTitle = "File Dialog"
 	}
 
-	// Build dialog content
 	var content strings.Builder
 	content.WriteString(fmt.Sprintf("%s\n\n", dialogTitle))
 	content.WriteString(fmt.Sprintf("Filename: %s_\n\n", m.Input))
 
-	// Show error if present
 	if m.Error != "" {
 		content.WriteString(fmt.Sprintf("Error: %s\n\n", m.Error))
 	}
 
 	content.WriteString("[Enter to confirm, Esc to cancel]")
 
-	// Render with border
-	return m.borderStyle.Render(content.String())
+	return tea.NewView(content.String())
 }
