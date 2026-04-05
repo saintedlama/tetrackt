@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"math"
 	"time"
 
 	"github.com/gopxl/beep/v2"
@@ -8,7 +9,8 @@ import (
 )
 
 type Mixer struct {
-	Balance float64 // 0.0 = full left, 1.0 = full right
+	Volume1 float64 // 0.0 to 1.0, independent volume for oscillator 1
+	Volume2 float64 // 0.0 to 1.0, independent volume for oscillator 2
 }
 
 // Synth represents the audio synthesis engine
@@ -63,9 +65,8 @@ func (s *Synth) Streamer(note Note, d time.Duration) beep.Streamer {
 		},
 	)
 
-	v := (s.mixer.Balance - 0.5) * 2 // Scale to -1 to 1
-	mix1 := &effects.Volume{Streamer: streamer1, Base: 2, Volume: -v, Silent: v >= 1}
-	mix2 := &effects.Volume{Streamer: streamer2, Base: 2, Volume: v, Silent: v <= -1}
+	mix1 := &effects.Volume{Streamer: streamer1, Base: 2, Volume: math.Log2(s.mixer.Volume1), Silent: s.mixer.Volume1 == 0}
+	mix2 := &effects.Volume{Streamer: streamer2, Base: 2, Volume: math.Log2(s.mixer.Volume2), Silent: s.mixer.Volume2 == 0}
 
 	mixed := beep.Mix(mix1, mix2)
 

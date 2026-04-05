@@ -11,19 +11,29 @@ import (
 )
 
 type Mixer struct {
-	BalanceBar widgets.Bar
-	Mixer      audio.Mixer
+	Bar1     widgets.Bar
+	Bar2     widgets.Bar
+	Mixer    audio.Mixer
+	selected int // 0=osc1, 1=osc2
 }
 
 type MixerUpdated struct {
 	Mixer audio.Mixer
 }
 
-func NewMixer(balance float64) *Mixer {
+func NewMixer(vol1, vol2 float64) *Mixer {
 	return &Mixer{
-		Mixer:      audio.Mixer{Balance: balance},
-		BalanceBar: widgets.NewBar(0, 1, balance, 10),
+		Mixer: audio.Mixer{Volume1: vol1, Volume2: vol2},
+		Bar1:  widgets.NewBar(0, 1, vol1, 10),
+		Bar2:  widgets.NewBar(0, 1, vol2, 10),
 	}
+}
+
+// SetMixer updates the audio.Mixer value and syncs the bars.
+func (m *Mixer) SetMixer(mixer audio.Mixer) {
+	m.Mixer = mixer
+	m.Bar1.Value = mixer.Volume1
+	m.Bar2.Value = mixer.Volume2
 }
 
 func (m *Mixer) Init() tea.Cmd {
@@ -31,45 +41,63 @@ func (m *Mixer) Init() tea.Cmd {
 }
 
 func (m *Mixer) View() string {
-	envView := strings.Builder{}
-
-	v := m.Mixer.Balance
-
-	fmt.Fprintf(&envView, "%3d%% ", int(math.Round((1-v)*100)))
-	envView.WriteString(m.BalanceBar.View())
-	fmt.Fprintf(&envView, " %3d%%", int(math.Round(v*100)))
-
-	return envView.String()
+	var sb strings.Builder
+	marker1, marker2 := " ", " "
+	if m.selected == 0 {
+		marker1 = ">"
+	} else {
+		marker2 = ">"
+	}
+	fmt.Fprintf(&sb, "%s Osc1: %s %3d%%\n", marker1, m.Bar1.View(), int(math.Round(m.Mixer.Volume1*100)))
+	fmt.Fprintf(&sb, "%s Osc2: %s %3d%%", marker2, m.Bar2.View(), int(math.Round(m.Mixer.Volume2*100)))
+	return sb.String()
 }
 
 func (m *Mixer) Update(msg tea.Msg) (Component, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
+		case "up":
+			if m.selected > 0 {
+				m.selected--
+			}
+		case "down":
+			if m.selected < 1 {
+				m.selected++
+			}
 		case "left":
-			m.Mixer.Balance -= 0.01
+			m.adjustSelected(-0.01)
 		case "shift+left":
-			m.Mixer.Balance -= 0.1
+			m.adjustSelected(-0.1)
 		case "right":
-			m.Mixer.Balance += 0.01
+			m.adjustSelected(0.01)
 		case "shift+right":
-			m.Mixer.Balance += 0.1
+			m.adjustSelected(0.1)
 		}
 	}
 
-	m.Mixer.Balance = math.Round(m.Mixer.Balance*100) / 100
-	if m.Mixer.Balance < 0 {
-		m.Mixer.Balance = 0
-	} else if m.Mixer.Balance > 1 {
-		m.Mixer.Balance = 1
-	}
+	m.Bar1.Value = m.Mixer.Volume1
+	m.Bar2.Value = m.Mixer.Volume2
 
-	m.BalanceBar.Value = m.Mixer.Balance
-
-	// TODO: Optimize to only send update when value changes
 	return m, func() tea.Msg {
-		return MixerUpdated{
-			Mixer: m.Mixer,
-		}
+		return MixerUpdated{Mixer: m.Mixer}
 	}
+}
+
+func (m *Mixer) adjustSelected(delta float64) {
+	if m.selected == 0 {
+		m.Mixer.Volume1 = clampVolume(math.Round((m.Mixer.Volume1+delta)*100) / 100)
+	} else {
+		m.Mixer.Volume2 = clampVolume(math.Round((m.Mixer.Volume2+delta)*100) / 100)
+	}
+}
+
+func clampVolume(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }

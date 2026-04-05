@@ -15,7 +15,7 @@ func TestSaveAndLoad(t *testing.T) {
 	// Add some test data
 	tracker.Tracks[0].Oscillator1 = audio.Oscillator{Type: audio.Sine}
 	tracker.Tracks[0].Oscillator2 = audio.Oscillator{Type: audio.Square}
-	tracker.Tracks[0].Mixer = audio.Mixer{Balance: 0.75}
+	tracker.Tracks[0].Mixer = audio.Mixer{Volume1: 0.75, Volume2: 0.5}
 	tracker.Tracks[0].Envelope1 = audio.Envelope{
 		Attack:  0.1,
 		Decay:   0.2,
@@ -68,8 +68,8 @@ func TestSaveAndLoad(t *testing.T) {
 	if newTracker.Tracks[0].Oscillator2 != (audio.Oscillator{Type: audio.Square}) {
 		t.Errorf("Expected Oscillator2=Square, got %v", newTracker.Tracks[0].Oscillator2)
 	}
-	if newTracker.Tracks[0].Mixer != (audio.Mixer{Balance: 0.75}) {
-		t.Errorf("Expected Mixer=0.75, got %f", newTracker.Tracks[0].Mixer.Balance)
+	if newTracker.Tracks[0].Mixer != (audio.Mixer{Volume1: 0.75, Volume2: 0.5}) {
+		t.Errorf("Expected Mixer={0.75, 0.5}, got %+v", newTracker.Tracks[0].Mixer)
 	}
 
 	// Verify row data

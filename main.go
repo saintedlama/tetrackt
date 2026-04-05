@@ -297,7 +297,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		synth.Env1().Envelope = msg.Instrument.Envelope1
 		synth.Osc2().Oscillator = msg.Instrument.Oscillator2
 		synth.Env2().Envelope = msg.Instrument.Envelope2
-		synth.GetMixer().Mixer = msg.Instrument.Mixer
+		synth.GetMixer().SetMixer(msg.Instrument.Mixer)
 
 		tracker := m.trackerModel()
 		track := &tracker.Tracks[tracker.CursorTrack]
@@ -460,7 +460,7 @@ func main() {
 		ui.NewPanel("Envelope 1", ui.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope1)),
 		ui.NewPanel("Oscillator 2", ui.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator2)),
 		ui.NewPanel("Envelope 2", ui.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope2)),
-		ui.NewPanel("Mixer", ui.ColorAccentModulation, ui.NewMixer(track.Mixer.Balance)),
+		ui.NewPanel("Mixer", ui.ColorAccentModulation, ui.NewMixer(track.Mixer.Volume1, track.Mixer.Volume2)),
 	}
 
 	p := tea.NewProgram(

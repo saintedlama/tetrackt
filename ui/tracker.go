@@ -83,7 +83,7 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 			Envelope1:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
 			Oscillator2: audio.Oscillator{Type: audio.Silent},
 			Envelope2:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
-			Mixer:       audio.Mixer{Balance: 0.0},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 			Rows:        make([]TrackRow, numRows),
 		}
 		// Initialize all rows with empty data

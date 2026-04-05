@@ -62,7 +62,7 @@ func (s *SynthScreen) ApplyTrackChange(msg TrackChanged) {
 	s.Env1().Envelope = msg.Envelope1
 	s.Osc2().Oscillator = msg.Oscillator2
 	s.Env2().Envelope = msg.Envelope2
-	s.GetMixer().Mixer = msg.Mixer
+	s.GetMixer().SetMixer(msg.Mixer)
 }
 
 // Title returns the tab label for the SynthScreen.

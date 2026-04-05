@@ -238,7 +238,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.01, Decay: 0.1, Sustain: 0.7, Release: 0.2},
 			Oscillator2: audio.Oscillator{Type: audio.Silent, Phase: 0},
 			Envelope2:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 0, Release: 0},
-			Mixer:       audio.Mixer{Balance: 0.0},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Classic Triangle",
@@ -247,7 +247,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.02, Decay: 0.15, Sustain: 0.6, Release: 0.3},
 			Oscillator2: audio.Oscillator{Type: audio.Silent, Phase: 0},
 			Envelope2:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 0, Release: 0},
-			Mixer:       audio.Mixer{Balance: 0.0},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Retro Sawtooth",
@@ -256,7 +256,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.005, Decay: 0.2, Sustain: 0.5, Release: 0.25},
 			Oscillator2: audio.Oscillator{Type: audio.Silent, Phase: 0},
 			Envelope2:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 0, Release: 0},
-			Mixer:       audio.Mixer{Balance: 0.0},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Noise Percussion",
@@ -265,7 +265,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.05, Sustain: 0, Release: 0.05},
 			Oscillator2: audio.Oscillator{Type: audio.Silent, Phase: 0},
 			Envelope2:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 0, Release: 0},
-			Mixer:       audio.Mixer{Balance: 0.0},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Chiptune Bass",
@@ -274,7 +274,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.01, Decay: 0.1, Sustain: 0.9, Release: 0.1},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.5},
 			Envelope2:   audio.Envelope{Attack: 0.01, Decay: 0.1, Sustain: 0.6, Release: 0.1},
-			Mixer:       audio.Mixer{Balance: 0.3},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Synth Lead",
@@ -283,7 +283,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.02, Decay: 0.2, Sustain: 0.7, Release: 0.3},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.25},
 			Envelope2:   audio.Envelope{Attack: 0.02, Decay: 0.2, Sustain: 0.5, Release: 0.3},
-			Mixer:       audio.Mixer{Balance: 0.4},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Vibrato Pad",
@@ -292,7 +292,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.3, Decay: 0.2, Sustain: 0.8, Release: 0.5},
 			Oscillator2: audio.Oscillator{Type: audio.Sine, Phase: 0.1},
 			Envelope2:   audio.Envelope{Attack: 0.3, Decay: 0.2, Sustain: 0.8, Release: 0.5},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Arpeggiated Chords",
@@ -301,7 +301,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.05, Sustain: 0.4, Release: 0.1},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.33},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.05, Sustain: 0.4, Release: 0.1},
-			Mixer:       audio.Mixer{Balance: 0.6},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Bit Crusher",
@@ -310,7 +310,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.1, Sustain: 0.6, Release: 0.2},
 			Oscillator2: audio.Oscillator{Type: audio.SawtoothReverse, Phase: 0},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.1, Sustain: 0.6, Release: 0.2},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "PWM Lead",
@@ -319,7 +319,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.01, Decay: 0.15, Sustain: 0.7, Release: 0.25},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.4},
 			Envelope2:   audio.Envelope{Attack: 0.01, Decay: 0.15, Sustain: 0.7, Release: 0.25},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Vocal Synth",
@@ -328,7 +328,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.05, Decay: 0.1, Sustain: 0.8, Release: 0.2},
 			Oscillator2: audio.Oscillator{Type: audio.Sawtooth, Phase: 0.25},
 			Envelope2:   audio.Envelope{Attack: 0.05, Decay: 0.1, Sustain: 0.6, Release: 0.2},
-			Mixer:       audio.Mixer{Balance: 0.35},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Chiptune Strings",
@@ -337,7 +337,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.2, Decay: 0.3, Sustain: 0.7, Release: 0.4},
 			Oscillator2: audio.Oscillator{Type: audio.Triangle, Phase: 0.5},
 			Envelope2:   audio.Envelope{Attack: 0.2, Decay: 0.3, Sustain: 0.5, Release: 0.4},
-			Mixer:       audio.Mixer{Balance: 0.45},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Glitchy FX",
@@ -346,7 +346,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.05, Sustain: 0.3, Release: 0.1},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.75},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.05, Sustain: 0.2, Release: 0.1},
-			Mixer:       audio.Mixer{Balance: 0.6},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Retro Organ",
@@ -355,7 +355,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.01, Decay: 0.05, Sustain: 0.9, Release: 0.15},
 			Oscillator2: audio.Oscillator{Type: audio.Sine, Phase: 0.5},
 			Envelope2:   audio.Envelope{Attack: 0.01, Decay: 0.05, Sustain: 0.8, Release: 0.15},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Digital Flute",
@@ -364,7 +364,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.08, Decay: 0.1, Sustain: 0.6, Release: 0.3},
 			Oscillator2: audio.Oscillator{Type: audio.Sine, Phase: 0.3},
 			Envelope2:   audio.Envelope{Attack: 0.08, Decay: 0.1, Sustain: 0.4, Release: 0.3},
-			Mixer:       audio.Mixer{Balance: 0.4},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Synth Brass",
@@ -373,7 +373,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.05, Decay: 0.1, Sustain: 0.8, Release: 0.2},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.5},
 			Envelope2:   audio.Envelope{Attack: 0.05, Decay: 0.1, Sustain: 0.6, Release: 0.2},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Chiptune Bells",
@@ -382,7 +382,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.3, Sustain: 0.2, Release: 0.4},
 			Oscillator2: audio.Oscillator{Type: audio.Triangle, Phase: 0.25},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.3, Sustain: 0.1, Release: 0.4},
-			Mixer:       audio.Mixer{Balance: 0.6},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Funky Guitar",
@@ -391,7 +391,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.1, Sustain: 0.4, Release: 0.2},
 			Oscillator2: audio.Oscillator{Type: audio.Sawtooth, Phase: 0.4},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.1, Sustain: 0.3, Release: 0.2},
-			Mixer:       audio.Mixer{Balance: 0.45},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Ambient Pads",
@@ -400,7 +400,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.5, Decay: 0.3, Sustain: 0.9, Release: 0.8},
 			Oscillator2: audio.Oscillator{Type: audio.Triangle, Phase: 0.6},
 			Envelope2:   audio.Envelope{Attack: 0.5, Decay: 0.3, Sustain: 0.7, Release: 0.8},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Epic Lead",
@@ -409,7 +409,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.03, Decay: 0.2, Sustain: 0.8, Release: 0.4},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.3},
 			Envelope2:   audio.Envelope{Attack: 0.03, Decay: 0.2, Sustain: 0.6, Release: 0.4},
-			Mixer:       audio.Mixer{Balance: 0.45},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Game Over Sound",
@@ -418,7 +418,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.5, Sustain: 0, Release: 0.3},
 			Oscillator2: audio.Oscillator{Type: audio.Noise, Phase: 0},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.3, Sustain: 0, Release: 0.2},
-			Mixer:       audio.Mixer{Balance: 0.7},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Retro Kick Drum",
@@ -427,7 +427,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.1, Sustain: 0, Release: 0.05},
 			Oscillator2: audio.Oscillator{Type: audio.Sine, Phase: 0},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.08, Sustain: 0, Release: 0.03},
-			Mixer:       audio.Mixer{Balance: 0.3},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Synthesized Choir",
@@ -436,7 +436,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.2, Decay: 0.2, Sustain: 0.9, Release: 0.5},
 			Oscillator2: audio.Oscillator{Type: audio.Triangle, Phase: 0.4},
 			Envelope2:   audio.Envelope{Attack: 0.2, Decay: 0.2, Sustain: 0.8, Release: 0.5},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Chiptune Harp",
@@ -445,7 +445,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.2, Sustain: 0.3, Release: 0.4},
 			Oscillator2: audio.Oscillator{Type: audio.Sine, Phase: 0.2},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.2, Sustain: 0.2, Release: 0.4},
-			Mixer:       audio.Mixer{Balance: 0.6},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Vocoder Effect",
@@ -454,7 +454,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.02, Decay: 0.1, Sustain: 0.7, Release: 0.2},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.5},
 			Envelope2:   audio.Envelope{Attack: 0.02, Decay: 0.1, Sustain: 0.6, Release: 0.2},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Retro Synth Bass",
@@ -463,7 +463,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.05, Sustain: 0.9, Release: 0.1},
 			Oscillator2: audio.Oscillator{Type: audio.Triangle, Phase: 0.5},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.05, Sustain: 0.7, Release: 0.1},
-			Mixer:       audio.Mixer{Balance: 0.35},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Chiptune Flanger",
@@ -472,7 +472,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.01, Decay: 0.15, Sustain: 0.7, Release: 0.25},
 			Oscillator2: audio.Oscillator{Type: audio.SawtoothReverse, Phase: 0.1},
 			Envelope2:   audio.Envelope{Attack: 0.01, Decay: 0.15, Sustain: 0.7, Release: 0.25},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Synthesized Trumpet",
@@ -481,7 +481,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.05, Decay: 0.1, Sustain: 0.8, Release: 0.3},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.4},
 			Envelope2:   audio.Envelope{Attack: 0.05, Decay: 0.1, Sustain: 0.6, Release: 0.3},
-			Mixer:       audio.Mixer{Balance: 0.45},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Chiptune Organ",
@@ -490,7 +490,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.01, Decay: 0.05, Sustain: 0.9, Release: 0.2},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.5},
 			Envelope2:   audio.Envelope{Attack: 0.01, Decay: 0.05, Sustain: 0.8, Release: 0.2},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Retro Soundtrack",
@@ -499,7 +499,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.1, Decay: 0.2, Sustain: 0.8, Release: 0.4},
 			Oscillator2: audio.Oscillator{Type: audio.Sawtooth, Phase: 0.3},
 			Envelope2:   audio.Envelope{Attack: 0.1, Decay: 0.2, Sustain: 0.6, Release: 0.4},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Laser Zap",
@@ -508,7 +508,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.08, Sustain: 0, Release: 0.05},
 			Oscillator2: audio.Oscillator{Type: audio.Sine, Phase: 0.2},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.06, Sustain: 0, Release: 0.04},
-			Mixer:       audio.Mixer{Balance: 0.6},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Sub Pulse Bass",
@@ -517,7 +517,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.01, Decay: 0.12, Sustain: 0.9, Release: 0.12},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.5},
 			Envelope2:   audio.Envelope{Attack: 0.01, Decay: 0.12, Sustain: 0.6, Release: 0.12},
-			Mixer:       audio.Mixer{Balance: 0.35},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Pluck Lead",
@@ -526,7 +526,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.12, Sustain: 0.3, Release: 0.1},
 			Oscillator2: audio.Oscillator{Type: audio.Triangle, Phase: 0.3},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.12, Sustain: 0.2, Release: 0.1},
-			Mixer:       audio.Mixer{Balance: 0.55},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Lo-Fi Keys",
@@ -535,7 +535,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.02, Decay: 0.2, Sustain: 0.7, Release: 0.25},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.4},
 			Envelope2:   audio.Envelope{Attack: 0.02, Decay: 0.2, Sustain: 0.5, Release: 0.25},
-			Mixer:       audio.Mixer{Balance: 0.45},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Chip Snare",
@@ -544,7 +544,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.09, Sustain: 0, Release: 0.06},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.6},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.05, Sustain: 0, Release: 0.04},
-			Mixer:       audio.Mixer{Balance: 0.65},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Chip Hi-Hat",
@@ -553,7 +553,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.04, Sustain: 0, Release: 0.03},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.8},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.03, Sustain: 0, Release: 0.02},
-			Mixer:       audio.Mixer{Balance: 0.7},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Crystal Pad",
@@ -562,7 +562,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.25, Decay: 0.2, Sustain: 0.85, Release: 0.6},
 			Oscillator2: audio.Oscillator{Type: audio.Triangle, Phase: 0.2},
 			Envelope2:   audio.Envelope{Attack: 0.25, Decay: 0.2, Sustain: 0.7, Release: 0.6},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Metal Bell",
@@ -571,7 +571,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.001, Decay: 0.4, Sustain: 0.15, Release: 0.5},
 			Oscillator2: audio.Oscillator{Type: audio.Sawtooth, Phase: 0.2},
 			Envelope2:   audio.Envelope{Attack: 0.001, Decay: 0.35, Sustain: 0.1, Release: 0.45},
-			Mixer:       audio.Mixer{Balance: 0.55},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Chiptune Piano",
@@ -580,7 +580,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.005, Decay: 0.2, Sustain: 0.5, Release: 0.25},
 			Oscillator2: audio.Oscillator{Type: audio.Square, Phase: 0.25},
 			Envelope2:   audio.Envelope{Attack: 0.005, Decay: 0.2, Sustain: 0.35, Release: 0.25},
-			Mixer:       audio.Mixer{Balance: 0.5},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 		{
 			Name:        "Airy Vox",
@@ -589,7 +589,7 @@ func presets() []Instrument {
 			Envelope1:   audio.Envelope{Attack: 0.08, Decay: 0.2, Sustain: 0.7, Release: 0.35},
 			Oscillator2: audio.Oscillator{Type: audio.Sawtooth, Phase: 0.15},
 			Envelope2:   audio.Envelope{Attack: 0.08, Decay: 0.2, Sustain: 0.5, Release: 0.35},
-			Mixer:       audio.Mixer{Balance: 0.4},
+			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 		},
 	}
 }
