@@ -18,8 +18,8 @@ type EnvelopePresetSelected struct {
 }
 
 var presetDialogSelectedStyle = lipgloss.NewStyle().
-	Background(lipgloss.Color("#d81b60")).
-	Foreground(lipgloss.Color("#ffffff")).
+	Background(ColorAccentInstrument).
+	Foreground(ColorWhite).
 	Bold(true)
 
 // EnvelopePresetDialog is a standalone tea.Model dialog for selecting envelope presets.

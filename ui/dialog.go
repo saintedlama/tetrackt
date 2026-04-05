@@ -7,7 +7,7 @@ import (
 
 var dialogBorderStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
-	BorderForeground(lipgloss.Color("#ff9800")).
+	BorderForeground(ColorAccentWarning).
 	Padding(0, 2)
 
 // CloseDialogMsg signals that the dialog should be closed.

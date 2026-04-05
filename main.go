@@ -33,28 +33,17 @@ const (
 
 var (
 	infoStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#ffa726")).
+			Foreground(ui.ColorAccentEnvelope).
 			Padding(0, 1)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#666666")).
+			Foreground(ui.ColorTextDisabled).
 			Padding(1, 1)
 
 	selectedStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#d81b60")).
-			Foreground(lipgloss.Color("#ffffff")).
+			Background(ui.ColorAccentInstrument).
+			Foreground(ui.ColorWhite).
 			Bold(true)
-
-	panelBorderStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("#333333")).
-				Padding(0, 2)
-
-	activePanelBorderStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("#00e5ff")).
-				Bold(true).
-				Padding(0, 2)
 )
 
 const (
@@ -547,9 +536,9 @@ func (m model) View() tea.View {
 	trackerView := m.tracker.View()
 
 	// Apply border to track view with conditional highlighting
-	trackerBorder := panelBorderStyle
+	trackerBorder := ui.PanelBorderStyle
 	if m.mode == TrackMode {
-		trackerBorder = activePanelBorderStyle
+		trackerBorder = ui.ActivePanelBorderStyle
 	}
 
 	trackerViewWithBorder := trackerBorder.Render(trackerView)
@@ -582,26 +571,26 @@ func (m model) synthView() string {
 	m.mixer.GlobalVolume = m.globalVolume
 
 	// Apply active border to the current mode panel
-	oscillator1Border := panelBorderStyle
-	envelope1Border := panelBorderStyle
-	oscillator2Border := panelBorderStyle
-	envelope2Border := panelBorderStyle
-	mixerBorder := panelBorderStyle
-	instrumentBorder := panelBorderStyle
+	oscillator1Border := ui.PanelBorderStyle
+	envelope1Border := ui.PanelBorderStyle
+	oscillator2Border := ui.PanelBorderStyle
+	envelope2Border := ui.PanelBorderStyle
+	mixerBorder := ui.PanelBorderStyle
+	instrumentBorder := ui.PanelBorderStyle
 
 	switch m.mode {
 	case Oscillator1EditMode:
-		oscillator1Border = activePanelBorderStyle
+		oscillator1Border = ui.ActivePanelBorderStyle
 	case Envelope1EditMode:
-		envelope1Border = activePanelBorderStyle
+		envelope1Border = ui.ActivePanelBorderStyle
 	case Oscillator2EditMode:
-		oscillator2Border = activePanelBorderStyle
+		oscillator2Border = ui.ActivePanelBorderStyle
 	case Envelope2EditMode:
-		envelope2Border = activePanelBorderStyle
+		envelope2Border = ui.ActivePanelBorderStyle
 	case MixerEditMode:
-		mixerBorder = activePanelBorderStyle
+		mixerBorder = ui.ActivePanelBorderStyle
 	case InstrumentMode:
-		instrumentBorder = activePanelBorderStyle
+		instrumentBorder = ui.ActivePanelBorderStyle
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,

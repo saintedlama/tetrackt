@@ -21,7 +21,7 @@ func WithDim() OverlayOption {
 }
 
 func dimContent(s string) string {
-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	dimStyle := lipgloss.NewStyle().Foreground(ColorTextDisabled)
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
 		lines[i] = dimStyle.Render(line)

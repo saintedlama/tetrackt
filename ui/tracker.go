@@ -12,26 +12,26 @@ import (
 var (
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#00ffff")).
+			Foreground(ColorAccentPrimary).
 			Padding(0, 1)
 
 	rowNumStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#888888"))
+			Foreground(ColorTextMuted)
 
 	cursorRowStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#ff9800")).
+			Foreground(ColorAccentEnvelope).
 			Bold(true)
 
 	playbackRowStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#00ffff")).
+				Foreground(ColorAccentPlay).
 				Bold(true)
 
 	cellStyle = lipgloss.NewStyle().
 			Padding(0, 1)
 
 	cursorCellStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#2a2a2a")).
-			Foreground(lipgloss.Color("#00e5ff")).
+			Background(ColorSurface).
+			Foreground(ColorAccentPrimary).
 			Padding(0, 1)
 )
 
@@ -124,7 +124,7 @@ func (m *TrackerModel) View() string {
 		if i == m.CursorTrack {
 			trackHeader = headerStyle.Render(trackHeader)
 		} else {
-			trackHeader = headerStyle.Foreground(lipgloss.Color("#555555")).Render(trackHeader)
+			trackHeader = headerStyle.Foreground(ColorGray).Render(trackHeader)
 		}
 		tracks.WriteString(trackHeader)
 		tracks.WriteString("    ")

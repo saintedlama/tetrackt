@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	leftStyle  = lipgloss.NewStyle().SetString("█").Foreground(lipgloss.Color("#ff5722"))
-	rightStyle = lipgloss.NewStyle().SetString("█").Foreground(lipgloss.Color("#2196f3"))
+	leftStyle  = lipgloss.NewStyle().SetString("█").Foreground(ColorAccentEnvelope)
+	rightStyle = lipgloss.NewStyle().SetString("█").Foreground(ColorAccentOscillator)
 )
 
 type Bar struct {
