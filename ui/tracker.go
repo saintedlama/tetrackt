@@ -63,6 +63,7 @@ type Track struct {
 	Oscillator2 audio.Oscillator
 	Envelope2   audio.Envelope
 	Mixer       audio.Mixer
+	Filter      audio.Filter
 	Rows        []TrackRow
 }
 
@@ -84,6 +85,7 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 			Oscillator2: audio.Oscillator{Type: audio.Silent},
 			Envelope2:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
 			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
+			Filter:      audio.NewFilter(),
 			Rows:        make([]TrackRow, numRows),
 		}
 		// Initialize all rows with empty data
@@ -177,6 +179,7 @@ type TrackChanged struct {
 	Oscillator2 audio.Oscillator
 	Envelope2   audio.Envelope
 	Mixer       audio.Mixer
+	Filter      audio.Filter
 }
 
 func (m *TrackerModel) Update(msg tea.Msg) (Component, tea.Cmd) {

@@ -1,0 +1,137 @@
+package ui
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/ui/widgets"
+)
+
+type filterField int
+
+const (
+	filterFieldType filterField = iota
+	filterFieldCutoff
+	filterFieldResonance
+)
+
+// FilterModel is the UI component for editing the filter parameters.
+type FilterModel struct {
+	Filter          audio.Filter
+	filterList      []audio.FilterType
+	selectedStyle   lipgloss.Style
+	filterTypeStyle lipgloss.Style
+	editField       filterField
+	cutoffBar       widgets.Bar
+	resonanceBar    widgets.Bar
+}
+
+// FilterUpdated is emitted when any filter parameter changes.
+type FilterUpdated struct {
+	Filter audio.Filter
+}
+
+// NewFilterModel creates a FilterModel with the given initial filter state.
+func NewFilterModel(selectedStyle lipgloss.Style, filter audio.Filter) *FilterModel {
+	filterList := []audio.FilterType{audio.FilterOff, audio.FilterLowPass, audio.FilterHighPass, audio.FilterBandPass}
+	maxWidth := 0
+	for _, t := range filterList {
+		if len(string(t)) > maxWidth {
+			maxWidth = len(string(t))
+		}
+	}
+	return &FilterModel{
+		Filter:          filter,
+		filterList:      filterList,
+		selectedStyle:   selectedStyle,
+		filterTypeStyle: lipgloss.NewStyle().Width(maxWidth),
+		cutoffBar:       widgets.NewBar(0, 1, filter.Cutoff, 10),
+		resonanceBar:    widgets.NewBar(0, 1, filter.Resonance, 10),
+	}
+}
+
+func (m *FilterModel) Init() tea.Cmd { return nil }
+
+func (m *FilterModel) View() string {
+	var sb strings.Builder
+	typeStr := renderFieldSelected(m.filterTypeStyle.Render(string(m.Filter.Type)), m.editField == filterFieldType, m.selectedStyle)
+	sb.WriteString(typeStr)
+	sb.WriteString("\n")
+	sb.WriteString(renderFieldSelected(fmt.Sprintf("Cutoff %s %3d%%", m.cutoffBar.View(), int(m.Filter.Cutoff*100)), m.editField == filterFieldCutoff, m.selectedStyle))
+	sb.WriteString("\n")
+	sb.WriteString(renderFieldSelected(fmt.Sprintf("Reso   %s %3d%%", m.resonanceBar.View(), int(m.Filter.Resonance*100)), m.editField == filterFieldResonance, m.selectedStyle))
+	return sb.String()
+}
+
+func (m *FilterModel) Update(msg tea.Msg) (Component, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "up":
+			m.editField = (m.editField - 1 + 3) % 3
+		case "down":
+			m.editField = (m.editField + 1) % 3
+		case "left", "shift+left":
+			delta := 0.05
+			if msg.String() == "shift+left" {
+				delta = 0.1
+			}
+			switch m.editField {
+			case filterFieldType:
+				m.Filter.Type = cycleFilter(m.filterList, m.Filter.Type, -1)
+			case filterFieldCutoff:
+				m.Filter.Cutoff = clampFilter(m.Filter.Cutoff - delta)
+				m.cutoffBar.Value = m.Filter.Cutoff
+			case filterFieldResonance:
+				m.Filter.Resonance = clampFilter(m.Filter.Resonance - delta)
+				m.resonanceBar.Value = m.Filter.Resonance
+			}
+			return m, func() tea.Msg { return FilterUpdated{Filter: m.Filter} }
+		case "right", "shift+right":
+			delta := 0.05
+			if msg.String() == "shift+right" {
+				delta = 0.1
+			}
+			switch m.editField {
+			case filterFieldType:
+				m.Filter.Type = cycleFilter(m.filterList, m.Filter.Type, 1)
+			case filterFieldCutoff:
+				m.Filter.Cutoff = clampFilter(m.Filter.Cutoff + delta)
+				m.cutoffBar.Value = m.Filter.Cutoff
+			case filterFieldResonance:
+				m.Filter.Resonance = clampFilter(m.Filter.Resonance + delta)
+				m.resonanceBar.Value = m.Filter.Resonance
+			}
+			return m, func() tea.Msg { return FilterUpdated{Filter: m.Filter} }
+		}
+	}
+	return m, nil
+}
+
+// SyncBars updates bar values to match the current Filter state.
+func (m *FilterModel) SyncBars() {
+	m.cutoffBar.Value = m.Filter.Cutoff
+	m.resonanceBar.Value = m.Filter.Resonance
+}
+
+func cycleFilter(list []audio.FilterType, current audio.FilterType, step int) audio.FilterType {
+	idx := slices.Index(list, current) + step
+	if idx < 0 {
+		return list[len(list)-1]
+	}
+	return list[idx%len(list)]
+}
+
+func clampFilter(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}

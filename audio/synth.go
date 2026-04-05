@@ -21,10 +21,11 @@ type Synth struct {
 	oscillator2 Oscillator
 	envelope2   Envelope
 	mixer       Mixer
+	filter      Filter
 }
 
 // NewSynth creates a new synthesis engine
-func NewSynth(sampleRate beep.SampleRate, oscillator1 Oscillator, envelope1 Envelope, oscillator2 Oscillator, envelope2 Envelope, mixer Mixer) *Synth {
+func NewSynth(sampleRate beep.SampleRate, oscillator1 Oscillator, envelope1 Envelope, oscillator2 Oscillator, envelope2 Envelope, mixer Mixer, filter Filter) *Synth {
 	return &Synth{
 		sampleRate:  sampleRate,
 		oscillator1: oscillator1,
@@ -32,6 +33,7 @@ func NewSynth(sampleRate beep.SampleRate, oscillator1 Oscillator, envelope1 Enve
 		oscillator2: oscillator2,
 		envelope2:   envelope2,
 		mixer:       mixer,
+		filter:      filter,
 	}
 }
 
@@ -69,6 +71,7 @@ func (s *Synth) Streamer(note Note, d time.Duration) beep.Streamer {
 	mix2 := &effects.Volume{Streamer: streamer2, Base: 2, Volume: math.Log2(s.mixer.Volume2), Silent: s.mixer.Volume2 == 0}
 
 	mixed := beep.Mix(mix1, mix2)
+	filtered := NewFilterStreamer(mixed, s.sampleRate, s.filter)
 
-	return beep.Take(sampleDuration, mixed)
+	return beep.Take(sampleDuration, filtered)
 }

@@ -284,6 +284,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ui.MixerUpdated:
 		m.trackerModel().Tracks[m.trackerModel().CursorTrack].Mixer = msg.Mixer
 
+	case ui.FilterUpdated:
+		m.trackerModel().Tracks[m.trackerModel().CursorTrack].Filter = msg.Filter
+
 	case ui.VolumeChanged:
 		m.globalVolume = msg.Volume
 
@@ -298,6 +301,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		synth.Osc2().Oscillator = msg.Instrument.Oscillator2
 		synth.Env2().Envelope = msg.Instrument.Envelope2
 		synth.GetMixer().SetMixer(msg.Instrument.Mixer)
+		synth.GetFilter().Filter = msg.Instrument.Filter
+		synth.GetFilter().SyncBars()
 
 		tracker := m.trackerModel()
 		track := &tracker.Tracks[tracker.CursorTrack]
@@ -306,6 +311,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		track.Oscillator2 = msg.Instrument.Oscillator2
 		track.Envelope2 = msg.Instrument.Envelope2
 		track.Mixer = msg.Instrument.Mixer
+		track.Filter = msg.Instrument.Filter
 	}
 
 	return m, nil
@@ -328,6 +334,7 @@ func (m *model) playNoteWithInstrument(note audio.Note, instr ui.Instrument) {
 		instr.Oscillator2,
 		instr.Envelope2,
 		instr.Mixer,
+		instr.Filter,
 	)
 	volumeAdjusted := &effects.Volume{
 		Streamer: synth.Streamer(note, duration),
@@ -343,7 +350,7 @@ func (m *model) playNote(note audio.Note) {
 	// TODO: duration should be adjustable
 	duration := time.Millisecond * 250
 
-	oscillator1, envelope1, oscillator2, envelope2, mixer := m.synth().GetActiveSynthParams()
+	oscillator1, envelope1, oscillator2, envelope2, mixer, filter := m.synth().GetActiveSynthParams()
 
 	synth := audio.NewSynth(
 		m.sampleRate,
@@ -351,7 +358,8 @@ func (m *model) playNote(note audio.Note) {
 		envelope1,
 		oscillator2,
 		envelope2,
-		mixer)
+		mixer,
+		filter)
 
 	synthStreamer := synth.Streamer(note, duration)
 	volumeAdjusted := &effects.Volume{
@@ -395,6 +403,7 @@ func (m *model) playRowNotes(row int) {
 			synth.Osc2().Oscillator,
 			synth.Env2().Envelope,
 			synth.GetMixer().Mixer,
+			track.Filter,
 		)
 
 		synthStreamer := audioSynth.Streamer(trackRow.Note, duration)
@@ -461,6 +470,7 @@ func main() {
 		ui.NewPanel("Oscillator 2", ui.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator2)),
 		ui.NewPanel("Envelope 2", ui.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope2)),
 		ui.NewPanel("Mixer", ui.ColorAccentModulation, ui.NewMixer(track.Mixer.Volume1, track.Mixer.Volume2)),
+		ui.NewPanel("Filter", ui.ColorAccentPrimary, ui.NewFilterModel(selectedStyle, track.Filter)),
 	}
 
 	p := tea.NewProgram(

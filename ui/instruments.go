@@ -19,6 +19,7 @@ type Instrument struct {
 	Oscillator2 audio.Oscillator
 	Envelope2   audio.Envelope
 	Mixer       audio.Mixer
+	Filter      audio.Filter
 }
 
 // InstrumentView represents the UI component for managing instrument presets

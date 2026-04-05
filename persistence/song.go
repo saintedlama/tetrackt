@@ -26,6 +26,9 @@ type SavedTrack struct {
 	Envelope2        audio.Envelope  `yaml:"envelope2"`
 	MixerVolume1     float64         `yaml:"mixer_volume1"`
 	MixerVolume2     float64         `yaml:"mixer_volume2"`
+	FilterType       string          `yaml:"filter_type"`
+	FilterCutoff     float64         `yaml:"filter_cutoff"`
+	FilterResonance  float64         `yaml:"filter_resonance"`
 	Rows             []SavedTrackRow `yaml:"rows"`
 }
 
@@ -63,6 +66,9 @@ func TracksToSong(tracker *ui.TrackerModel) *SavedSong {
 			Envelope2:        track.Envelope2,
 			MixerVolume1:     track.Mixer.Volume1,
 			MixerVolume2:     track.Mixer.Volume2,
+			FilterType:       string(track.Filter.Type),
+			FilterCutoff:     track.Filter.Cutoff,
+			FilterResonance:  track.Filter.Resonance,
 			Rows:             rows,
 		}
 	}
@@ -89,6 +95,11 @@ func SongToTracks(saved *SavedSong, tracker *ui.TrackerModel) {
 		track.Oscillator2 = audio.Oscillator{Type: audio.OscillatorType(savedTrack.Oscillator2), Phase: savedTrack.Oscillator2Phase}
 		track.Envelope2 = savedTrack.Envelope2
 		track.Mixer = audio.Mixer{Volume1: savedTrack.MixerVolume1, Volume2: savedTrack.MixerVolume2}
+		track.Filter = audio.Filter{
+			Type:      audio.FilterType(savedTrack.FilterType),
+			Cutoff:    savedTrack.FilterCutoff,
+			Resonance: savedTrack.FilterResonance,
+		}
 
 		// Resize rows slice if needed
 		if len(track.Rows) != saved.NumRows {

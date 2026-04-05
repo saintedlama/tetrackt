@@ -49,11 +49,12 @@ func (s *SynthScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 
 // Accessors for synth component children, used by main for audio playback and
 // cross-screen state synchronisation.
-func (s *SynthScreen) Osc1() *OscillatorModel { return s.panels[0].Child.(*OscillatorModel) }
-func (s *SynthScreen) Env1() *EnvelopeModel   { return s.panels[1].Child.(*EnvelopeModel) }
-func (s *SynthScreen) Osc2() *OscillatorModel { return s.panels[2].Child.(*OscillatorModel) }
-func (s *SynthScreen) Env2() *EnvelopeModel   { return s.panels[3].Child.(*EnvelopeModel) }
-func (s *SynthScreen) GetMixer() *Mixer       { return s.panels[4].Child.(*Mixer) }
+func (s *SynthScreen) Osc1() *OscillatorModel  { return s.panels[0].Child.(*OscillatorModel) }
+func (s *SynthScreen) Env1() *EnvelopeModel    { return s.panels[1].Child.(*EnvelopeModel) }
+func (s *SynthScreen) Osc2() *OscillatorModel  { return s.panels[2].Child.(*OscillatorModel) }
+func (s *SynthScreen) Env2() *EnvelopeModel    { return s.panels[3].Child.(*EnvelopeModel) }
+func (s *SynthScreen) GetMixer() *Mixer        { return s.panels[4].Child.(*Mixer) }
+func (s *SynthScreen) GetFilter() *FilterModel { return s.panels[5].Child.(*FilterModel) }
 
 // ApplyTrackChange updates all panels to reflect the settings of the newly
 // selected track.
@@ -63,6 +64,8 @@ func (s *SynthScreen) ApplyTrackChange(msg TrackChanged) {
 	s.Osc2().Oscillator = msg.Oscillator2
 	s.Env2().Envelope = msg.Envelope2
 	s.GetMixer().SetMixer(msg.Mixer)
+	s.GetFilter().Filter = msg.Filter
+	s.GetFilter().SyncBars()
 }
 
 // Title returns the tab label for the SynthScreen.
@@ -70,7 +73,7 @@ func (s *SynthScreen) Title() string { return "Synth" }
 
 // ModeLabel returns the name of the currently active panel for the header bar.
 func (s *SynthScreen) ModeLabel() string {
-	labels := []string{"OSCILLATOR1", "ENVELOPE1", "OSCILLATOR2", "ENVELOPE2", "MIXER"}
+	labels := []string{"OSCILLATOR1", "ENVELOPE1", "OSCILLATOR2", "ENVELOPE2", "MIXER", "FILTER"}
 	return labels[s.ActivePanel]
 }
 
@@ -89,7 +92,7 @@ func (s *SynthScreen) Footer() string {
 	return "Tab/Shift+Tab: Switch panel | ↑↓: Select | ←→: Adjust | +/-: Octave | I: Instruments | p: Play/Pause | P: Loop | S: Save | L: Load | T: Tracker | Q: Quit"
 }
 
-// GetActiveSynthParams returns the oscillator/envelope/mixer settings for audio playback.
-func (s *SynthScreen) GetActiveSynthParams() (audio.Oscillator, audio.Envelope, audio.Oscillator, audio.Envelope, audio.Mixer) {
-	return s.Osc1().Oscillator, s.Env1().Envelope, s.Osc2().Oscillator, s.Env2().Envelope, s.GetMixer().Mixer
+// GetActiveSynthParams returns the oscillator/envelope/mixer/filter settings for audio playback.
+func (s *SynthScreen) GetActiveSynthParams() (audio.Oscillator, audio.Envelope, audio.Oscillator, audio.Envelope, audio.Mixer, audio.Filter) {
+	return s.Osc1().Oscillator, s.Env1().Envelope, s.Osc2().Oscillator, s.Env2().Envelope, s.GetMixer().Mixer, s.GetFilter().Filter
 }
