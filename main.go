@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
@@ -446,7 +447,12 @@ func (m model) View() tea.View {
 	}
 	tabBar := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
 
-	header := tabBar + "\n\n"
+	logoStr := ui.Logo()
+	spacerWidth := m.width - lipgloss.Width(tabBar) - lipgloss.Width(logoStr)
+	if spacerWidth < 0 {
+		spacerWidth = 0
+	}
+	header := tabBar + strings.Repeat(" ", spacerWidth) + logoStr + "\n\n"
 
 	body := m.screens[m.activeScreen].View()
 	footer := helpStyle.Render(m.screens[m.activeScreen].Footer())
