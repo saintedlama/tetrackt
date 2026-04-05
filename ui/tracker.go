@@ -179,7 +179,7 @@ type TrackChanged struct {
 	Mixer       audio.Mixer
 }
 
-func (m *TrackerModel) Update(msg tea.Msg) (*TrackerModel, tea.Cmd) {
+func (m *TrackerModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {

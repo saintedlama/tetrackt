@@ -47,11 +47,6 @@ func (m *OscillatorModel) Init() tea.Cmd {
 
 func (m *OscillatorModel) View() string {
 	var oscillatorView strings.Builder
-	oscillatorView.WriteString("Oscillator ")
-
-	oscillatorView.WriteString(RenderOnOff(m.Oscillator.Type != audio.Silent))
-
-	oscillatorView.WriteString("\n")
 	oscType := renderFieldSelected(string(m.Oscillator.Type), m.editField == oscillatorType, m.selectedStyle)
 	oscillatorView.WriteString(m.oscillatorTypeStyle.Render(oscType))
 
@@ -61,7 +56,7 @@ func (m *OscillatorModel) View() string {
 	return oscillatorView.String()
 }
 
-func (m *OscillatorModel) Update(msg tea.Msg) (*OscillatorModel, tea.Cmd) {
+func (m *OscillatorModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:

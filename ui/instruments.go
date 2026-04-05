@@ -64,8 +64,12 @@ func (ip *InstrumentView) GetPreset(index int) *Instrument {
 	return nil
 }
 
+func (ip *InstrumentView) Init() tea.Cmd {
+	return nil
+}
+
 // Update handles input for selecting and applying presets.
-func (ip *InstrumentView) Update(msg tea.Msg) (*InstrumentView, tea.Cmd) {
+func (ip *InstrumentView) Update(msg tea.Msg) (Component, tea.Cmd) {
 	if len(ip.Presets) == 0 {
 		return ip, nil
 	}

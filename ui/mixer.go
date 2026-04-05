@@ -33,7 +33,6 @@ func (m *Mixer) Init() tea.Cmd {
 
 func (m *Mixer) View() string {
 	envView := strings.Builder{}
-	envView.WriteString("Mixer:\n")
 
 	v := m.Mixer.Balance
 
@@ -46,7 +45,7 @@ func (m *Mixer) View() string {
 	return envView.String()
 }
 
-func (m *Mixer) Update(msg tea.Msg) (*Mixer, tea.Cmd) {
+func (m *Mixer) Update(msg tea.Msg) (Component, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {

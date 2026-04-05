@@ -56,13 +56,8 @@ type model struct {
 	width       int
 	height      int
 	sampleRate  beep.SampleRate
-	oscillator1 *ui.OscillatorModel
-	envelope1   *ui.EnvelopeModel
-	oscillator2 *ui.OscillatorModel
-	envelope2   *ui.EnvelopeModel
-	mixer       *ui.Mixer
+	synthPanels []ui.Panel
 	tracker     *ui.TrackerModel
-	instrument  *ui.InstrumentView
 
 	mode InputMode
 
@@ -72,6 +67,14 @@ type model struct {
 	// current loaded/saved filename (prefill on save)
 	currentFilename string
 }
+
+// Accessors for synth panel children (synthPanels order: osc1, env1, osc2, env2, mixer, instrument)
+func (m model) osc1() *ui.OscillatorModel  { return m.synthPanels[0].Child.(*ui.OscillatorModel) }
+func (m model) env1() *ui.EnvelopeModel    { return m.synthPanels[1].Child.(*ui.EnvelopeModel) }
+func (m model) osc2() *ui.OscillatorModel  { return m.synthPanels[2].Child.(*ui.OscillatorModel) }
+func (m model) env2() *ui.EnvelopeModel    { return m.synthPanels[3].Child.(*ui.EnvelopeModel) }
+func (m model) mixer() *ui.Mixer           { return m.synthPanels[4].Child.(*ui.Mixer) }
+func (m model) instr() *ui.InstrumentView  { return m.synthPanels[5].Child.(*ui.InstrumentView) }
 
 // tickMsg is sent to advance playback
 type tickMsg time.Time
@@ -181,7 +184,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.globalVolume = 0.0
 			}
 
-			m.mixer.GlobalVolume = m.globalVolume
+			m.mixer().GlobalVolume = m.globalVolume
 			return m, nil
 		case "]", "alt+]": // increase volume, for german keyboard layout we need to consider the alt+combo
 			m.globalVolume += 0.05
@@ -189,7 +192,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.globalVolume = 1.0
 			}
 
-			m.mixer.GlobalVolume = m.globalVolume
+			m.mixer().GlobalVolume = m.globalVolume
 			return m, nil
 		case "tab":
 			m.mode = InputMode((int(m.mode) + 1) % 7) // Cycle through 7 modes
@@ -235,42 +238,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.mode == Envelope1EditMode {
-			var _, cmd = m.envelope1.Update(msg)
-			return m, cmd
-		}
-
-		if m.mode == Envelope2EditMode {
-			var _, cmd = m.envelope2.Update(msg)
-			return m, cmd
-		}
-
-		// Handle oscillator edit mode
-		if m.mode == Oscillator1EditMode {
-			var _, cmd = m.oscillator1.Update(msg)
-			return m, cmd
-		}
-
-		if m.mode == Oscillator2EditMode {
-			var _, cmd = m.oscillator2.Update(msg)
-			return m, cmd
-		}
-
-		if m.mode == MixerEditMode {
-			var _, cmd = m.mixer.Update(msg)
-			return m, cmd
-		}
-
 		if m.mode == TrackMode {
 			var _, cmd = m.tracker.Update(msg)
 			return m, cmd
 		}
 
-		if m.mode == InstrumentMode {
-			var cmd tea.Cmd
-			m.instrument, cmd = m.instrument.Update(msg)
-			return m, cmd
-		}
+		// Route to the active synth panel (modes 1-6 map to synthPanels[0-5])
+		idx := int(m.mode) - 1
+		var cmd tea.Cmd
+		m.synthPanels[idx], cmd = m.synthPanels[idx].Update(msg)
+		return m, cmd
 
 	case tickMsg:
 		if !m.tracker.IsPlaying {
@@ -312,12 +289,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ui.TrackChanged:
 		// Update synth parameters based on current track
-		m.envelope1.Envelope = msg.Envelope1
-		m.oscillator1.Oscillator = msg.Oscillator1
-		m.envelope2.Envelope = msg.Envelope2
-		m.oscillator2.Oscillator = msg.Oscillator2
-		m.mixer.Mixer = msg.Mixer
-		m.instrument.CurrentTrackNum = m.tracker.CursorTrack
+		m.env1().Envelope = msg.Envelope1
+		m.osc1().Oscillator = msg.Oscillator1
+		m.env2().Envelope = msg.Envelope2
+		m.osc2().Oscillator = msg.Oscillator2
+		m.mixer().Mixer = msg.Mixer
+		m.instr().CurrentTrackNum = m.tracker.CursorTrack
 
 	case ui.FileDialogConfirmed:
 		// Handle file dialog confirmation
@@ -351,10 +328,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ui.EnvelopePresetSelected:
 		switch m.mode {
 		case Envelope1EditMode:
-			m.envelope1.Envelope = msg.Envelope
+			m.env1().Envelope = msg.Envelope
 			m.tracker.Tracks[m.tracker.CursorTrack].Envelope1 = msg.Envelope
 		case Envelope2EditMode:
-			m.envelope2.Envelope = msg.Envelope
+			m.env2().Envelope = msg.Envelope
 			m.tracker.Tracks[m.tracker.CursorTrack].Envelope2 = msg.Envelope
 		}
 		return m, nil
@@ -379,11 +356,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tracker.Tracks[m.tracker.CursorTrack].Mixer = msg.Mixer
 
 	case ui.InstrumentApplied:
-		m.oscillator1.Oscillator = msg.Instrument.Oscillator1
-		m.envelope1.Envelope = msg.Instrument.Envelope1
-		m.oscillator2.Oscillator = msg.Instrument.Oscillator2
-		m.envelope2.Envelope = msg.Instrument.Envelope2
-		m.mixer.Mixer = msg.Instrument.Mixer
+		m.osc1().Oscillator = msg.Instrument.Oscillator1
+		m.env1().Envelope = msg.Instrument.Envelope1
+		m.osc2().Oscillator = msg.Instrument.Oscillator2
+		m.env2().Envelope = msg.Instrument.Envelope2
+		m.mixer().Mixer = msg.Instrument.Mixer
 
 		track := &m.tracker.Tracks[m.tracker.CursorTrack]
 		track.Oscillator1 = msg.Instrument.Oscillator1
@@ -408,14 +385,14 @@ func (m *model) playNote(note audio.Note) {
 	// TODO: duration should be adjustable
 	duration := time.Millisecond * 250
 
-	oscillator1 := m.oscillator1.Oscillator
-	envelope1 := m.envelope1.Envelope
-	oscillator2 := m.oscillator2.Oscillator
-	envelope2 := m.envelope2.Envelope
-	mixer := m.mixer.Mixer
+	oscillator1 := m.osc1().Oscillator
+	envelope1 := m.env1().Envelope
+	oscillator2 := m.osc2().Oscillator
+	envelope2 := m.env2().Envelope
+	mixer := m.mixer().Mixer
 
 	if m.mode == InstrumentMode {
-		if preset := m.instrument.GetPreset(m.instrument.SelectedPreset); preset != nil {
+		if preset := m.instr().GetPreset(m.instr().SelectedPreset); preset != nil {
 			oscillator1 = preset.Oscillator1
 			envelope1 = preset.Envelope1
 			oscillator2 = preset.Oscillator2
@@ -466,11 +443,11 @@ func (m *model) playRowNotes(row int) {
 
 		synth := audio.NewSynth(
 			m.sampleRate,
-			m.oscillator1.Oscillator,
-			m.envelope1.Envelope,
-			m.oscillator2.Oscillator,
-			m.envelope2.Envelope,
-			m.mixer.Mixer,
+			m.osc1().Oscillator,
+			m.env1().Envelope,
+			m.osc2().Oscillator,
+			m.env2().Envelope,
+			m.mixer().Mixer,
 		)
 
 		synthStreamer := synth.Streamer(trackRow.Note, duration)
@@ -547,31 +524,29 @@ func (m model) View() tea.View {
 }
 
 func (m model) synthView() string {
-	oscillatorView1 := m.oscillator1.View()
-	envelopeView1 := m.envelope1.View()
+	// Pre-render child views to compute MaxHeight for the instrument panel
+	childViews := make([]string, len(m.synthPanels))
+	for i, p := range m.synthPanels {
+		if i != 5 {
+			childViews[i] = p.Child.View()
+		}
+	}
+	maxH := 0
+	for i, v := range childViews {
+		if i != 5 {
+			maxH = max(maxH, lipgloss.Height(v))
+		}
+	}
+	m.instr().MaxHeight = maxH
+	m.mixer().GlobalVolume = m.globalVolume
+	childViews[5] = m.instr().View()
 
-	oscillatorView2 := m.oscillator2.View()
-	envelopeView2 := m.envelope2.View()
-
-	m.instrument.MaxHeight = maxInt(
-		lipgloss.Height(oscillatorView1),
-		lipgloss.Height(envelopeView1),
-		lipgloss.Height(oscillatorView2),
-		lipgloss.Height(envelopeView2),
-		lipgloss.Height(m.mixer.View()),
-	)
-	instrumentView := m.instrument.View()
-
-	m.mixer.GlobalVolume = m.globalVolume
-
-	return lipgloss.JoinHorizontal(lipgloss.Top,
-		ui.RenderPanel("Oscillator 1", ui.ColorAccentOscillator, oscillatorView1, m.mode == Oscillator1EditMode),
-		ui.RenderPanel("Envelope 1", ui.ColorAccentEnvelope, envelopeView1, m.mode == Envelope1EditMode),
-		ui.RenderPanel("Oscillator 2", ui.ColorAccentOscillator, oscillatorView2, m.mode == Oscillator2EditMode),
-		ui.RenderPanel("Envelope 2", ui.ColorAccentEnvelope, envelopeView2, m.mode == Envelope2EditMode),
-		ui.RenderPanel("Mixer", ui.ColorAccentModulation, m.mixer.View(), m.mode == MixerEditMode),
-		ui.RenderPanel("Instruments", ui.ColorAccentInstrument, instrumentView, m.mode == InstrumentMode),
-	)
+	panelViews := make([]string, len(m.synthPanels))
+	for i, p := range m.synthPanels {
+		active := m.mode != TrackMode && i == int(m.mode)-1
+		panelViews[i] = ui.RenderPanel(p.Title, p.Color, childViews[i], active)
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, panelViews...)
 }
 
 func maxInt(values ...int) int {
@@ -599,14 +574,16 @@ func main() {
 
 	p := tea.NewProgram(
 		model{
-			sampleRate:   sampleRate,
-			oscillator1:  ui.NewOscillatorModel(selectedStyle, track.Oscillator1),
-			envelope1:    ui.NewEnvelopeModel(selectedStyle, track.Envelope1),
-			oscillator2:  ui.NewOscillatorModel(selectedStyle, track.Oscillator2),
-			envelope2:    ui.NewEnvelopeModel(selectedStyle, track.Envelope2),
-			mixer:        ui.NewMixer(track.Mixer.Balance),
+			sampleRate: sampleRate,
+			synthPanels: []ui.Panel{
+				ui.NewPanel("Oscillator 1", ui.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator1)),
+				ui.NewPanel("Envelope 1", ui.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope1)),
+				ui.NewPanel("Oscillator 2", ui.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator2)),
+				ui.NewPanel("Envelope 2", ui.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope2)),
+				ui.NewPanel("Mixer", ui.ColorAccentModulation, ui.NewMixer(track.Mixer.Balance)),
+				ui.NewPanel("Instruments", ui.ColorAccentInstrument, ui.NewInstrumentView(selectedStyle)),
+			},
 			tracker:      tracker,
-			instrument:   ui.NewInstrumentView(selectedStyle),
 			mode:         TrackMode,
 			octave:       4,
 			globalVolume: 1.0,

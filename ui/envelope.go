@@ -36,7 +36,11 @@ func NewEnvelopeModel(selectedStyle lipgloss.Style, envelope audio.Envelope) *En
 	}
 }
 
-func (m *EnvelopeModel) Update(msg tea.Msg) (*EnvelopeModel, tea.Cmd) {
+func (m *EnvelopeModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m *EnvelopeModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -108,7 +112,6 @@ func (m *EnvelopeModel) adjustEnvelopeValue(delta float64) {
 
 func (m *EnvelopeModel) View() string {
 	envView := strings.Builder{}
-	envView.WriteString("Envelope:\n")
 
 	envView.WriteString(RenderKnobSelected("Attack", m.Envelope.Attack, m.envelopeField == EnvelopeAttack, m.selectedStyle) + "\n")
 	envView.WriteString(RenderKnobSelected("Decay", m.Envelope.Decay, m.envelopeField == EnvelopeDecay, m.selectedStyle) + "\n")
