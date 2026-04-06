@@ -40,8 +40,6 @@ func (t *TrackerScreen) SetGlobalVolume(v float64) {
 	t.volumeBar.Value = v
 }
 
-func (t *TrackerScreen) Init() tea.Cmd { return nil }
-
 // Update handles tab navigation between tracker/volume panels and key events.
 func (t *TrackerScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -98,9 +96,6 @@ func (t *TrackerScreen) View() string {
 
 // Title returns the tab label for the TrackerScreen.
 func (t *TrackerScreen) Title() string { return "Tracker" }
-
-// ModeLabel returns the mode name shown in the persistent header.
-func (t *TrackerScreen) ModeLabel() string { return "TRACK" }
 
 // Footer returns the help text shown in the footer bar on the Tracker screen.
 func (t *TrackerScreen) Footer() string {

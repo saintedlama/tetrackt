@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -15,6 +16,8 @@ type editField int
 const (
 	oscillatorType editField = iota
 	oscillatorPhase
+	oscillatorPulseWidth
+	oscillatorFieldCount
 )
 
 type OscillatorModel struct {
@@ -54,6 +57,13 @@ func (m *OscillatorModel) View() string {
 	oscillatorView.WriteString("\n")
 	oscillatorView.WriteString(renderFieldSelected(common.RenderKnob("Phase", m.Oscillator.Phase), m.editField == oscillatorPhase, m.selectedStyle))
 
+	pw := m.Oscillator.PulseWidth
+	if pw == 0 {
+		pw = 0.5
+	}
+	oscillatorView.WriteString("\n")
+	oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("PW:   %3d%%", int(pw*100)), m.editField == oscillatorPulseWidth, m.selectedStyle))
+
 	return oscillatorView.String()
 }
 
@@ -64,10 +74,10 @@ func (m *OscillatorModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 		switch msg.String() {
 		case "up":
 			// Move to previous oscillator field
-			m.editField = (m.editField - 1 + 2) % 2
+			m.editField = (m.editField - 1 + oscillatorFieldCount) % oscillatorFieldCount
 		case "down":
 			// Move to next oscillator field
-			m.editField = (m.editField + 1) % 2
+			m.editField = (m.editField + 1) % oscillatorFieldCount
 		case "left":
 			switch m.editField {
 			case oscillatorType:
@@ -78,6 +88,12 @@ func (m *OscillatorModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 				if m.Oscillator.Phase < 0.0 {
 					m.Oscillator.Phase = 0.0
 				}
+			case oscillatorPulseWidth:
+				pw := m.Oscillator.PulseWidth
+				if pw == 0 {
+					pw = 0.5
+				}
+				m.Oscillator.PulseWidth = max(0.01, pw-0.05)
 			}
 			cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
 		case "right":
@@ -90,6 +106,12 @@ func (m *OscillatorModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 				if m.Oscillator.Phase > 1.0 {
 					m.Oscillator.Phase = 1.0
 				}
+			case oscillatorPulseWidth:
+				pw := m.Oscillator.PulseWidth
+				if pw == 0 {
+					pw = 0.5
+				}
+				m.Oscillator.PulseWidth = min(0.99, pw+0.05)
 			}
 			cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
 		}

@@ -22,6 +22,7 @@ type Synth struct {
 	envelope2   Envelope
 	mixer       Mixer
 	filter      Filter
+	LFOs        map[ModDest]*LFO // optional modulation sources; nil = no modulation
 }
 
 // NewSynth creates a new synthesis engine
@@ -40,38 +41,37 @@ func NewSynth(sampleRate beep.SampleRate, oscillator1 Oscillator, envelope1 Enve
 func (s *Synth) Streamer(note Note, d time.Duration) beep.Streamer {
 	frequency := note.Frequency()
 
-	oscillator1 := NewOscillator(s.oscillator1.Type, frequency, s.sampleRate, s.oscillator1.Phase)
-	oscillator2 := NewOscillator(s.oscillator2.Type, frequency, s.sampleRate, s.oscillator2.Phase)
+	osc1 := NewOscillator(s.oscillator1.Type, frequency, s.sampleRate, s.oscillator1.Phase, s.oscillator1.PulseWidth)
+	osc2 := NewOscillator(s.oscillator2.Type, frequency, s.sampleRate, s.oscillator2.Phase, s.oscillator2.PulseWidth)
 
 	sampleDuration := s.sampleRate.N(d)
+	sr := float64(s.sampleRate)
 
-	streamer1 := NewEnvelope(
-		oscillator1,
-		sampleDuration,
-		Envelope{
-			Attack:  s.envelope1.Attack,
-			Decay:   s.envelope1.Decay,
-			Sustain: s.envelope1.Sustain,
-			Release: s.envelope1.Release,
-		},
-	)
+	// Helper: create a fresh lfoGenerator for the given destination, or nil.
+	makeLFO := func(dest ModDest) *lfoGenerator {
+		if s.LFOs == nil {
+			return nil
+		}
+		if lfo := s.LFOs[dest]; lfo != nil {
+			return newLFOGenerator(*lfo, sr)
+		}
+		return nil
+	}
 
-	streamer2 := NewEnvelope(
-		oscillator2,
-		sampleDuration,
-		Envelope{
-			Attack:  s.envelope2.Attack,
-			Decay:   s.envelope2.Decay,
-			Sustain: s.envelope2.Sustain,
-			Release: s.envelope2.Release,
-		},
-	)
+	src1 := newModulatedOscillatorStreamer(osc1, frequency, osc1.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth))
+	src2 := newModulatedOscillatorStreamer(osc2, frequency, osc2.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth))
 
-	mix1 := &effects.Volume{Streamer: streamer1, Base: 2, Volume: math.Log2(s.mixer.Volume1), Silent: s.mixer.Volume1 == 0}
-	mix2 := &effects.Volume{Streamer: streamer2, Base: 2, Volume: math.Log2(s.mixer.Volume2), Silent: s.mixer.Volume2 == 0}
+	streamer1 := NewEnvelope(src1, sampleDuration, s.envelope1)
+	streamer2 := NewEnvelope(src2, sampleDuration, s.envelope2)
+
+	mod1 := newModulatedVolumeStreamer(streamer1, makeLFO(ModVolume))
+	mod2 := newModulatedVolumeStreamer(streamer2, makeLFO(ModVolume))
+
+	mix1 := &effects.Volume{Streamer: mod1, Base: 2, Volume: math.Log2(s.mixer.Volume1), Silent: s.mixer.Volume1 == 0}
+	mix2 := &effects.Volume{Streamer: mod2, Base: 2, Volume: math.Log2(s.mixer.Volume2), Silent: s.mixer.Volume2 == 0}
 
 	mixed := beep.Mix(mix1, mix2)
-	filtered := NewFilterStreamer(mixed, s.sampleRate, s.filter)
+	filtered := NewModulatedFilterStreamer(mixed, s.sampleRate, s.filter, makeLFO(ModCutoff))
 
 	return beep.Take(sampleDuration, filtered)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/tetrackt/tetrackt/audio"
 	"github.com/tetrackt/tetrackt/persistence"
 	"github.com/tetrackt/tetrackt/ui"
+	"github.com/tetrackt/tetrackt/ui/common"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -25,22 +26,22 @@ const (
 
 var (
 	helpStyle = lipgloss.NewStyle().
-			Foreground(ui.ColorTextDisabled).
+			Foreground(common.ColorTextDisabled).
 			Padding(1, 1)
 
 	selectedStyle = lipgloss.NewStyle().
-			Background(ui.ColorGrayDark).
-			Foreground(ui.ColorAccentPrimary)
+			Background(common.ColorGrayDark).
+			Foreground(common.ColorAccentPrimary)
 
 	tabActiveStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(ui.ColorBackground).
-			Background(ui.ColorAccentPrimary).
+			Foreground(common.ColorBackground).
+			Background(common.ColorAccentPrimary).
 			Padding(0, 2)
 
 	tabInactiveStyle = lipgloss.NewStyle().
-				Foreground(ui.ColorTextMuted).
-				Background(ui.ColorSurface).
+				Foreground(common.ColorTextMuted).
+				Background(common.ColorSurface).
 				Padding(0, 2)
 )
 
@@ -287,6 +288,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ui.FilterUpdated:
 		m.trackerModel().Tracks[m.trackerModel().CursorTrack].Filter = msg.Filter
 
+	case ui.LFOUpdated:
+		tracker := m.trackerModel()
+		track := &tracker.Tracks[tracker.CursorTrack]
+		switch m.synth().ActivePanel {
+		case 6: // LFO1
+			track.LFO1 = msg.LFO
+			track.LFO1Dest = msg.Dest
+		case 7: // LFO2
+			track.LFO2 = msg.LFO
+			track.LFO2Dest = msg.Dest
+		}
+
 	case ui.VolumeChanged:
 		m.globalVolume = msg.Volume
 
@@ -322,6 +335,25 @@ func (m *model) tick() tea.Cmd {
 	return tea.Tick(time.Millisecond*250, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
+}
+
+// buildSynthLFOs constructs a map of active LFOs from the current synth UI state.
+// LFOs with zero depth are excluded (no modulation effect).
+func (m *model) buildSynthLFOs() map[audio.ModDest]*audio.LFO {
+	lfo1Val, dest1, lfo2Val, dest2 := m.synth().GetActiveLFOs()
+	lfos := make(map[audio.ModDest]*audio.LFO)
+	if lfo1Val.Depth > 0 {
+		l := lfo1Val
+		lfos[dest1] = &l
+	}
+	if lfo2Val.Depth > 0 {
+		l := lfo2Val
+		lfos[dest2] = &l
+	}
+	if len(lfos) == 0 {
+		return nil
+	}
+	return lfos
 }
 
 // playNoteWithInstrument plays a note using the given instrument's parameters.
@@ -360,6 +392,7 @@ func (m *model) playNote(note audio.Note) {
 		envelope2,
 		mixer,
 		filter)
+	synth.LFOs = m.buildSynthLFOs()
 
 	synthStreamer := synth.Streamer(note, duration)
 	volumeAdjusted := &effects.Volume{
@@ -405,6 +438,7 @@ func (m *model) playRowNotes(row int) {
 			synth.GetMixer().Mixer,
 			track.Filter,
 		)
+		audioSynth.LFOs = m.buildSynthLFOs()
 
 		synthStreamer := audioSynth.Streamer(trackRow.Note, duration)
 		streamers = append(streamers, synthStreamer)
@@ -470,12 +504,14 @@ func main() {
 	track := tracker.CurrentTrack()
 
 	synthPanels := []ui.Panel{
-		ui.NewPanel("Oscillator 1", ui.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator1)),
-		ui.NewPanel("Envelope 1", ui.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope1)),
-		ui.NewPanel("Oscillator 2", ui.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator2)),
-		ui.NewPanel("Envelope 2", ui.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope2)),
-		ui.NewPanel("Mixer", ui.ColorAccentModulation, ui.NewMixer(track.Mixer.Volume1, track.Mixer.Volume2)),
-		ui.NewPanel("Filter", ui.ColorAccentPrimary, ui.NewFilterModel(selectedStyle, track.Filter)),
+		ui.NewPanel("Oscillator 1", common.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator1)),
+		ui.NewPanel("Envelope 1", common.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope1)),
+		ui.NewPanel("Oscillator 2", common.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator2)),
+		ui.NewPanel("Envelope 2", common.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope2)),
+		ui.NewPanel("Mixer", common.ColorAccentModulation, ui.NewMixer(track.Mixer.Volume1, track.Mixer.Volume2)),
+		ui.NewPanel("Filter", common.ColorAccentPrimary, ui.NewFilterModel(selectedStyle, track.Filter)),
+		ui.NewPanel("LFO 1", common.ColorAccentModulation, ui.NewLFOModel(selectedStyle, track.LFO1, track.LFO1Dest)),
+		ui.NewPanel("LFO 2", common.ColorAccentModulation, ui.NewLFOModel(selectedStyle, track.LFO2, track.LFO2Dest)),
 	}
 
 	p := tea.NewProgram(

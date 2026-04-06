@@ -22,8 +22,6 @@ func NewSynthScreen(panels []Panel) *SynthScreen {
 	}
 }
 
-func (s *SynthScreen) Init() tea.Cmd { return nil }
-
 // Update handles keyboard navigation between panels and forwards all other key
 // events to the active panel's Update method.
 func (s *SynthScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
@@ -55,6 +53,8 @@ func (s *SynthScreen) Osc2() *OscillatorModel  { return s.panels[2].Child.(*Osci
 func (s *SynthScreen) Env2() *EnvelopeModel    { return s.panels[3].Child.(*EnvelopeModel) }
 func (s *SynthScreen) GetMixer() *Mixer        { return s.panels[4].Child.(*Mixer) }
 func (s *SynthScreen) GetFilter() *FilterModel { return s.panels[5].Child.(*FilterModel) }
+func (s *SynthScreen) LFO1() *LFOModel         { return s.panels[6].Child.(*LFOModel) }
+func (s *SynthScreen) LFO2() *LFOModel         { return s.panels[7].Child.(*LFOModel) }
 
 // ApplyTrackChange updates all panels to reflect the settings of the newly
 // selected track.
@@ -66,21 +66,19 @@ func (s *SynthScreen) ApplyTrackChange(msg TrackChanged) {
 	s.GetMixer().SetMixer(msg.Mixer)
 	s.GetFilter().Filter = msg.Filter
 	s.GetFilter().SyncBars()
+	s.LFO1().LFO = msg.LFO1
+	s.LFO1().Dest = msg.LFO1Dest
+	s.LFO2().LFO = msg.LFO2
+	s.LFO2().Dest = msg.LFO2Dest
 }
 
 // Title returns the tab label for the SynthScreen.
 func (s *SynthScreen) Title() string { return "Synth" }
 
-// ModeLabel returns the name of the currently active panel for the header bar.
-func (s *SynthScreen) ModeLabel() string {
-	labels := []string{"OSCILLATOR1", "ENVELOPE1", "OSCILLATOR2", "ENVELOPE2", "MIXER", "FILTER"}
-	return labels[s.ActivePanel]
-}
-
-// View renders the synth panels in a 2x2 grid with mixer and filter stacked on the right.
+// View renders the synth panels in a 2x2 + right-column layout:
 //
-//	Row 1: Osc1  Env1  │ Mixer
-//	Row 2: Osc2  Env2  │ Filter
+//	Row 1: Osc1  Env1  │ Mixer  │ LFO1
+//	Row 2: Osc2  Env2  │ Filter │ LFO2
 func (s *SynthScreen) View() string {
 	render := func(idx int) string {
 		p := s.panels[idx]
@@ -91,9 +89,10 @@ func (s *SynthScreen) View() string {
 	row2 := lipgloss.JoinHorizontal(lipgloss.Top, render(2), render(3))
 	left := lipgloss.JoinVertical(lipgloss.Left, row1, row2)
 
-	right := lipgloss.JoinVertical(lipgloss.Left, render(4), render(5))
+	mid := lipgloss.JoinVertical(lipgloss.Left, render(4), render(5))
+	right := lipgloss.JoinVertical(lipgloss.Left, render(6), render(7))
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, mid, right)
 }
 
 // Footer returns the help text shown in the footer bar on the Synth screen.
@@ -104,4 +103,9 @@ func (s *SynthScreen) Footer() string {
 // GetActiveSynthParams returns the oscillator/envelope/mixer/filter settings for audio playback.
 func (s *SynthScreen) GetActiveSynthParams() (audio.Oscillator, audio.Envelope, audio.Oscillator, audio.Envelope, audio.Mixer, audio.Filter) {
 	return s.Osc1().Oscillator, s.Env1().Envelope, s.Osc2().Oscillator, s.Env2().Envelope, s.GetMixer().Mixer, s.GetFilter().Filter
+}
+
+// GetActiveLFOs returns the current LFO settings for both voices.
+func (s *SynthScreen) GetActiveLFOs() (audio.LFO, audio.ModDest, audio.LFO, audio.ModDest) {
+	return s.LFO1().LFO, s.LFO1().Dest, s.LFO2().LFO, s.LFO2().Dest
 }

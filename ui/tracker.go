@@ -6,8 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/tetrackt/tetrackt/ui/common"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/ui/common"
 )
 
 var (
@@ -65,6 +65,10 @@ type Track struct {
 	Envelope2   audio.Envelope
 	Mixer       audio.Mixer
 	Filter      audio.Filter
+	LFO1        audio.LFO
+	LFO1Dest    audio.ModDest
+	LFO2        audio.LFO
+	LFO2Dest    audio.ModDest
 	Rows        []TrackRow
 }
 
@@ -87,6 +91,10 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 			Envelope2:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
 			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 			Filter:      audio.NewFilter(),
+			LFO1:        audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0},
+			LFO1Dest:    audio.ModPitch,
+			LFO2:        audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0},
+			LFO2Dest:    audio.ModVolume,
 			Rows:        make([]TrackRow, numRows),
 		}
 		// Initialize all rows with empty data
@@ -181,6 +189,10 @@ type TrackChanged struct {
 	Envelope2   audio.Envelope
 	Mixer       audio.Mixer
 	Filter      audio.Filter
+	LFO1        audio.LFO
+	LFO1Dest    audio.ModDest
+	LFO2        audio.LFO
+	LFO2Dest    audio.ModDest
 }
 
 func (m *TrackerModel) Update(msg tea.Msg) (Component, tea.Cmd) {
@@ -208,6 +220,11 @@ func (m *TrackerModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 						Oscillator2: currentTrack.Oscillator2,
 						Envelope2:   currentTrack.Envelope2,
 						Mixer:       currentTrack.Mixer,
+						Filter:      currentTrack.Filter,
+						LFO1:        currentTrack.LFO1,
+						LFO1Dest:    currentTrack.LFO1Dest,
+						LFO2:        currentTrack.LFO2,
+						LFO2Dest:    currentTrack.LFO2Dest,
 					}
 				}
 			}
@@ -225,6 +242,11 @@ func (m *TrackerModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 						Oscillator2: currentTrack.Oscillator2,
 						Envelope2:   currentTrack.Envelope2,
 						Mixer:       currentTrack.Mixer,
+						Filter:      currentTrack.Filter,
+						LFO1:        currentTrack.LFO1,
+						LFO1Dest:    currentTrack.LFO1Dest,
+						LFO2:        currentTrack.LFO2,
+						LFO2Dest:    currentTrack.LFO2Dest,
 					}
 				}
 			}

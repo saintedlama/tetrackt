@@ -8,8 +8,9 @@ import (
 )
 
 type Oscillator struct {
-	Type  OscillatorType
-	Phase float64 // normalized initial phase [0..1)
+	Type       OscillatorType
+	Phase      float64 // normalized initial phase [0..1)
+	PulseWidth float64 // duty cycle [0.01..0.99]; only used by Square; 0 defaults to 0.5
 }
 
 // OscillatorType represents the type of oscillator waveform to generate
@@ -25,15 +26,19 @@ const (
 	Silent          OscillatorType = "silent"
 )
 
-// TODO: Confusing that NewOscillator returns a generator (streamer) and not the Oscillator type in this package
-// NewOscillator creates a beep.Streamer that generates the specified oscillator waveform
-// initialPhase is normalized [0..1) and independent of sample rate
-func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate, initialPhase float64) beep.Streamer {
+// NewOscillator creates an oscillatorGenerator for the specified waveform.
+// pulseWidth is used only by Square; a zero value defaults to 0.5 (50% duty).
+func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate, initialPhase float64, pulseWidth float64) *oscillatorGenerator {
+	pw := pulseWidth
+	if pw == 0 {
+		pw = 0.5
+	}
 	return &oscillatorGenerator{
 		oscillatorType: oscillatorType,
 		frequency:      frequency,
 		sampleRate:     sampleRate,
 		phase:          math.Mod(initialPhase, 1.0),
+		pulseWidth:     pw,
 	}
 }
 
@@ -43,6 +48,7 @@ type oscillatorGenerator struct {
 	frequency      float64
 	sampleRate     beep.SampleRate
 	phase          float64
+	pulseWidth     float64 // resolved duty cycle [0.01..0.99]
 }
 
 // Stream fills the samples buffer with oscillator waveform data
@@ -57,7 +63,7 @@ func (g *oscillatorGenerator) Stream(samples [][2]float64) (n int, ok bool) {
 			sample = math.Sin(2 * math.Pi * g.phase)
 
 		case Square:
-			if g.phase < 0.5 {
+			if g.phase < g.pulseWidth {
 				sample = 1.0
 			} else {
 				sample = -1.0
