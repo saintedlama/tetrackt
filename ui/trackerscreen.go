@@ -82,6 +82,10 @@ func (t *TrackerScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		}
 		_, cmd := t.Tracker.Update(msg)
 		return t, cmd
+
+	case SynthUpdated:
+		t.Tracker.Tracks[t.Tracker.CursorTrack].Synth = msg.Synth
+		return t, nil
 	}
 	return t, nil
 }

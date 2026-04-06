@@ -9,8 +9,6 @@ import (
 
 const srLFO beep.SampleRate = 44100
 
-// ── lfoWaveformSample ────────────────────────────────────────────────────────
-
 func TestLFOWaveformSine(t *testing.T) {
 	t.Helper()
 	if got := lfoWaveformSample(LFOSine, 0); math.Abs(got) > 1e-9 {
@@ -65,8 +63,6 @@ func TestLFOWaveformUnknownReturnsZero(t *testing.T) {
 		t.Fatalf("want 0, got %v", got)
 	}
 }
-
-// ── lfoGenerator ────────────────────────────────────────────────────────────
 
 func TestLFODelayHoldsZero(t *testing.T) {
 	lfo := LFO{Waveform: LFOSine, Rate: 1.0, Depth: 1.0, Delay: 1.0}
@@ -123,8 +119,6 @@ func TestLFOPhaseWraps(t *testing.T) {
 	}
 }
 
-// ── modulatedOscillatorStreamer ──────────────────────────────────────────────
-
 func TestModulatedOscillatorNilLFOsReturnOscDirect(t *testing.T) {
 	osc := NewOscillator(Square, 440, srLFO, 0, 0.5)
 	got := newModulatedOscillatorStreamer(osc, 440, 0.5, nil, nil)
@@ -159,8 +153,6 @@ func TestModulatedOscillatorPWMLFOClampsDuty(t *testing.T) {
 		t.Fatalf("pulse width %v out of clamped range [0.05, 0.95]", osc.pulseWidth)
 	}
 }
-
-// ── modulatedVolumeStreamer ──────────────────────────────────────────────────
 
 func TestModulatedVolumeNilLFOReturnsDirect(t *testing.T) {
 	osc2 := NewOscillator(Silent, 440, srLFO, 0, 0)
@@ -220,8 +212,6 @@ func TestModulatedVolumeGainFloorIsZero(t *testing.T) {
 		}
 	}
 }
-
-// ── modulatedFilterStreamer ──────────────────────────────────────────────────
 
 func TestModulatedFilterOffReturnsSource(t *testing.T) {
 	osc := NewOscillator(Sine, 440, srLFO, 0, 0)

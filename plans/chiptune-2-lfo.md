@@ -1,6 +1,6 @@
 # Chiptune-2: LFO (Low Frequency Oscillator)
 
-**Status:** Planned
+**Status:** Done
 
 **Priority:** High
 

@@ -4,7 +4,15 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/ui/common"
 )
+
+// SynthUpdated is emitted when any parameter of the current track's synth changes.
+// It is subscribed to by SynthScreen (to sync panels on preset load) and
+// TrackerScreen (to keep track.Synth in sync).
+type SynthUpdated struct {
+	Synth *audio.Synth
+}
 
 // SynthScreen is the synthesizer editor screen containing the five synth panels.
 // It owns panel navigation state (which panel is active) that was previously
@@ -14,8 +22,19 @@ type SynthScreen struct {
 	ActivePanel int // 0=Osc1, 1=Env1, 2=Osc2, 3=Env2, 4=Mixer
 }
 
-// NewSynthScreen creates a new SynthScreen wrapping the given panels.
-func NewSynthScreen(panels []Panel) *SynthScreen {
+// NewSynthScreen creates a new SynthScreen for the given synth instance.
+// Panels are constructed internally from the synth's initial state.
+func NewSynthScreen(synth *audio.Synth) *SynthScreen {
+	panels := []Panel{
+		NewPanel("Oscillator 1", common.ColorAccentPrimary, NewOscillatorModel(synth.Oscillator1)),
+		NewPanel("Envelope 1", common.ColorAccentPrimary, NewEnvelopeModel(synth.Envelope1)),
+		NewPanel("LFO 1", common.ColorAccentPrimary, NewLFOModel(synth.LFO1)),
+		NewPanel("Oscillator 2", common.ColorAccentEnvelope, NewOscillatorModel(synth.Oscillator2)),
+		NewPanel("Envelope 2", common.ColorAccentEnvelope, NewEnvelopeModel(synth.Envelope2)),
+		NewPanel("LFO 2", common.ColorAccentEnvelope, NewLFOModel(synth.LFO2)),
+		NewPanel("Mixer", common.ColorAccentModulation, NewMixer(synth.Mixer.Volume1, synth.Mixer.Volume2)),
+		NewPanel("Filter", common.ColorAccentModulation, NewFilterModel(synth.Filter)),
+	}
 	return &SynthScreen{
 		panels:      panels,
 		ActivePanel: 0,
@@ -36,13 +55,34 @@ func (s *SynthScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 			return s, nil
 		}
 
-		// Forward to active panel
+		// Forward to active panel; convert any component update into SynthUpdated.
 		var cmd tea.Cmd
 		s.panels[s.ActivePanel], cmd = s.panels[s.ActivePanel].Update(msg)
-		return s, cmd
+		return s, s.toSynthUpdated(cmd)
+
+	case SynthUpdated:
+		s.ApplyTrackChange(TrackChanged{Synth: msg.Synth})
+		return s, nil
 	}
 
 	return s, nil
+}
+
+// toSynthUpdated wraps a panel command, converting any synth component update
+// message (OscillatorUpdated, EnvelopeUpdated, etc.) into a SynthUpdated that
+// carries the full current synth state.
+func (s *SynthScreen) toSynthUpdated(cmd tea.Cmd) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		inner := cmd()
+		switch inner.(type) {
+		case OscillatorUpdated, EnvelopeUpdated, MixerUpdated, FilterUpdated, LFOUpdated:
+			return SynthUpdated{Synth: s.GetSynth()}
+		}
+		return inner
+	}
 }
 
 // Accessors for synth component children, used by main for audio playback and
@@ -60,17 +100,16 @@ func (s *SynthScreen) GetFilter() *FilterModel { return s.panels[7].Child.(*Filt
 // ApplyTrackChange updates all panels to reflect the settings of the newly
 // selected track.
 func (s *SynthScreen) ApplyTrackChange(msg TrackChanged) {
-	s.Osc1().Oscillator = msg.Oscillator1
-	s.Env1().Envelope = msg.Envelope1
-	s.Osc2().Oscillator = msg.Oscillator2
-	s.Env2().Envelope = msg.Envelope2
-	s.GetMixer().SetMixer(msg.Mixer)
-	s.GetFilter().Filter = msg.Filter
+	synth := msg.Synth
+	s.Osc1().Oscillator = synth.Oscillator1
+	s.Env1().Envelope = synth.Envelope1
+	s.Osc2().Oscillator = synth.Oscillator2
+	s.Env2().Envelope = synth.Envelope2
+	s.GetMixer().SetMixer(synth.Mixer)
+	s.GetFilter().Filter = synth.Filter
 	s.GetFilter().SyncBars()
-	s.LFO1().LFO = msg.LFO1
-	s.LFO1().Dest = msg.LFO1Dest
-	s.LFO2().LFO = msg.LFO2
-	s.LFO2().Dest = msg.LFO2Dest
+	s.LFO1().LFO = synth.LFO1
+	s.LFO2().LFO = synth.LFO2
 }
 
 // Title returns the tab label for the SynthScreen.
@@ -100,12 +139,7 @@ func (s *SynthScreen) Footer() string {
 	return "Tab/Shift+Tab: Switch panel | ↑↓: Select | ←→: Adjust | +/-: Octave | I: Instruments | p: Play/Pause | P: Loop | S: Save | L: Load | T: Tracker | Q: Quit"
 }
 
-// GetActiveSynthParams returns the oscillator/envelope/mixer/filter settings for audio playback.
-func (s *SynthScreen) GetActiveSynthParams() (audio.Oscillator, audio.Envelope, audio.Oscillator, audio.Envelope, audio.Mixer, audio.Filter) {
-	return s.Osc1().Oscillator, s.Env1().Envelope, s.Osc2().Oscillator, s.Env2().Envelope, s.GetMixer().Mixer, s.GetFilter().Filter
-}
-
-// GetActiveLFOs returns the current LFO settings for both voices.
-func (s *SynthScreen) GetActiveLFOs() (audio.LFO, audio.ModDest, audio.LFO, audio.ModDest) {
-	return s.LFO1().LFO, s.LFO1().Dest, s.LFO2().LFO, s.LFO2().Dest
+// GetSynth builds and returns an audio.Synth from the current panel state.
+func (s *SynthScreen) GetSynth() *audio.Synth {
+	return audio.NewSynth(s.Osc1().Oscillator, s.Env1().Envelope, s.Osc2().Oscillator, s.Env2().Envelope, s.GetMixer().Mixer, s.GetFilter().Filter, s.LFO1().LFO, s.LFO2().LFO)
 }

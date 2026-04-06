@@ -21,9 +21,9 @@ var NoteKeys = map[string]audio.Base{
 	"7":  "B",
 }
 
-// PlayInstrumentNoteMsg requests that a note be played using a specific
-// instrument's parameters rather than the current track's synth settings.
-type PlayInstrumentNoteMsg struct {
-	Note       audio.Note
-	Instrument Instrument
+// PlaySynthPresetNoteMsg requests that a note be played using a specific
+// synth preset's parameters rather than the current track's synth settings.
+type PlaySynthPresetNoteMsg struct {
+	Note   audio.Note
+	Preset SynthPreset
 }

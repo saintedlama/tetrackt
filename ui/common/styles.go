@@ -3,6 +3,27 @@ package common
 import "charm.land/lipgloss/v2"
 
 var (
+	StyleSelected = lipgloss.NewStyle().
+			Background(ColorGrayDark).
+			Foreground(ColorAccentPrimary)
+
+	StyleHelp = lipgloss.NewStyle().
+			Foreground(ColorTextDisabled).
+			Padding(1, 1)
+
+	StyleTabActive = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(ColorBackground).
+			Background(ColorAccentPrimary).
+			Padding(0, 2)
+
+	StyleTabInactive = lipgloss.NewStyle().
+				Foreground(ColorTextMuted).
+				Background(ColorSurface).
+				Padding(0, 2)
+)
+
+var (
 	ColorGrayDarkest = lipgloss.Color("#1c1c1e") // Main application background
 	ColorGrayDark    = lipgloss.Color("#242428") // Panel / section backgrounds
 	ColorGrayMedium  = lipgloss.Color("#3c3c3c") // Knob bodies, inactive separators
@@ -22,18 +43,18 @@ var (
 )
 
 var (
-	ColorBackground       = ColorGrayDarkest // Root terminal background
-	ColorSurface          = ColorGrayDark    // Panel / bordered section background
-	ColorBorder           = ColorGrayMedium  // Inactive panel border
-	ColorBorderActive     = ColorCyan        // Active / focused panel border
-	ColorText             = ColorGrayLighter // Default readable text
-	ColorTextMuted        = ColorGrayLight   // Labels, secondary info
-	ColorTextDisabled     = ColorGray        // Disabled / empty cells
-	ColorAccentPrimary    = ColorCyan        // Selected rows, cursor cells, active modes
-	ColorAccentEnvelope   = ColorOrange      // Envelope editor highlights
-	ColorAccentOscillator = ColorCyan        // Oscillator waveform type indicator
-	ColorAccentModulation = ColorPurple      // Modulation / LFO indicators
-	ColorAccentPlay       = ColorGreen       // Playback row highlight
-	ColorAccentInstrument = ColorPink        // Instrument / preset selection highlight
-	ColorAccentWarning    = ColorYellow      // Errors, warnings, unsaved-changes indicator
+	ColorBackground        = ColorGrayDarkest // Root terminal background
+	ColorSurface           = ColorGrayDark    // Panel / bordered section background
+	ColorBorder            = ColorGrayMedium  // Inactive panel border
+	ColorBorderActive      = ColorCyan        // Active / focused panel border
+	ColorText              = ColorGrayLighter // Default readable text
+	ColorTextMuted         = ColorGrayLight   // Labels, secondary info
+	ColorTextDisabled      = ColorGray        // Disabled / empty cells
+	ColorAccentPrimary     = ColorCyan        // Selected rows, cursor cells, active modes
+	ColorAccentEnvelope    = ColorOrange      // Envelope editor highlights
+	ColorAccentOscillator  = ColorCyan        // Oscillator waveform type indicator
+	ColorAccentModulation  = ColorPurple      // Modulation / LFO indicators
+	ColorAccentPlay        = ColorGreen       // Playback row highlight
+	ColorAccentSynthPreset = ColorPink        // Synth preset selection highlight
+	ColorAccentWarning     = ColorYellow      // Errors, warnings, unsaved-changes indicator
 )

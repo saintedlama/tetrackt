@@ -13,10 +13,10 @@ func TestSaveAndLoad(t *testing.T) {
 	tracker := ui.NewTracker(4, 16, 0, 0)
 
 	// Add some test data
-	tracker.Tracks[0].Oscillator1 = audio.Oscillator{Type: audio.Sine}
-	tracker.Tracks[0].Oscillator2 = audio.Oscillator{Type: audio.Square}
-	tracker.Tracks[0].Mixer = audio.Mixer{Volume1: 0.75, Volume2: 0.5}
-	tracker.Tracks[0].Envelope1 = audio.Envelope{
+	tracker.Tracks[0].Synth.Oscillator1 = audio.Oscillator{Type: audio.Sine}
+	tracker.Tracks[0].Synth.Oscillator2 = audio.Oscillator{Type: audio.Square}
+	tracker.Tracks[0].Synth.Mixer = audio.Mixer{Volume1: 0.75, Volume2: 0.5}
+	tracker.Tracks[0].Synth.Envelope1 = audio.Envelope{
 		Attack:  0.1,
 		Decay:   0.2,
 		Sustain: 0.5,
@@ -25,12 +25,10 @@ func TestSaveAndLoad(t *testing.T) {
 	tracker.Tracks[0].Rows[0] = ui.TrackRow{
 		Note:   audio.NewNote("C", 4),
 		Volume: 64,
-		Effect: "---",
 	}
 	tracker.Tracks[0].Rows[1] = ui.TrackRow{
 		Note:   audio.NewNote("E", 4),
 		Volume: 80,
-		Effect: "---",
 	}
 
 	// Save to a temporary file
@@ -62,14 +60,14 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 
 	// Verify track data
-	if newTracker.Tracks[0].Oscillator1 != (audio.Oscillator{Type: audio.Sine}) {
-		t.Errorf("Expected Oscillator1=Sine, got %v", newTracker.Tracks[0].Oscillator1)
+	if newTracker.Tracks[0].Synth.Oscillator1 != (audio.Oscillator{Type: audio.Sine}) {
+		t.Errorf("Expected Oscillator1=Sine, got %v", newTracker.Tracks[0].Synth.Oscillator1)
 	}
-	if newTracker.Tracks[0].Oscillator2 != (audio.Oscillator{Type: audio.Square}) {
-		t.Errorf("Expected Oscillator2=Square, got %v", newTracker.Tracks[0].Oscillator2)
+	if newTracker.Tracks[0].Synth.Oscillator2 != (audio.Oscillator{Type: audio.Square}) {
+		t.Errorf("Expected Oscillator2=Square, got %v", newTracker.Tracks[0].Synth.Oscillator2)
 	}
-	if newTracker.Tracks[0].Mixer != (audio.Mixer{Volume1: 0.75, Volume2: 0.5}) {
-		t.Errorf("Expected Mixer={0.75, 0.5}, got %+v", newTracker.Tracks[0].Mixer)
+	if newTracker.Tracks[0].Synth.Mixer != (audio.Mixer{Volume1: 0.75, Volume2: 0.5}) {
+		t.Errorf("Expected Mixer={0.75, 0.5}, got %+v", newTracker.Tracks[0].Synth.Mixer)
 	}
 
 	// Verify row data
@@ -87,7 +85,7 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 
 	// Verify envelope data
-	if newTracker.Tracks[0].Envelope1.Attack != 0.1 {
-		t.Errorf("Expected Attack=0.1, got %f", newTracker.Tracks[0].Envelope1.Attack)
+	if newTracker.Tracks[0].Synth.Envelope1.Attack != 0.1 {
+		t.Errorf("Expected Attack=0.1, got %f", newTracker.Tracks[0].Synth.Envelope1.Attack)
 	}
 }

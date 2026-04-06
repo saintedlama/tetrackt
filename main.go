@@ -24,27 +24,6 @@ const (
 	synthScreenIdx   = 1
 )
 
-var (
-	helpStyle = lipgloss.NewStyle().
-			Foreground(common.ColorTextDisabled).
-			Padding(1, 1)
-
-	selectedStyle = lipgloss.NewStyle().
-			Background(common.ColorGrayDark).
-			Foreground(common.ColorAccentPrimary)
-
-	tabActiveStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(common.ColorBackground).
-			Background(common.ColorAccentPrimary).
-			Padding(0, 2)
-
-	tabInactiveStyle = lipgloss.NewStyle().
-				Foreground(common.ColorTextMuted).
-				Background(common.ColorSurface).
-				Padding(0, 2)
-)
-
 const (
 	minOctave = 1
 	maxOctave = 8
@@ -58,7 +37,7 @@ type model struct {
 	screens      []ui.Screen
 	activeScreen int
 
-	instrumentView *ui.InstrumentView // persistent across dialog opens
+	synthPresetView *ui.SynthPresetView // persistent across dialog opens
 
 	octave       int
 	globalVolume float64
@@ -70,11 +49,6 @@ type model struct {
 // synth returns the SynthScreen (always screens[synthScreenIdx]).
 func (m model) synth() *ui.SynthScreen {
 	return m.screens[synthScreenIdx].(*ui.SynthScreen)
-}
-
-// tracker returns the TrackerScreen (always screens[trackerScreenIdx]).
-func (m model) tracker() *ui.TrackerScreen {
-	return m.screens[trackerScreenIdx].(*ui.TrackerScreen)
 }
 
 // trackerModel returns the TrackerModel owned by the TrackerScreen.
@@ -114,7 +88,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open load dialog
 			return ui.NewDialogModel(ui.NewFileDialog(ui.ModeLoad, ""), m, m.width, m.height), nil
 		case "i":
-			return ui.NewDialogModel(ui.NewInstrumentDialog(m.instrumentView, m.octave), m, m.width, m.height), nil
+			return ui.NewDialogModel(ui.NewSynthPresetsDialog(m.synthPresetView, m.octave), m, m.width, m.height), nil
 		case "t":
 			m.activeScreen = (m.activeScreen + 1) % len(m.screens)
 			return m, nil
@@ -251,80 +225,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case ui.OpenPresetDialogMsg:
-		return ui.NewDialogModel(ui.NewEnvelopePresetDialog(), m, m.width, m.height), nil
-
-	case ui.EnvelopePresetSelected:
-		tracker := m.trackerModel()
-		switch m.synth().ActivePanel {
-		case 1: // Env1
-			m.synth().Env1().Envelope = msg.Envelope
-			tracker.Tracks[tracker.CursorTrack].Envelope1 = msg.Envelope
-		case 4: // Env2
-			m.synth().Env2().Envelope = msg.Envelope
-			tracker.Tracks[tracker.CursorTrack].Envelope2 = msg.Envelope
-		}
-		return m, nil
-
-	case ui.OscillatorUpdated:
-		tracker := m.trackerModel()
-		switch m.synth().ActivePanel {
-		case 0: // Osc1
-			tracker.Tracks[tracker.CursorTrack].Oscillator1 = msg.Oscillator
-		case 3: // Osc2
-			tracker.Tracks[tracker.CursorTrack].Oscillator2 = msg.Oscillator
-		}
-	case ui.EnvelopeUpdated:
-		tracker := m.trackerModel()
-		switch m.synth().ActivePanel {
-		case 1: // Env1
-			tracker.Tracks[tracker.CursorTrack].Envelope1 = msg.Envelope
-		case 4: // Env2
-			tracker.Tracks[tracker.CursorTrack].Envelope2 = msg.Envelope
-		}
-	case ui.MixerUpdated:
-		m.trackerModel().Tracks[m.trackerModel().CursorTrack].Mixer = msg.Mixer
-
-	case ui.FilterUpdated:
-		m.trackerModel().Tracks[m.trackerModel().CursorTrack].Filter = msg.Filter
-
-	case ui.LFOUpdated:
-		tracker := m.trackerModel()
-		track := &tracker.Tracks[tracker.CursorTrack]
-		switch m.synth().ActivePanel {
-		case 2: // LFO1
-			track.LFO1 = msg.LFO
-			track.LFO1Dest = msg.Dest
-		case 5: // LFO2
-			track.LFO2 = msg.LFO
-			track.LFO2Dest = msg.Dest
-		}
-
 	case ui.VolumeChanged:
 		m.globalVolume = msg.Volume
 
-	case ui.PlayInstrumentNoteMsg:
-		m.playNoteWithInstrument(msg.Note, msg.Instrument)
+	case ui.PlaySynthPresetNoteMsg:
+		m.playNoteWithSynthPreset(msg.Note, msg.Preset)
 		return m, nil
 
-	case ui.InstrumentApplied:
-		synth := m.synth()
-		synth.Osc1().Oscillator = msg.Instrument.Oscillator1
-		synth.Env1().Envelope = msg.Instrument.Envelope1
-		synth.Osc2().Oscillator = msg.Instrument.Oscillator2
-		synth.Env2().Envelope = msg.Instrument.Envelope2
-		synth.GetMixer().SetMixer(msg.Instrument.Mixer)
-		synth.GetFilter().Filter = msg.Instrument.Filter
-		synth.GetFilter().SyncBars()
-
-		tracker := m.trackerModel()
-		track := &tracker.Tracks[tracker.CursorTrack]
-		track.Oscillator1 = msg.Instrument.Oscillator1
-		track.Envelope1 = msg.Instrument.Envelope1
-		track.Oscillator2 = msg.Instrument.Oscillator2
-		track.Envelope2 = msg.Instrument.Envelope2
-		track.Mixer = msg.Instrument.Mixer
-		track.Filter = msg.Instrument.Filter
+	case ui.SynthUpdated:
+		var cmd1, cmd2 tea.Cmd
+		m.screens[synthScreenIdx], cmd1 = m.screens[synthScreenIdx].Update(msg)
+		m.screens[trackerScreenIdx], cmd2 = m.screens[trackerScreenIdx].Update(msg)
+		return m, tea.Batch(cmd1, cmd2)
 	}
 
 	return m, nil
@@ -337,39 +249,11 @@ func (m *model) tick() tea.Cmd {
 	})
 }
 
-// buildSynthLFOs constructs a map of active LFOs from the current synth UI state.
-// LFOs with zero depth are excluded (no modulation effect).
-func (m *model) buildSynthLFOs() map[audio.ModDest]*audio.LFO {
-	lfo1Val, dest1, lfo2Val, dest2 := m.synth().GetActiveLFOs()
-	lfos := make(map[audio.ModDest]*audio.LFO)
-	if lfo1Val.Depth > 0 {
-		l := lfo1Val
-		lfos[dest1] = &l
-	}
-	if lfo2Val.Depth > 0 {
-		l := lfo2Val
-		lfos[dest2] = &l
-	}
-	if len(lfos) == 0 {
-		return nil
-	}
-	return lfos
-}
-
-// playNoteWithInstrument plays a note using the given instrument's parameters.
-func (m *model) playNoteWithInstrument(note audio.Note, instr ui.Instrument) {
+// playNoteWithSynthPreset plays a note using the given synth preset's parameters.
+func (m *model) playNoteWithSynthPreset(note audio.Note, preset ui.SynthPreset) {
 	duration := time.Millisecond * 250
-	synth := audio.NewSynth(
-		m.sampleRate,
-		instr.Oscillator1,
-		instr.Envelope1,
-		instr.Oscillator2,
-		instr.Envelope2,
-		instr.Mixer,
-		instr.Filter,
-	)
 	volumeAdjusted := &effects.Volume{
-		Streamer: synth.Streamer(note, duration),
+		Streamer: preset.Synth.Streamer(m.sampleRate, note, duration),
 		Base:     2,
 		Volume:   volumeToDecibels(m.globalVolume),
 		Silent:   m.globalVolume == 0,
@@ -382,19 +266,9 @@ func (m *model) playNote(note audio.Note) {
 	// TODO: duration should be adjustable
 	duration := time.Millisecond * 250
 
-	oscillator1, envelope1, oscillator2, envelope2, mixer, filter := m.synth().GetActiveSynthParams()
+	synth := m.synth().GetSynth()
 
-	synth := audio.NewSynth(
-		m.sampleRate,
-		oscillator1,
-		envelope1,
-		oscillator2,
-		envelope2,
-		mixer,
-		filter)
-	synth.LFOs = m.buildSynthLFOs()
-
-	synthStreamer := synth.Streamer(note, duration)
+	synthStreamer := synth.Streamer(m.sampleRate, note, duration)
 	volumeAdjusted := &effects.Volume{
 		Streamer: synthStreamer,
 		Base:     2,
@@ -417,8 +291,6 @@ func (m *model) playRowNotes(row int) {
 	duration := time.Millisecond * 250
 	var streamers []beep.Streamer
 
-	synth := m.synth()
-
 	// Collect all note generators for this row
 	for trackIdx := 0; trackIdx < tracker.NumTracks; trackIdx++ {
 		track := tracker.Tracks[trackIdx]
@@ -429,18 +301,7 @@ func (m *model) playRowNotes(row int) {
 			continue
 		}
 
-		audioSynth := audio.NewSynth(
-			m.sampleRate,
-			synth.Osc1().Oscillator,
-			synth.Env1().Envelope,
-			synth.Osc2().Oscillator,
-			synth.Env2().Envelope,
-			synth.GetMixer().Mixer,
-			track.Filter,
-		)
-		audioSynth.LFOs = m.buildSynthLFOs()
-
-		synthStreamer := audioSynth.Streamer(trackRow.Note, duration)
+		synthStreamer := track.Synth.Streamer(m.sampleRate, trackRow.Note, duration)
 		streamers = append(streamers, synthStreamer)
 	}
 
@@ -473,9 +334,9 @@ func (m model) View() tea.View {
 	tabs := make([]string, len(m.screens))
 	for i, s := range m.screens {
 		if i == m.activeScreen {
-			tabs[i] = tabActiveStyle.Render(s.Title())
+			tabs[i] = common.StyleTabActive.Render(s.Title())
 		} else {
-			tabs[i] = tabInactiveStyle.Render(s.Title())
+			tabs[i] = common.StyleTabInactive.Render(s.Title())
 		}
 	}
 	tabBar := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
@@ -488,7 +349,7 @@ func (m model) View() tea.View {
 	header := tabBar + strings.Repeat(" ", spacerWidth) + logoStr + "\n\n"
 
 	body := m.screens[m.activeScreen].View()
-	footer := helpStyle.Render(m.screens[m.activeScreen].Footer())
+	footer := common.StyleHelp.Render(m.screens[m.activeScreen].Footer())
 
 	v := tea.NewView(header + body + "\n" + footer)
 	v.AltScreen = true
@@ -503,28 +364,17 @@ func main() {
 	tracker := ui.NewTracker(8, 64, 0, 0)
 	track := tracker.CurrentTrack()
 
-	synthPanels := []ui.Panel{
-		ui.NewPanel("Oscillator 1", common.ColorAccentPrimary, ui.NewOscillatorModel(selectedStyle, track.Oscillator1)),
-		ui.NewPanel("Envelope 1", common.ColorAccentPrimary, ui.NewEnvelopeModel(selectedStyle, track.Envelope1)),
-		ui.NewPanel("LFO 1", common.ColorAccentPrimary, ui.NewLFOModel(selectedStyle, track.LFO1, track.LFO1Dest)),
-		ui.NewPanel("Oscillator 2", common.ColorAccentEnvelope, ui.NewOscillatorModel(selectedStyle, track.Oscillator2)),
-		ui.NewPanel("Envelope 2", common.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope2)),
-		ui.NewPanel("LFO 2", common.ColorAccentEnvelope, ui.NewLFOModel(selectedStyle, track.LFO2, track.LFO2Dest)),
-		ui.NewPanel("Mixer", common.ColorAccentModulation, ui.NewMixer(track.Mixer.Volume1, track.Mixer.Volume2)),
-		ui.NewPanel("Filter", common.ColorAccentModulation, ui.NewFilterModel(selectedStyle, track.Filter)),
-	}
-
 	p := tea.NewProgram(
 		model{
 			sampleRate: sampleRate,
 			screens: []ui.Screen{
 				ui.NewTrackerScreen(tracker),
-				ui.NewSynthScreen(synthPanels),
+				ui.NewSynthScreen(track.Synth),
 			},
-			activeScreen:   trackerScreenIdx,
-			instrumentView: ui.NewInstrumentView(selectedStyle),
-			octave:         4,
-			globalVolume:   1.0,
+			activeScreen:    trackerScreenIdx,
+			synthPresetView: ui.NewSynthPresetView(),
+			octave:          4,
+			globalVolume:    1.0,
 		},
 	)
 

@@ -23,7 +23,6 @@ const (
 type OscillatorModel struct {
 	Oscillator          audio.Oscillator
 	oscillatorList      []audio.OscillatorType
-	selectedStyle       lipgloss.Style
 	oscillatorTypeStyle lipgloss.Style
 	editField           editField // 0 = type, 1 = phase
 }
@@ -32,7 +31,7 @@ type OscillatorUpdated struct {
 	Oscillator audio.Oscillator
 }
 
-func NewOscillatorModel(selectedStyle lipgloss.Style, oscillator audio.Oscillator) *OscillatorModel {
+func NewOscillatorModel(oscillator audio.Oscillator) *OscillatorModel {
 	oscillatorList := []audio.OscillatorType{audio.Sine, audio.Square, audio.Triangle, audio.Sawtooth, audio.SawtoothReverse, audio.Noise, audio.Silent}
 
 	oscillatorTypeStyle := lipgloss.NewStyle().Width(calcOscWidth(oscillatorList))
@@ -40,7 +39,6 @@ func NewOscillatorModel(selectedStyle lipgloss.Style, oscillator audio.Oscillato
 	return &OscillatorModel{
 		Oscillator:          oscillator,
 		oscillatorList:      oscillatorList,
-		selectedStyle:       selectedStyle,
 		oscillatorTypeStyle: oscillatorTypeStyle,
 	}
 }
@@ -51,18 +49,18 @@ func (m *OscillatorModel) Init() tea.Cmd {
 
 func (m *OscillatorModel) View() string {
 	var oscillatorView strings.Builder
-	oscType := renderFieldSelected(string(m.Oscillator.Type), m.editField == oscillatorType, m.selectedStyle)
+	oscType := renderFieldSelected(string(m.Oscillator.Type), m.editField == oscillatorType)
 	oscillatorView.WriteString(m.oscillatorTypeStyle.Render(oscType))
 
 	oscillatorView.WriteString("\n")
-	oscillatorView.WriteString(renderFieldSelected(common.RenderKnob("Phase", m.Oscillator.Phase), m.editField == oscillatorPhase, m.selectedStyle))
+	oscillatorView.WriteString(renderFieldSelected(common.RenderKnob("Phase", m.Oscillator.Phase), m.editField == oscillatorPhase))
 
 	pw := m.Oscillator.PulseWidth
 	if pw == 0 {
 		pw = 0.5
 	}
 	oscillatorView.WriteString("\n")
-	oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("PW:   %3d%%", int(pw*100)), m.editField == oscillatorPulseWidth, m.selectedStyle))
+	oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("PW:   %3d%%", int(pw*100)), m.editField == oscillatorPulseWidth))
 
 	return oscillatorView.String()
 }
@@ -120,9 +118,9 @@ func (m *OscillatorModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 	return m, cmd
 }
 
-func renderFieldSelected(content string, selected bool, style lipgloss.Style) string {
+func renderFieldSelected(content string, selected bool) string {
 	if selected {
-		return style.Render(content)
+		return common.StyleSelected.Render(content)
 	}
 
 	return content

@@ -58,25 +58,15 @@ type TrackerModel struct {
 
 // Track represents a single track in the pattern
 type Track struct {
-	number      int
-	Oscillator1 audio.Oscillator
-	Envelope1   audio.Envelope
-	Oscillator2 audio.Oscillator
-	Envelope2   audio.Envelope
-	Mixer       audio.Mixer
-	Filter      audio.Filter
-	LFO1        audio.LFO
-	LFO1Dest    audio.ModDest
-	LFO2        audio.LFO
-	LFO2Dest    audio.ModDest
-	Rows        []TrackRow
+	number int
+	Synth  *audio.Synth
+	Rows   []TrackRow
 }
 
 // TrackRow represents a single row in a track
 type TrackRow struct {
 	Note   audio.Note
-	Volume int    // 0-64
-	Effect string // effect command
+	Volume int // 0-64
 }
 
 // NewPattern creates a new pattern with the specified number of tracks and rows
@@ -84,25 +74,24 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 	tracks := make([]Track, numTracks)
 	for i := range numTracks {
 		tracks[i] = Track{
-			number:      i,
-			Oscillator1: audio.Oscillator{Type: audio.Sine},
-			Envelope1:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
-			Oscillator2: audio.Oscillator{Type: audio.Silent},
-			Envelope2:   audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
-			Mixer:       audio.Mixer{Volume1: 1.0, Volume2: 1.0},
-			Filter:      audio.NewFilter(),
-			LFO1:        audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0},
-			LFO1Dest:    audio.ModPitch,
-			LFO2:        audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0},
-			LFO2Dest:    audio.ModVolume,
-			Rows:        make([]TrackRow, numRows),
+			number: i,
+			Synth: audio.NewSynth(
+				audio.Oscillator{Type: audio.Sine},
+				audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
+				audio.Oscillator{Type: audio.Silent},
+				audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
+				audio.Mixer{Volume1: 1.0, Volume2: 1.0},
+				audio.NewFilter(),
+					audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0, Dest: audio.ModPitch},
+					audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0, Dest: audio.ModVolume},
+			),
+			Rows: make([]TrackRow, numRows),
 		}
 		// Initialize all rows with empty data
 		for j := range numRows {
 			tracks[i].Rows[j] = TrackRow{
 				Note:   audio.Off(),
 				Volume: 0,
-				Effect: "---",
 			}
 		}
 	}
@@ -167,7 +156,7 @@ func (m *TrackerModel) View() string {
 		// Track cells
 		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
 			trackRow := m.Tracks[trackIdx].Rows[row]
-			cellContent := fmt.Sprintf("%-3s %2s %3s", formatNote(trackRow.Note), formatVolume(trackRow.Volume), trackRow.Effect)
+			cellContent := fmt.Sprintf("%-3s %2s %3s", formatNote(trackRow.Note), formatVolume(trackRow.Volume), "---")
 
 			if row == m.CursorRow && trackIdx == m.CursorTrack {
 				tracks.WriteString(cursorCellStyle.Render(cellContent))
@@ -183,16 +172,7 @@ func (m *TrackerModel) View() string {
 }
 
 type TrackChanged struct {
-	Oscillator1 audio.Oscillator
-	Envelope1   audio.Envelope
-	Oscillator2 audio.Oscillator
-	Envelope2   audio.Envelope
-	Mixer       audio.Mixer
-	Filter      audio.Filter
-	LFO1        audio.LFO
-	LFO1Dest    audio.ModDest
-	LFO2        audio.LFO
-	LFO2Dest    audio.ModDest
+	Synth *audio.Synth
 }
 
 func (m *TrackerModel) Update(msg tea.Msg) (Component, tea.Cmd) {
@@ -208,46 +188,18 @@ func (m *TrackerModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 			// Move cursor left (previous track)
 			if m.CursorTrack > 0 {
 				m.CursorTrack--
-
-				// TODO: Extract to common function
-				// TODO: solve sync problem between tracker and osc, env, mixer models
-				//m.oscillator1.Oscillator = m.pattern.tracks[m.cursorTrack].oscillator1
 				currentTrack := m.Tracks[m.CursorTrack]
 				cmd = func() tea.Msg {
-					return TrackChanged{
-						Oscillator1: currentTrack.Oscillator1,
-						Envelope1:   currentTrack.Envelope1,
-						Oscillator2: currentTrack.Oscillator2,
-						Envelope2:   currentTrack.Envelope2,
-						Mixer:       currentTrack.Mixer,
-						Filter:      currentTrack.Filter,
-						LFO1:        currentTrack.LFO1,
-						LFO1Dest:    currentTrack.LFO1Dest,
-						LFO2:        currentTrack.LFO2,
-						LFO2Dest:    currentTrack.LFO2Dest,
-					}
+					return TrackChanged{Synth: currentTrack.Synth}
 				}
 			}
 		case "right":
 			// Move cursor right (next track)
 			if m.CursorTrack < m.NumTracks-1 {
 				m.CursorTrack++
-				// TODO: solve sync problem between tracker and osc, env, mixer models
-				//m.oscillator1.Oscillator = m.pattern.tracks[m.cursorTrack].oscillator1
 				currentTrack := m.Tracks[m.CursorTrack]
 				cmd = func() tea.Msg {
-					return TrackChanged{
-						Oscillator1: currentTrack.Oscillator1,
-						Envelope1:   currentTrack.Envelope1,
-						Oscillator2: currentTrack.Oscillator2,
-						Envelope2:   currentTrack.Envelope2,
-						Mixer:       currentTrack.Mixer,
-						Filter:      currentTrack.Filter,
-						LFO1:        currentTrack.LFO1,
-						LFO1Dest:    currentTrack.LFO1Dest,
-						LFO2:        currentTrack.LFO2,
-						LFO2Dest:    currentTrack.LFO2Dest,
-					}
+					return TrackChanged{Synth: currentTrack.Synth}
 				}
 			}
 		case "up":

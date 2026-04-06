@@ -32,6 +32,7 @@ type LFO struct {
 	Rate     float64 // Hz (0.01–20)
 	Depth    float64 // [0, 1] — scales the [-1,+1] raw output
 	Delay    float64 // seconds before onset
+	Dest     ModDest // modulation destination
 }
 
 // lfoGenerator produces per-block modulation values.
@@ -80,8 +81,6 @@ func lfoWaveformSample(w LFOWaveform, phase float64) float64 {
 	}
 }
 
-// ── Modulated oscillator (pitch + PWM) ─────────────────────────────────────
-
 type modulatedOscillatorStreamer struct {
 	osc      *oscillatorGenerator
 	pitchLFO *lfoGenerator
@@ -126,8 +125,6 @@ func (m *modulatedOscillatorStreamer) Stream(samples [][2]float64) (int, bool) {
 
 func (m *modulatedOscillatorStreamer) Err() error { return m.osc.Err() }
 
-// ── Modulated volume (tremolo) ──────────────────────────────────────────────
-
 type modulatedVolumeStreamer struct {
 	inner beep.Streamer
 	lfo   *lfoGenerator
@@ -156,8 +153,6 @@ func (m *modulatedVolumeStreamer) Stream(samples [][2]float64) (int, bool) {
 }
 
 func (m *modulatedVolumeStreamer) Err() error { return m.inner.Err() }
-
-// ── Modulated filter cutoff (auto-wah) ─────────────────────────────────────
 
 type modulatedFilterStreamer struct {
 	filter     *biquadFilter

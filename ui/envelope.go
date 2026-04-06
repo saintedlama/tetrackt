@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
 	"github.com/tetrackt/tetrackt/ui/common"
 )
@@ -22,18 +21,16 @@ const (
 type EnvelopeModel struct {
 	envelopeField EnvelopeEditField
 	Envelope      audio.Envelope
-	selectedStyle lipgloss.Style
 }
 
 type EnvelopeUpdated struct {
 	Envelope audio.Envelope
 }
 
-func NewEnvelopeModel(selectedStyle lipgloss.Style, envelope audio.Envelope) *EnvelopeModel {
+func NewEnvelopeModel(envelope audio.Envelope) *EnvelopeModel {
 	return &EnvelopeModel{
 		envelopeField: EnvelopeAttack,
 		Envelope:      envelope,
-		selectedStyle: selectedStyle,
 	}
 }
 
@@ -59,8 +56,6 @@ func (m *EnvelopeModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 			m.adjustEnvelopeValue(0.01)
 		case "shift+right":
 			m.adjustEnvelopeValue(0.10)
-		case ".":
-			return m, func() tea.Msg { return OpenPresetDialogMsg{} }
 		}
 	}
 
@@ -114,10 +109,10 @@ func (m *EnvelopeModel) adjustEnvelopeValue(delta float64) {
 func (m *EnvelopeModel) View() string {
 	envView := strings.Builder{}
 
-	envView.WriteString(common.RenderKnobSelected("Attack", m.Envelope.Attack, m.envelopeField == EnvelopeAttack, m.selectedStyle) + "\n")
-	envView.WriteString(common.RenderKnobSelected("Decay", m.Envelope.Decay, m.envelopeField == EnvelopeDecay, m.selectedStyle) + "\n")
-	envView.WriteString(common.RenderKnobSelected("Sustain", m.Envelope.Sustain, m.envelopeField == EnvelopeSustain, m.selectedStyle) + "\n")
-	envView.WriteString(common.RenderKnobSelected("Release", m.Envelope.Release, m.envelopeField == EnvelopeRelease, m.selectedStyle))
+	envView.WriteString(common.RenderKnobSelected("Attack", m.Envelope.Attack, m.envelopeField == EnvelopeAttack) + "\n")
+	envView.WriteString(common.RenderKnobSelected("Decay", m.Envelope.Decay, m.envelopeField == EnvelopeDecay) + "\n")
+	envView.WriteString(common.RenderKnobSelected("Sustain", m.Envelope.Sustain, m.envelopeField == EnvelopeSustain) + "\n")
+	envView.WriteString(common.RenderKnobSelected("Release", m.Envelope.Release, m.envelopeField == EnvelopeRelease))
 
 	return envView.String()
 }

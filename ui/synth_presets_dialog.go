@@ -5,38 +5,38 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/tetrackt/tetrackt/ui/common"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/ui/common"
 )
 
-// OpenInstrumentDialogMsg is sent to request opening the instrument picker.
-type OpenInstrumentDialogMsg struct{}
+// OpenSynthPresetDialogMsg is sent to request opening the synth preset picker.
+type OpenSynthPresetDialogMsg struct{}
 
-var instrumentDialogHelpStyle = lipgloss.NewStyle().
+var synthPresetDialogHelpStyle = lipgloss.NewStyle().
 	Foreground(common.ColorTextDisabled).
 	Padding(1, 0)
 
-// InstrumentDialog is a standalone tea.Model that wraps InstrumentView for
+// SynthPresetsDialog is a standalone tea.Model that wraps SynthPresetView for
 // use as an overlay dialog. Navigation keys are forwarded to the view;
-// enter applies the selected instrument; esc cancels; note keys (1–7 etc.)
-// preview the selected instrument by emitting a PassThroughMsg so audio
+// enter applies the selected preset; esc cancels; note keys (1–7 etc.)
+// preview the selected preset by emitting a PassThroughMsg so audio
 // is played without closing the dialog.
-type InstrumentDialog struct {
-	view   *InstrumentView
+type SynthPresetsDialog struct {
+	view   *SynthPresetView
 	octave int
 	height int // terminal height; updated via WindowSizeMsg
 }
 
-// NewInstrumentDialog creates an instrument picker dialog. The caller passes a
-// persistent *InstrumentView so selection state is preserved across opens, and
+// NewSynthPresetsDialog creates a synth preset picker dialog. The caller passes a
+// persistent *SynthPresetView so selection state is preserved across opens, and
 // the current octave for note previews.
-func NewInstrumentDialog(view *InstrumentView, octave int) *InstrumentDialog {
-	return &InstrumentDialog{view: view, octave: octave}
+func NewSynthPresetsDialog(view *SynthPresetView, octave int) *SynthPresetsDialog {
+	return &SynthPresetsDialog{view: view, octave: octave}
 }
 
-func (d *InstrumentDialog) Init() tea.Cmd { return nil }
+func (d *SynthPresetsDialog) Init() tea.Cmd { return nil }
 
-func (d *InstrumentDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (d *SynthPresetsDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		d.height = msg.Height
@@ -51,10 +51,10 @@ func (d *InstrumentDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			preset := d.view.Presets[d.view.SelectedPreset]
 			return d, func() tea.Msg {
-				return CloseDialogMsg{Payload: InstrumentApplied{Instrument: preset}}
+				return CloseDialogMsg{Payload: SynthUpdated{Synth: preset.Synth}}
 			}
 		default:
-			// Note key → preview selected instrument, keep dialog open
+			// Note key → preview selected preset, keep dialog open
 			if base, ok := NoteKeys[msg.String()]; ok {
 				if len(d.view.Presets) == 0 {
 					return d, nil
@@ -62,7 +62,7 @@ func (d *InstrumentDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				note := audio.Note{Base: base, Octave: audio.Octave(d.octave)}
 				preset := d.view.Presets[d.view.SelectedPreset]
 				return d, func() tea.Msg {
-					return PassThroughMsg{Payload: PlayInstrumentNoteMsg{Note: note, Instrument: preset}}
+					return PassThroughMsg{Payload: PlaySynthPresetNoteMsg{Note: note, Preset: preset}}
 				}
 			}
 			// Navigation keys — forward to the view (up/down/left/right)
@@ -73,7 +73,7 @@ func (d *InstrumentDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return d, nil
 }
 
-func (d *InstrumentDialog) View() tea.View {
+func (d *SynthPresetsDialog) View() tea.View {
 	// Reserve lines for: dialog border (2), category header (1), help bar (3),
 	// plus a margin so the dialog never touches the screen edges.
 	const overhead = 10
@@ -82,6 +82,6 @@ func (d *InstrumentDialog) View() tea.View {
 		visible = 4
 	}
 	d.view.MaxHeight = visible
-	content := fmt.Sprintf("%s\n%s", d.view.View(), instrumentDialogHelpStyle.Render("↑↓: Navigate | ←→: Category | Enter: Apply | Esc: Close | 1-7: Preview"))
+	content := fmt.Sprintf("%s\n%s", d.view.View(), synthPresetDialogHelpStyle.Render("↑↓: Navigate | ←→: Category | Enter: Apply | Esc: Close | 1-7: Preview"))
 	return tea.NewView(content)
 }

@@ -23,7 +23,6 @@ const (
 type FilterModel struct {
 	Filter          audio.Filter
 	filterList      []audio.FilterType
-	selectedStyle   lipgloss.Style
 	filterTypeStyle lipgloss.Style
 	editField       filterField
 	cutoffBar       common.Bar
@@ -36,7 +35,7 @@ type FilterUpdated struct {
 }
 
 // NewFilterModel creates a FilterModel with the given initial filter state.
-func NewFilterModel(selectedStyle lipgloss.Style, filter audio.Filter) *FilterModel {
+func NewFilterModel(filter audio.Filter) *FilterModel {
 	filterList := []audio.FilterType{audio.FilterOff, audio.FilterLowPass, audio.FilterHighPass, audio.FilterBandPass}
 	maxWidth := 0
 	for _, t := range filterList {
@@ -47,7 +46,6 @@ func NewFilterModel(selectedStyle lipgloss.Style, filter audio.Filter) *FilterMo
 	return &FilterModel{
 		Filter:          filter,
 		filterList:      filterList,
-		selectedStyle:   selectedStyle,
 		filterTypeStyle: lipgloss.NewStyle().Width(maxWidth),
 		cutoffBar:       common.NewBar(0, 1, filter.Cutoff, 10),
 		resonanceBar:    common.NewBar(0, 1, filter.Resonance, 10),
@@ -61,11 +59,11 @@ func (m *FilterModel) View() string {
 	renderBarRow := func(label, barView string, pct int, selected bool) string {
 		l := label
 		if selected {
-			l = m.selectedStyle.Render(label)
+			l = common.StyleSelected.Render(label)
 		}
 		return fmt.Sprintf("%s %s %3d%%", l, barView, pct)
 	}
-	typeStr := renderFieldSelected(m.filterTypeStyle.Render(string(m.Filter.Type)), m.editField == filterFieldType, m.selectedStyle)
+	typeStr := renderFieldSelected(m.filterTypeStyle.Render(string(m.Filter.Type)), m.editField == filterFieldType)
 	sb.WriteString(typeStr)
 	sb.WriteString("\n")
 	sb.WriteString(renderBarRow("Cutoff", m.cutoffBar.View(), int(m.Filter.Cutoff*100), m.editField == filterFieldCutoff))

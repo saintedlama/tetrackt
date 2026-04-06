@@ -13,7 +13,6 @@ type SavedTrackRow struct {
 	Base   string `yaml:"base"`
 	Octave int    `yaml:"octave"`
 	Volume int    `yaml:"volume"`
-	Effect string `yaml:"effect"`
 }
 
 // SavedTrack is the YAML-serializable form of Track
@@ -66,33 +65,33 @@ func TracksToSong(tracker *ui.TrackerModel) *SavedSong {
 				Base:   string(row.Note.Base),
 				Octave: int(row.Note.Octave),
 				Volume: row.Volume,
-				Effect: row.Effect,
 			}
 		}
+		s := track.Synth
 		saved.Tracks[i] = SavedTrack{
-			Oscillator1:           string(track.Oscillator1.Type),
-			Oscillator1Phase:      track.Oscillator1.Phase,
-			Oscillator1PulseWidth: track.Oscillator1.PulseWidth,
-			Envelope1:             track.Envelope1,
-			Oscillator2:           string(track.Oscillator2.Type),
-			Oscillator2Phase:      track.Oscillator2.Phase,
-			Oscillator2PulseWidth: track.Oscillator2.PulseWidth,
-			Envelope2:             track.Envelope2,
-			MixerVolume1:          track.Mixer.Volume1,
-			MixerVolume2:          track.Mixer.Volume2,
-			FilterType:            string(track.Filter.Type),
-			FilterCutoff:          track.Filter.Cutoff,
-			FilterResonance:       track.Filter.Resonance,
-			LFO1Waveform:          string(track.LFO1.Waveform),
-			LFO1Rate:              track.LFO1.Rate,
-			LFO1Depth:             track.LFO1.Depth,
-			LFO1Delay:             track.LFO1.Delay,
-			LFO1Dest:              int(track.LFO1Dest),
-			LFO2Waveform:          string(track.LFO2.Waveform),
-			LFO2Rate:              track.LFO2.Rate,
-			LFO2Depth:             track.LFO2.Depth,
-			LFO2Delay:             track.LFO2.Delay,
-			LFO2Dest:              int(track.LFO2Dest),
+			Oscillator1:           string(s.Oscillator1.Type),
+			Oscillator1Phase:      s.Oscillator1.Phase,
+			Oscillator1PulseWidth: s.Oscillator1.PulseWidth,
+			Envelope1:             s.Envelope1,
+			Oscillator2:           string(s.Oscillator2.Type),
+			Oscillator2Phase:      s.Oscillator2.Phase,
+			Oscillator2PulseWidth: s.Oscillator2.PulseWidth,
+			Envelope2:             s.Envelope2,
+			MixerVolume1:          s.Mixer.Volume1,
+			MixerVolume2:          s.Mixer.Volume2,
+			FilterType:            string(s.Filter.Type),
+			FilterCutoff:          s.Filter.Cutoff,
+			FilterResonance:       s.Filter.Resonance,
+			LFO1Waveform:          string(s.LFO1.Waveform),
+			LFO1Rate:              s.LFO1.Rate,
+			LFO1Depth:             s.LFO1.Depth,
+			LFO1Delay:             s.LFO1.Delay,
+			LFO1Dest:              int(s.LFO1.Dest),
+			LFO2Waveform:          string(s.LFO2.Waveform),
+			LFO2Rate:              s.LFO2.Rate,
+			LFO2Depth:             s.LFO2.Depth,
+			LFO2Delay:             s.LFO2.Delay,
+			LFO2Dest:              int(s.LFO2.Dest),
 			Rows:                  rows,
 		}
 	}
@@ -114,38 +113,40 @@ func SongToTracks(saved *SavedSong, tracker *ui.TrackerModel) {
 	// Update each track with saved data
 	for i, savedTrack := range saved.Tracks {
 		track := &tracker.Tracks[i]
-		track.Oscillator1 = audio.Oscillator{
-			Type:       audio.OscillatorType(savedTrack.Oscillator1),
-			Phase:      savedTrack.Oscillator1Phase,
-			PulseWidth: savedTrack.Oscillator1PulseWidth,
-		}
-		track.Envelope1 = savedTrack.Envelope1
-		track.Oscillator2 = audio.Oscillator{
-			Type:       audio.OscillatorType(savedTrack.Oscillator2),
-			Phase:      savedTrack.Oscillator2Phase,
-			PulseWidth: savedTrack.Oscillator2PulseWidth,
-		}
-		track.Envelope2 = savedTrack.Envelope2
-		track.Mixer = audio.Mixer{Volume1: savedTrack.MixerVolume1, Volume2: savedTrack.MixerVolume2}
-		track.Filter = audio.Filter{
-			Type:      audio.FilterType(savedTrack.FilterType),
-			Cutoff:    savedTrack.FilterCutoff,
-			Resonance: savedTrack.FilterResonance,
-		}
-		track.LFO1 = audio.LFO{
-			Waveform: audio.LFOWaveform(savedTrack.LFO1Waveform),
-			Rate:     savedTrack.LFO1Rate,
-			Depth:    savedTrack.LFO1Depth,
-			Delay:    savedTrack.LFO1Delay,
-		}
-		track.LFO1Dest = audio.ModDest(savedTrack.LFO1Dest)
-		track.LFO2 = audio.LFO{
-			Waveform: audio.LFOWaveform(savedTrack.LFO2Waveform),
-			Rate:     savedTrack.LFO2Rate,
-			Depth:    savedTrack.LFO2Depth,
-			Delay:    savedTrack.LFO2Delay,
-		}
-		track.LFO2Dest = audio.ModDest(savedTrack.LFO2Dest)
+		track.Synth = audio.NewSynth(
+			audio.Oscillator{
+				Type:       audio.OscillatorType(savedTrack.Oscillator1),
+				Phase:      savedTrack.Oscillator1Phase,
+				PulseWidth: savedTrack.Oscillator1PulseWidth,
+			},
+			savedTrack.Envelope1,
+			audio.Oscillator{
+				Type:       audio.OscillatorType(savedTrack.Oscillator2),
+				Phase:      savedTrack.Oscillator2Phase,
+				PulseWidth: savedTrack.Oscillator2PulseWidth,
+			},
+			savedTrack.Envelope2,
+			audio.Mixer{Volume1: savedTrack.MixerVolume1, Volume2: savedTrack.MixerVolume2},
+			audio.Filter{
+				Type:      audio.FilterType(savedTrack.FilterType),
+				Cutoff:    savedTrack.FilterCutoff,
+				Resonance: savedTrack.FilterResonance,
+			},
+			audio.LFO{
+				Waveform: audio.LFOWaveform(savedTrack.LFO1Waveform),
+				Rate:     savedTrack.LFO1Rate,
+				Depth:    savedTrack.LFO1Depth,
+				Delay:    savedTrack.LFO1Delay,
+				Dest:     audio.ModDest(savedTrack.LFO1Dest),
+			},
+			audio.LFO{
+				Waveform: audio.LFOWaveform(savedTrack.LFO2Waveform),
+				Rate:     savedTrack.LFO2Rate,
+				Depth:    savedTrack.LFO2Depth,
+				Delay:    savedTrack.LFO2Delay,
+				Dest:     audio.ModDest(savedTrack.LFO2Dest),
+			},
+		)
 
 		// Resize rows slice if needed
 		if len(track.Rows) != saved.NumRows {
@@ -158,7 +159,6 @@ func SongToTracks(saved *SavedSong, tracker *ui.TrackerModel) {
 				track.Rows[j] = ui.TrackRow{
 					Note:   audio.Note{Base: audio.Base(row.Base), Octave: audio.Octave(row.Octave)},
 					Volume: row.Volume,
-					Effect: row.Effect,
 				}
 			}
 		}

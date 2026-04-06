@@ -2,8 +2,6 @@ package common
 
 import (
 	"fmt"
-
-	"charm.land/lipgloss/v2"
 )
 
 // RenderKnob renders a knob display showing the label, a character indicating
@@ -12,11 +10,11 @@ func RenderKnob(label string, value float64) string {
 	return fmt.Sprintf("%s: %s %3d%%", label, percentageToKnob(value), int(value*100))
 }
 
-// RenderKnobSelected renders a knob, applying selectedStyle when selected is true.
-func RenderKnobSelected(label string, value float64, selected bool, selectedStyle lipgloss.Style) string {
+// RenderKnobSelected renders a knob, applying StyleSelected when selected is true.
+func RenderKnobSelected(label string, value float64, selected bool) string {
 	knob := RenderKnob(label, value)
 	if selected {
-		return selectedStyle.Render(knob)
+		return StyleSelected.Render(knob)
 	}
 	return knob
 }

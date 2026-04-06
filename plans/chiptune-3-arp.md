@@ -101,7 +101,7 @@ Arpeggio is **not** computed in the audio engine. It is driven by the tracker's 
 
 Integration point — wherever the playback engine processes a tick (likely `main.go` or a future `tracker/player.go`):
 
-```
+```text
 on each tick:
     step = (tickCount / arpeggio.TicksPerStep) % len(arpeggio.Offsets)
     transposedNote, ok = currentNote.Transpose(arpeggio.Offsets[step])
@@ -115,20 +115,21 @@ The tick counter resets when a new note is triggered. Arpeggio is evaluated per-
 
 ### 5. Integration checklist
 
-| Step | File(s) | Action |
-|------|---------|--------|
-| 1 | `audio/notes.go` | Rewrite `Transpose` for semitone arithmetic |
-| 2 | `audio/notes.go` or `tracker/` | Add `chromaticScale` index helper |
-| 3 | `audio/oscilator.go` | Add `SetFrequency` method; change `NewOscillator` return to `*oscillatorGenerator` |
-| 4 | `audio/synth.go` | Store oscillator handles; expose `SetFrequency` on active voice |
-| 5 | `tracker/` (new or existing) | Define `ArpeggioEffect`; wire into tick loop |
-| 6 | Existing callers of `Transpose` | Update `delta` from octave units to semitones (`×12`) |
+| Step | File(s)                         | Action                                                                             |
+| ---- | ------------------------------- | ---------------------------------------------------------------------------------- |
+| 1    | `audio/notes.go`                | Rewrite `Transpose` for semitone arithmetic                                        |
+| 2    | `audio/notes.go` or `tracker/`  | Add `chromaticScale` index helper                                                  |
+| 3    | `audio/oscilator.go`            | Add `SetFrequency` method; change `NewOscillator` return to `*oscillatorGenerator` |
+| 4    | `audio/synth.go`                | Store oscillator handles; expose `SetFrequency` on active voice                    |
+| 5    | `tracker/` (new or existing)    | Define `ArpeggioEffect`; wire into tick loop                                       |
+| 6    | Existing callers of `Transpose` | Update `delta` from octave units to semitones (`×12`)                              |
 
 ## Impact
 
 **Invasiveness:** Moderate. The oscillator and synth changes are additive (new method, widened return type); the `Transpose` fix is a semantic breaking change limited to a single function signature.
 
 **Files touched:**
+
 - `audio/notes.go` — `Transpose` rewrite + chromatic scale table
 - `audio/oscilator.go` — `SetFrequency` method, return type adjustment
 - `audio/synth.go` — active-voice struct holding oscillator handles, `SetFrequency` delegation
@@ -136,6 +137,7 @@ The tick counter resets when a new note is triggered. Arpeggio is evaluated per-
 - Any existing callers of `Note.Transpose` that pass octave-unit deltas
 
 **Backward compatibility:**
+
 - `NewOscillator` return-type change (`*oscillatorGenerator` → still satisfies `beep.Streamer`) is **source-compatible** at all current call sites.
 - `Synth.Streamer` signature is **unchanged**; `SetFrequency` is added on a new active-voice handle.
 - `Note.Transpose` is a **breaking semantic change** — all callers must be audited. Currently only used in a narrow surface area, so the blast radius is small.
