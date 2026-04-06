@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
-	"github.com/tetrackt/tetrackt/ui/widgets"
+	"github.com/tetrackt/tetrackt/ui/common"
 )
 
 // VolumeChanged is emitted when the user adjusts global volume via the volume panel.
@@ -21,7 +21,7 @@ type VolumeChanged struct {
 type TrackerScreen struct {
 	Tracker      *TrackerModel
 	GlobalVolume float64
-	volumeBar    widgets.Bar
+	volumeBar    common.Bar
 	activePanel  int // 0=tracker, 1=volume
 }
 
@@ -30,7 +30,7 @@ func NewTrackerScreen(tracker *TrackerModel) *TrackerScreen {
 	return &TrackerScreen{
 		Tracker:      tracker,
 		GlobalVolume: 1.0,
-		volumeBar:    widgets.NewBar(0, 1, 1.0, 10),
+		volumeBar:    common.NewBar(0, 1, 1.0, 10),
 	}
 }
 
@@ -91,8 +91,8 @@ func (t *TrackerScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 // View renders the tracker grid and a global volume panel side by side.
 func (t *TrackerScreen) View() string {
 	volumeContent := fmt.Sprintf("%s  %3d%%", t.volumeBar.View(), int(t.GlobalVolume*100))
-	trackerPanel := RenderPanel("Tracker", ColorAccentPrimary, t.Tracker.View(), t.activePanel == 0)
-	volumePanel := RenderPanel("Volume", ColorAccentModulation, volumeContent, t.activePanel == 1)
+	trackerPanel := RenderPanel("Tracker", common.ColorAccentPrimary, t.Tracker.View(), t.activePanel == 0)
+	volumePanel := RenderPanel("Volume", common.ColorAccentModulation, volumeContent, t.activePanel == 1)
 	return lipgloss.JoinHorizontal(lipgloss.Top, trackerPanel, volumePanel)
 }
 

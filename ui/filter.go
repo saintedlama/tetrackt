@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
-	"github.com/tetrackt/tetrackt/ui/widgets"
+	"github.com/tetrackt/tetrackt/ui/common"
 )
 
 type filterField int
@@ -26,8 +26,8 @@ type FilterModel struct {
 	selectedStyle   lipgloss.Style
 	filterTypeStyle lipgloss.Style
 	editField       filterField
-	cutoffBar       widgets.Bar
-	resonanceBar    widgets.Bar
+	cutoffBar       common.Bar
+	resonanceBar    common.Bar
 }
 
 // FilterUpdated is emitted when any filter parameter changes.
@@ -49,8 +49,8 @@ func NewFilterModel(selectedStyle lipgloss.Style, filter audio.Filter) *FilterMo
 		filterList:      filterList,
 		selectedStyle:   selectedStyle,
 		filterTypeStyle: lipgloss.NewStyle().Width(maxWidth),
-		cutoffBar:       widgets.NewBar(0, 1, filter.Cutoff, 10),
-		resonanceBar:    widgets.NewBar(0, 1, filter.Resonance, 10),
+		cutoffBar:       common.NewBar(0, 1, filter.Cutoff, 10),
+		resonanceBar:    common.NewBar(0, 1, filter.Resonance, 10),
 	}
 }
 

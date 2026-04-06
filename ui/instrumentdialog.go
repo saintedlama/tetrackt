@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/tetrackt/tetrackt/ui/common"
 	"github.com/tetrackt/tetrackt/audio"
 )
 
@@ -12,7 +13,7 @@ import (
 type OpenInstrumentDialogMsg struct{}
 
 var instrumentDialogHelpStyle = lipgloss.NewStyle().
-	Foreground(ColorTextDisabled).
+	Foreground(common.ColorTextDisabled).
 	Padding(1, 0)
 
 // InstrumentDialog is a standalone tea.Model that wraps InstrumentView for

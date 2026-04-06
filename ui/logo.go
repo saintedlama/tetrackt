@@ -1,10 +1,13 @@
 package ui
 
-import "charm.land/lipgloss/v2"
+import (
+	"charm.land/lipgloss/v2"
+	"github.com/tetrackt/tetrackt/ui/common"
+)
 
 var logoStyle = lipgloss.NewStyle().
-	Background(ColorAccentEnvelope).
-	Foreground(ColorGrayDarkest).
+	Background(common.ColorAccentEnvelope).
+	Foreground(common.ColorGrayDarkest).
 	Bold(true).
 	Padding(0, 1)
 

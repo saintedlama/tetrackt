@@ -3,12 +3,12 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/tetrackt/tetrackt/ui/widgets"
+	"github.com/tetrackt/tetrackt/ui/common"
 )
 
 var dialogBorderStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
-	BorderForeground(ColorAccentWarning).
+	BorderForeground(common.ColorAccentWarning).
 	Padding(0, 2)
 
 // CloseDialogMsg signals that the dialog should be closed.
@@ -75,7 +75,7 @@ func (m dialogModel) View() tea.View {
 	bg := m.main.View().Content
 	dialogContent := dialogBorderStyle.Render(m.dialog.View().Content)
 
-	v := tea.NewView(widgets.OverlayCenter(m.width, m.height, dialogContent, bg, widgets.WithDim()))
+	v := tea.NewView(common.OverlayCenter(m.width, m.height, dialogContent, bg, common.WithDim()))
 	v.AltScreen = true
 	return v
 }

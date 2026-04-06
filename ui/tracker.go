@@ -6,32 +6,33 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/tetrackt/tetrackt/ui/common"
 	"github.com/tetrackt/tetrackt/audio"
 )
 
 var (
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(ColorAccentPrimary).
+			Foreground(common.ColorAccentPrimary).
 			Padding(0, 1)
 
 	rowNumStyle = lipgloss.NewStyle().
-			Foreground(ColorTextMuted)
+			Foreground(common.ColorTextMuted)
 
 	cursorRowStyle = lipgloss.NewStyle().
-			Foreground(ColorAccentEnvelope).
+			Foreground(common.ColorAccentEnvelope).
 			Bold(true)
 
 	playbackRowStyle = lipgloss.NewStyle().
-				Foreground(ColorAccentPlay).
+				Foreground(common.ColorAccentPlay).
 				Bold(true)
 
 	cellStyle = lipgloss.NewStyle().
 			Padding(0, 1)
 
 	cursorCellStyle = lipgloss.NewStyle().
-			Background(ColorSurface).
-			Foreground(ColorAccentPrimary).
+			Background(common.ColorSurface).
+			Foreground(common.ColorAccentPrimary).
 			Padding(0, 1)
 )
 
@@ -126,7 +127,7 @@ func (m *TrackerModel) View() string {
 		if i == m.CursorTrack {
 			trackHeader = headerStyle.Render(trackHeader)
 		} else {
-			trackHeader = headerStyle.Foreground(ColorGray).Render(trackHeader)
+			trackHeader = headerStyle.Foreground(common.ColorGray).Render(trackHeader)
 		}
 		tracks.WriteString(trackHeader)
 		tracks.WriteString("    ")

@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/tetrackt/tetrackt/ui/common"
 )
 
 // Panel is a layout container that wraps a Component inside a titled, bordered panel.
@@ -58,9 +59,9 @@ func (p Panel) SetActive(active bool) Panel {
 // titleColor is the foreground color for the title text.
 // active controls whether the active or inactive border color is used.
 func RenderPanel(title string, titleColor color.Color, content string, active bool) string {
-	borderColor := ColorBorder
+	borderColor := common.ColorBorder
 	if active {
-		borderColor = ColorBorderActive
+		borderColor = common.ColorBorderActive
 	}
 
 	borderStyle := lipgloss.NewStyle().
@@ -76,7 +77,7 @@ func RenderPanel(title string, titleColor color.Color, content string, active bo
 
 	titleStyle := lipgloss.NewStyle().
 		Foreground(titleColor).
-		Background(ColorSurface)
+		Background(common.ColorSurface)
 	titleRendered := titleStyle.Render(" " + title + " ")
 
 	w := lipgloss.Width(bordered)

@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/tetrackt/tetrackt/ui/common"
 	"github.com/tetrackt/tetrackt/audio"
 )
 
@@ -18,8 +19,8 @@ type EnvelopePresetSelected struct {
 }
 
 var presetDialogSelectedStyle = lipgloss.NewStyle().
-	Background(ColorAccentInstrument).
-	Foreground(ColorWhite).
+	Background(common.ColorAccentInstrument).
+	Foreground(common.ColorWhite).
 	Bold(true)
 
 // EnvelopePresetDialog is a standalone tea.Model dialog for selecting envelope presets.
