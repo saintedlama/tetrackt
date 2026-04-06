@@ -1,4 +1,4 @@
-package ui
+package tracker
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 )
 
@@ -45,6 +46,7 @@ type Viewport struct {
 const DefaultBPM = 160
 const MinBPM = 40
 const MaxBPM = 300
+const DefaultSpeed = 6 // sub-ticks per row
 
 // TrackerModel represents the state of the tracker pattern editor
 type TrackerModel struct {
@@ -60,6 +62,7 @@ type TrackerModel struct {
 	viewportRow int
 	Viewport    Viewport
 	BPM         int
+	Speed       int // sub-ticks per row; 0 treated as DefaultSpeed
 }
 
 // BPMDuration returns the duration of one row at the current BPM.
@@ -80,11 +83,12 @@ type Track struct {
 
 // TrackRow represents a single row in a track
 type TrackRow struct {
-	Note   audio.Note
-	Volume int // 0-64
+	Note     audio.Note
+	Volume   int // 0-64
+	Arpeggio audio.ArpeggioEffect
 }
 
-// NewPattern creates a new pattern with the specified number of tracks and rows
+// NewTracker creates a new pattern with the specified number of tracks and rows
 func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerModel {
 	tracks := make([]Track, numTracks)
 	for i := range numTracks {
@@ -122,6 +126,7 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 		viewportRow: 0,
 		Viewport:    Viewport{Width: viewportWidth, Height: viewportHeight},
 		BPM:         DefaultBPM,
+		Speed:       DefaultSpeed,
 	}
 }
 
@@ -172,7 +177,7 @@ func (m *TrackerModel) View() string {
 		// Track cells
 		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
 			trackRow := m.Tracks[trackIdx].Rows[row]
-			cellContent := fmt.Sprintf("%-3s %2s %3s", formatNote(trackRow.Note), formatVolume(trackRow.Volume), "---")
+			cellContent := fmt.Sprintf("%-3s %2s %3s", formatNote(trackRow.Note), formatVolume(trackRow.Volume), formatArpeggio(trackRow.Arpeggio))
 
 			if row == m.CursorRow && trackIdx == m.CursorTrack {
 				tracks.WriteString(cursorCellStyle.Render(cellContent))
@@ -187,11 +192,7 @@ func (m *TrackerModel) View() string {
 	return tracks.String()
 }
 
-type TrackChanged struct {
-	Synth *audio.Synth
-}
-
-func (m *TrackerModel) Update(msg tea.Msg) (Component, tea.Cmd) {
+func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -206,7 +207,7 @@ func (m *TrackerModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 				m.CursorTrack--
 				currentTrack := m.Tracks[m.CursorTrack]
 				cmd = func() tea.Msg {
-					return TrackChanged{Synth: currentTrack.Synth}
+					return ui.TrackChanged{Synth: currentTrack.Synth}
 				}
 			}
 		case "right":
@@ -215,7 +216,7 @@ func (m *TrackerModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 				m.CursorTrack++
 				currentTrack := m.Tracks[m.CursorTrack]
 				cmd = func() tea.Msg {
-					return TrackChanged{Synth: currentTrack.Synth}
+					return ui.TrackChanged{Synth: currentTrack.Synth}
 				}
 			}
 		case "up":
@@ -275,6 +276,22 @@ func formatVolume(volume int) string {
 		return ".."
 	}
 	return fmt.Sprintf("%02d", volume)
+}
+
+// formatArpeggio formats an arpeggio effect for display (3 chars).
+// Active arp with offsets [0,4,7] shows "A47"; inactive shows "---".
+func formatArpeggio(arp audio.ArpeggioEffect) string {
+	if !arp.IsActive() {
+		return "---"
+	}
+	o1, o2 := 0, 0
+	if len(arp.Offsets) > 1 {
+		o1 = arp.Offsets[1] % 10
+	}
+	if len(arp.Offsets) > 2 {
+		o2 = arp.Offsets[2] % 10
+	}
+	return fmt.Sprintf("A%d%d", o1, o2)
 }
 
 func (m Track) CurrentRow() TrackRow {

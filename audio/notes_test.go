@@ -48,20 +48,58 @@ func TestNoteFrequency(t *testing.T) {
 }
 
 func TestNoteTranspose(t *testing.T) {
-	note := NewNote(BaseC, Octave4)
-
-	transposed, ok := note.Transpose(1)
+	// +1 semitone: C4 → C#4
+	transposed, ok := NewNote(BaseC, Octave4).Transpose(1)
 	if !ok {
 		t.Error("C4+1: expected ok=true")
 	}
-	if transposed.Octave != Octave5 {
-		t.Errorf("C4+1: expected octave 5, got %v", transposed.Octave)
+	if transposed != NewNote(BaseCs, Octave4) {
+		t.Errorf("C4+1: expected C#4, got %v", transposed)
 	}
 
-	// beyond octave 8 returns false
-	_, ok = NewNote(BaseC, Octave8).Transpose(1)
+	// +12 semitones (1 octave): C4 → C5
+	transposed, ok = NewNote(BaseC, Octave4).Transpose(12)
+	if !ok {
+		t.Error("C4+12: expected ok=true")
+	}
+	if transposed != NewNote(BaseC, Octave5) {
+		t.Errorf("C4+12: expected C5, got %v", transposed)
+	}
+
+	// -1 semitone: C4 → B3
+	transposed, ok = NewNote(BaseC, Octave4).Transpose(-1)
+	if !ok {
+		t.Error("C4-1: expected ok=true")
+	}
+	if transposed != NewNote(BaseB, Octave3) {
+		t.Errorf("C4-1: expected B3, got %v", transposed)
+	}
+
+	// -12 semitones: C4 → C3
+	transposed, ok = NewNote(BaseC, Octave4).Transpose(-12)
+	if !ok {
+		t.Error("C4-12: expected ok=true")
+	}
+	if transposed != NewNote(BaseC, Octave3) {
+		t.Errorf("C4-12: expected C3, got %v", transposed)
+	}
+
+	// beyond range: B8 + 1 semitone is out of range
+	_, ok = NewNote(BaseB, Octave8).Transpose(1)
 	if ok {
-		t.Error("C8+1: expected ok=false (beyond octave 8)")
+		t.Error("B8+1: expected ok=false (beyond octave 8)")
+	}
+
+	// C8 + 12 -> C9 which is out of range
+	_, ok = NewNote(BaseC, Octave8).Transpose(12)
+	if ok {
+		t.Error("C8+12: expected ok=false (beyond octave 8)")
+	}
+
+	// C0 - 1 semitone is out of range
+	_, ok = NewNote(BaseC, Octave0).Transpose(-1)
+	if ok {
+		t.Error("C0-1: expected ok=false (below octave 0)")
 	}
 
 	// off note returns false

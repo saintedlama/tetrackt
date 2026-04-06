@@ -80,6 +80,7 @@ var prevFreq [maxChannels]float64 // last triggered frequency per channel
 ```
 
 When a note-on event is emitted for channel `ch`:
+
 1. Read `prevFreq[ch]` as `startFreq`.
 2. Call `synth.StreamerWithGlide(note, dur, startFreq, instrument.Portamento)`.
 3. Update `prevFreq[ch] = noteFrequency(note)`.
@@ -100,9 +101,9 @@ This keeps `Stream()` arithmetic integer-only (cheap `portamentoIdx < portamento
 
 ## Impact
 
-| Dimension | Assessment |
-|---|---|
-| **Invasiveness** | Low. The oscillator change is self-contained; glide is a no-op when `portamentoSamples == 0`. |
-| **Files touched** | `audio/oscillator.go` (fields + loop body), `audio/synth.go` (new `StreamerWithGlide` method), playback engine file (prev-freq tracking). |
-| **Backward compatibility** | Fully additive. `Synth.Streamer` signature is unchanged; `oscillatorGenerator` defaults to zero portamento. No existing call sites break. |
-| **Risk** | Exponential interpolation requires a non-zero `startFrequency`; a guard (`startFreq <= 0 → linear or snap`) is needed to avoid `math.Pow` with a zero base. |
+| Dimension                  | Assessment                                                                                                                                                  |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Invasiveness**           | Low. The oscillator change is self-contained; glide is a no-op when `portamentoSamples == 0`.                                                               |
+| **Files touched**          | `audio/oscillator.go` (fields + loop body), `audio/synth.go` (new `StreamerWithGlide` method), playback engine file (prev-freq tracking).                   |
+| **Backward compatibility** | Fully additive. `Synth.Streamer` signature is unchanged; `oscillatorGenerator` defaults to zero portamento. No existing call sites break.                   |
+| **Risk**                   | Exponential interpolation requires a non-zero `startFrequency`; a guard (`startFreq <= 0 → linear or snap`) is needed to avoid `math.Pow` with a zero base. |

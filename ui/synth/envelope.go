@@ -1,10 +1,11 @@
-package ui
+package synth
 
 import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 )
 
@@ -38,7 +39,7 @@ func (m *EnvelopeModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m *EnvelopeModel) Update(msg tea.Msg) (Component, tea.Cmd) {
+func (m *EnvelopeModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {

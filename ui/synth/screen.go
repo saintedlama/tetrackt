@@ -1,39 +1,33 @@
-package ui
+package synth
 
 import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 )
-
-// SynthUpdated is emitted when any parameter of the current track's synth changes.
-// It is subscribed to by SynthScreen (to sync panels on preset load) and
-// TrackerScreen (to keep track.Synth in sync).
-type SynthUpdated struct {
-	Synth *audio.Synth
-}
 
 // SynthScreen is the synthesizer editor screen containing the five synth panels.
 // It owns panel navigation state (which panel is active) that was previously
 // held as InputMode in main.go.
 type SynthScreen struct {
-	panels      []Panel
+	panels      []ui.Panel
 	ActivePanel int // 0=Osc1, 1=Env1, 2=Osc2, 3=Env2, 4=Mixer
 }
 
 // NewSynthScreen creates a new SynthScreen for the given synth instance.
 // Panels are constructed internally from the synth's initial state.
 func NewSynthScreen(synth *audio.Synth) *SynthScreen {
-	panels := []Panel{
-		NewPanel("Oscillator 1", common.ColorAccentPrimary, NewOscillatorModel(synth.Oscillator1)),
-		NewPanel("Envelope 1", common.ColorAccentPrimary, NewEnvelopeModel(synth.Envelope1)),
-		NewPanel("LFO 1", common.ColorAccentPrimary, NewLFOModel(synth.LFO1)),
-		NewPanel("Oscillator 2", common.ColorAccentEnvelope, NewOscillatorModel(synth.Oscillator2)),
-		NewPanel("Envelope 2", common.ColorAccentEnvelope, NewEnvelopeModel(synth.Envelope2)),
-		NewPanel("LFO 2", common.ColorAccentEnvelope, NewLFOModel(synth.LFO2)),
-		NewPanel("Mixer", common.ColorAccentModulation, NewMixer(synth.Mixer.Volume1, synth.Mixer.Volume2)),
-		NewPanel("Filter", common.ColorAccentModulation, NewFilterModel(synth.Filter)),
+	panels := []ui.Panel{
+		ui.NewPanel("Oscillator 1", common.ColorAccentPrimary, NewOscillatorModel(synth.Oscillator1)),
+		ui.NewPanel("Envelope 1", common.ColorAccentPrimary, NewEnvelopeModel(synth.Envelope1)),
+		ui.NewPanel("LFO 1", common.ColorAccentPrimary, NewLFOModel(synth.LFO1)),
+		ui.NewPanel("Oscillator 2", common.ColorAccentEnvelope, NewOscillatorModel(synth.Oscillator2)),
+		ui.NewPanel("Envelope 2", common.ColorAccentEnvelope, NewEnvelopeModel(synth.Envelope2)),
+		ui.NewPanel("LFO 2", common.ColorAccentEnvelope, NewLFOModel(synth.LFO2)),
+		ui.NewPanel("Mixer", common.ColorAccentModulation, NewMixer(synth.Mixer.Volume1, synth.Mixer.Volume2)),
+		ui.NewPanel("Filter", common.ColorAccentModulation, NewFilterModel(synth.Filter)),
 	}
 	return &SynthScreen{
 		panels:      panels,
@@ -43,7 +37,7 @@ func NewSynthScreen(synth *audio.Synth) *SynthScreen {
 
 // Update handles keyboard navigation between panels and forwards all other key
 // events to the active panel's Update method.
-func (s *SynthScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
+func (s *SynthScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -60,8 +54,8 @@ func (s *SynthScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		s.panels[s.ActivePanel], cmd = s.panels[s.ActivePanel].Update(msg)
 		return s, s.toSynthUpdated(cmd)
 
-	case SynthUpdated:
-		s.ApplyTrackChange(TrackChanged{Synth: msg.Synth})
+	case ui.SynthUpdated:
+		s.ApplyTrackChange(ui.TrackChanged{Synth: msg.Synth})
 		return s, nil
 	}
 
@@ -79,7 +73,7 @@ func (s *SynthScreen) toSynthUpdated(cmd tea.Cmd) tea.Cmd {
 		inner := cmd()
 		switch inner.(type) {
 		case OscillatorUpdated, EnvelopeUpdated, MixerUpdated, FilterUpdated, LFOUpdated:
-			return SynthUpdated{Synth: s.GetSynth()}
+			return ui.SynthUpdated{Synth: s.GetSynth()}
 		}
 		return inner
 	}
@@ -99,7 +93,7 @@ func (s *SynthScreen) GetFilter() *FilterModel { return s.panels[7].Child.(*Filt
 
 // ApplyTrackChange updates all panels to reflect the settings of the newly
 // selected track.
-func (s *SynthScreen) ApplyTrackChange(msg TrackChanged) {
+func (s *SynthScreen) ApplyTrackChange(msg ui.TrackChanged) {
 	synth := msg.Synth
 	s.Osc1().Oscillator = synth.Oscillator1
 	s.Env1().Envelope = synth.Envelope1
@@ -122,7 +116,7 @@ func (s *SynthScreen) Title() string { return "Synth" }
 func (s *SynthScreen) View() string {
 	render := func(idx int) string {
 		p := s.panels[idx]
-		return RenderPanel(p.Title, p.Color, p.Child.View(), idx == s.ActivePanel)
+		return ui.RenderPanel(p.Title, p.Color, p.Child.View(), idx == s.ActivePanel)
 	}
 
 	voice1 := lipgloss.JoinHorizontal(lipgloss.Top, render(0), render(1), render(2))

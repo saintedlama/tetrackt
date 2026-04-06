@@ -15,7 +15,7 @@ func TestSynthStreamerLength(t *testing.T) {
 	osc := Oscillator{Type: Silent}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc, env, osc, env, Mixer{Volume1: 1.0, Volume2: 1.0}, NewFilter(), LFO{}, LFO{})
-	streamer := synth.Streamer(sr, NewNote(BaseA, Octave4), dur)
+	streamer := synth.Streamer(sr, NewNote(BaseA, Octave4).Frequency(), dur)
 
 	buf := make([][2]float64, 512)
 	total := 0
@@ -39,7 +39,7 @@ func TestSynthSilentOscillators(t *testing.T) {
 	osc := Oscillator{Type: Silent}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc, env, osc, env, Mixer{Volume1: 1.0, Volume2: 1.0}, NewFilter(), LFO{}, LFO{})
-	samples := streamN(synth.Streamer(sr, NewNote(BaseA, Octave4), dur), sr.N(dur))
+	samples := streamN(synth.Streamer(sr, NewNote(BaseA, Octave4).Frequency(), dur), sr.N(dur))
 
 	for i, s := range samples {
 		if s[0] != 0 || s[1] != 0 {
@@ -55,7 +55,7 @@ func TestSynthMixerZeroVolume(t *testing.T) {
 	osc := Oscillator{Type: Square}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc, env, osc, env, Mixer{Volume1: 0, Volume2: 0}, NewFilter(), LFO{}, LFO{})
-	samples := streamN(synth.Streamer(sr, NewNote(BaseA, Octave4), dur), sr.N(dur))
+	samples := streamN(synth.Streamer(sr, NewNote(BaseA, Octave4).Frequency(), dur), sr.N(dur))
 
 	for i, s := range samples {
 		if s[0] != 0 || s[1] != 0 {
@@ -72,7 +72,7 @@ func TestSynthMixerBalance(t *testing.T) {
 	osc2 := Oscillator{Type: Silent}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc1, env, osc2, env, Mixer{Volume1: 1.0, Volume2: 0}, NewFilter(), LFO{}, LFO{})
-	samples := streamN(synth.Streamer(sr, NewNote(BaseA, Octave4), dur), sr.N(dur))
+	samples := streamN(synth.Streamer(sr, NewNote(BaseA, Octave4).Frequency(), dur), sr.N(dur))
 
 	hasNonZero := false
 	for _, s := range samples {
@@ -98,11 +98,11 @@ func TestSynthFilterOff(t *testing.T) {
 
 	// FilterOff passes through unmodified
 	synthOff := NewSynth(osc, env, osc, env, mixer, Filter{Type: FilterOff, Cutoff: 0.5}, LFO{}, LFO{})
-	samplesOff := streamN(synthOff.Streamer(sr, note, dur), n)
+	samplesOff := streamN(synthOff.Streamer(sr, note.Frequency(), dur), n)
 
 	// Aggressive LP filter (~21 Hz cutoff) should heavily attenuate 440 Hz content
 	synthLP := NewSynth(osc, env, osc, env, mixer, Filter{Type: FilterLowPass, Cutoff: 0.01}, LFO{}, LFO{})
-	samplesLP := streamN(synthLP.Streamer(sr, note, dur), n)
+	samplesLP := streamN(synthLP.Streamer(sr, note.Frequency(), dur), n)
 
 	rmsOff := rms(samplesOff)
 	rmsLP := rms(samplesLP)

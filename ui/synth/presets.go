@@ -1,4 +1,4 @@
-package ui
+package synth
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 )
 
@@ -59,7 +60,7 @@ func (ip *SynthPresetView) Init() tea.Cmd {
 }
 
 // Update handles input for selecting and applying presets.
-func (ip *SynthPresetView) Update(msg tea.Msg) (Component, tea.Cmd) {
+func (ip *SynthPresetView) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 	if len(ip.Presets) == 0 {
 		return ip, nil
 	}
@@ -84,7 +85,7 @@ func (ip *SynthPresetView) Update(msg tea.Msg) (Component, tea.Cmd) {
 		case "enter":
 			preset := ip.Presets[ip.SelectedPreset]
 			return ip, func() tea.Msg {
-				return SynthUpdated{Synth: preset.Synth}
+				return ui.SynthUpdated{Synth: preset.Synth}
 			}
 		}
 	}

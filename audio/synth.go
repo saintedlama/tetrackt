@@ -39,9 +39,21 @@ func NewSynth(oscillator1 Oscillator, envelope1 Envelope, oscillator2 Oscillator
 	}
 }
 
-func (s *Synth) Streamer(sampleRate beep.SampleRate, note Note, d time.Duration) beep.Streamer {
-	frequency := note.Frequency()
+// ActiveVoice is the handle returned by Synth.Streamer. It wraps the composed
+// beep.Streamer and exposes SetFrequency for live retuning (e.g. arpeggio).
+type ActiveVoice struct {
+	beep.Streamer
+	osc1 *oscillatorGenerator
+	osc2 *oscillatorGenerator
+}
 
+// SetFrequency retunes both oscillators to hz. Call between speaker.Lock/Unlock.
+func (av *ActiveVoice) SetFrequency(hz float64) {
+	av.osc1.SetFrequency(hz)
+	av.osc2.SetFrequency(hz)
+}
+
+func (s *Synth) Streamer(sampleRate beep.SampleRate, frequency float64, d time.Duration) *ActiveVoice {
 	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth)
 	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth)
 
@@ -76,5 +88,9 @@ func (s *Synth) Streamer(sampleRate beep.SampleRate, note Note, d time.Duration)
 	mixed := beep.Mix(mix1, mix2)
 	filtered := NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
 
-	return beep.Take(sampleDuration, filtered)
+	return &ActiveVoice{
+		Streamer: beep.Take(sampleDuration, filtered),
+		osc1:     osc1,
+		osc2:     osc2,
+	}
 }

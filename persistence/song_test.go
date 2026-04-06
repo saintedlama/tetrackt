@@ -5,28 +5,28 @@ import (
 	"testing"
 
 	"github.com/tetrackt/tetrackt/audio"
-	"github.com/tetrackt/tetrackt/ui"
+	"github.com/tetrackt/tetrackt/ui/tracker"
 )
 
 func TestSaveAndLoad(t *testing.T) {
 	// Create a test tracker with some data
-	tracker := ui.NewTracker(4, 16, 0, 0)
+	trackerModel := tracker.NewTracker(4, 16, 0, 0)
 
 	// Add some test data
-	tracker.Tracks[0].Synth.Oscillator1 = audio.Oscillator{Type: audio.Sine}
-	tracker.Tracks[0].Synth.Oscillator2 = audio.Oscillator{Type: audio.Square}
-	tracker.Tracks[0].Synth.Mixer = audio.Mixer{Volume1: 0.75, Volume2: 0.5}
-	tracker.Tracks[0].Synth.Envelope1 = audio.Envelope{
+	trackerModel.Tracks[0].Synth.Oscillator1 = audio.Oscillator{Type: audio.Sine}
+	trackerModel.Tracks[0].Synth.Oscillator2 = audio.Oscillator{Type: audio.Square}
+	trackerModel.Tracks[0].Synth.Mixer = audio.Mixer{Volume1: 0.75, Volume2: 0.5}
+	trackerModel.Tracks[0].Synth.Envelope1 = audio.Envelope{
 		Attack:  0.1,
 		Decay:   0.2,
 		Sustain: 0.5,
 		Release: 0.3,
 	}
-	tracker.Tracks[0].Rows[0] = ui.TrackRow{
+	trackerModel.Tracks[0].Rows[0] = tracker.TrackRow{
 		Note:   audio.NewNote("C", 4),
 		Volume: 64,
 	}
-	tracker.Tracks[0].Rows[1] = ui.TrackRow{
+	trackerModel.Tracks[0].Rows[1] = tracker.TrackRow{
 		Note:   audio.NewNote("E", 4),
 		Volume: 80,
 	}
@@ -35,7 +35,7 @@ func TestSaveAndLoad(t *testing.T) {
 	tmpFile := "test_song.yaml"
 	defer os.Remove(tmpFile)
 
-	song := TracksToSong(tracker)
+	song := TracksToSong(trackerModel)
 	err := SaveToFile(tmpFile, song)
 	if err != nil {
 		t.Fatalf("SaveToFile failed: %v", err)
@@ -48,7 +48,7 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 
 	// Create a new tracker and load data into it
-	newTracker := ui.NewTracker(8, 64, 0, 0) // Different dimensions initially
+	newTracker := tracker.NewTracker(8, 64, 0, 0) // Different dimensions initially
 	SongToTracks(loadedSong, newTracker)
 
 	// Verify dimensions were updated

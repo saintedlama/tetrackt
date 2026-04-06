@@ -20,10 +20,3 @@ var NoteKeys = map[string]audio.Base{
 	"&":  "A#", // german keyboard layout
 	"7":  "B",
 }
-
-// PlaySynthPresetNoteMsg requests that a note be played using a specific
-// synth preset's parameters rather than the current track's synth settings.
-type PlaySynthPresetNoteMsg struct {
-	Note   audio.Note
-	Preset SynthPreset
-}

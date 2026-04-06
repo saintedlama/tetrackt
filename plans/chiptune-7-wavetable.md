@@ -21,11 +21,13 @@ Amiga trackers play arbitrary PCM loops as oscillators. Custom wavetables unlock
 ## Implementation Plan
 
 1. **Add `Wavetable` constant** in `oscillator.go`:
+
    ```go
    Wavetable OscillatorType = "wavetable"
    ```
 
 2. **Extend `Oscillator` struct** with an optional slice field:
+
    ```go
    Wavetable []float64 // nil for all non-wavetable types
    ```
@@ -33,6 +35,7 @@ Amiga trackers play arbitrary PCM loops as oscillators. Custom wavetables unlock
 3. **Propagate wavetable into generator** — add `wavetable []float64` to `oscillatorGenerator`, populated from `Oscillator.Wavetable` when constructing the streamer in `NewOscillator`.
 
 4. **Handle `Wavetable` in `Stream()` switch**:
+
    ```go
    case Wavetable:
        n := float64(len(g.wavetable))
@@ -42,6 +45,7 @@ Amiga trackers play arbitrary PCM loops as oscillators. Custom wavetables unlock
        frac := pos - math.Floor(pos)
        sample = g.wavetable[i]*(1-frac) + g.wavetable[j]*frac
    ```
+
    Phase advances as normal (`g.phase += frequency / sampleRate`, wrapped to `[0, 1)`).
 
 5. **Validate in `NewOscillator`**: when `oscType == Wavetable`, return an error (or panic) if `Oscillator.Wavetable` is nil or empty before constructing the generator.

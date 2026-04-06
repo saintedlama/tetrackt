@@ -3,6 +3,7 @@ package audio
 import (
 	"fmt"
 	"math"
+	"slices"
 )
 
 type Note struct {
@@ -82,17 +83,21 @@ var noteBaseFrequencies = map[Base]float64{
 	"B":  493.88, // B4
 }
 
-func (note Note) Transpose(delta int) (Note, bool) {
-	if note.Base == BaseOff {
+// chromaticScale lists all 12 chromatic pitches in ascending order.
+var chromaticScale = []Base{BaseC, BaseCs, BaseD, BaseDs, BaseE, BaseF, BaseFs, BaseG, BaseGs, BaseA, BaseAs, BaseB}
+
+// Transpose shifts the note by the given number of semitones.
+// Returns (transposed, true) on success; (note, false) for off notes or out-of-range results.
+func (note Note) Transpose(semitones int) (Note, bool) {
+	idx := slices.Index(chromaticScale, note.Base)
+	if idx < 0 {
 		return note, false
 	}
-
-	newOctave := note.Octave + Octave(delta)
-	if newOctave > Octave8 {
+	total := int(note.Octave)*12 + idx + semitones
+	if total < 0 || total > int(Octave8)*12+11 {
 		return note, false
 	}
-
-	return Note{Base: note.Base, Octave: newOctave}, true
+	return Note{Base: chromaticScale[total%12], Octave: Octave(total / 12)}, true
 }
 
 func (note Note) Frequency() float64 {

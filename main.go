@@ -9,8 +9,11 @@ import (
 
 	"github.com/tetrackt/tetrackt/audio"
 	"github.com/tetrackt/tetrackt/persistence"
+	"github.com/tetrackt/tetrackt/player"
 	"github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
+	"github.com/tetrackt/tetrackt/ui/synth"
+	"github.com/tetrackt/tetrackt/ui/tracker"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -37,27 +40,32 @@ type model struct {
 	screens      []ui.Screen
 	activeScreen int
 
-	synthPresetView *ui.SynthPresetView // persistent across dialog opens
+	synthPresetView *synth.SynthPresetView // persistent across dialog opens
 
 	octave       int
 	globalVolume float64
 
 	// current loaded/saved filename (prefill on save)
 	currentFilename string
+
+	player player.Player
 }
 
 // synth returns the SynthScreen (always screens[synthScreenIdx]).
-func (m model) synth() *ui.SynthScreen {
-	return m.screens[synthScreenIdx].(*ui.SynthScreen)
+func (m model) synth() *synth.SynthScreen {
+	return m.screens[synthScreenIdx].(*synth.SynthScreen)
 }
 
 // trackerModel returns the TrackerModel owned by the TrackerScreen.
-func (m model) trackerModel() *ui.TrackerModel {
-	return m.screens[trackerScreenIdx].(*ui.TrackerScreen).Tracker
+func (m model) trackerModel() *tracker.TrackerModel {
+	return m.screens[trackerScreenIdx].(*tracker.TrackerScreen).Tracker
 }
 
 // tickMsg is sent to advance playback
 type tickMsg time.Time
+
+// previewTickMsg is sent to advance arp preview one sub-tick
+type previewTickMsg time.Time
 
 var noteKeyToName = ui.NoteKeys
 
@@ -87,7 +95,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open load dialog
 			return ui.NewDialogModel(ui.NewFileDialog(ui.ModeLoad, ""), m, m.width, m.height), nil
 		case "i":
-			return ui.NewDialogModel(ui.NewSynthPresetsDialog(m.synthPresetView, m.octave), m, m.width, m.height), nil
+			return ui.NewDialogModel(synth.NewSynthPresetsDialog(m.synthPresetView, m.octave), m, m.width, m.height), nil
+		case "e":
+			if m.activeScreen == trackerScreenIdx {
+				tm := m.trackerModel()
+				row := tm.Tracks[tm.CursorTrack].Rows[tm.CursorRow]
+				return ui.NewDialogModel(tracker.NewRowEffectsDialog(row.Arpeggio, tm.CursorTrack, tm.CursorRow), m, m.width, m.height), nil
+			}
 		case "t":
 			m.activeScreen = (m.activeScreen + 1) % len(m.screens)
 			return m, nil
@@ -97,7 +111,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			note := m.trackerModel().GetNote()
-			if newNote, ok := note.Transpose(-1); ok {
+			if newNote, ok := note.Transpose(-12); ok {
 				m.trackerModel().SetNote(newNote)
 				m.playNote(newNote)
 				return m, nil
@@ -110,7 +124,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			note := m.trackerModel().CurrentTrack().CurrentRow().Note
-			if newNote, ok := note.Transpose(-1); ok {
+			if newNote, ok := note.Transpose(-12); ok {
 				m.trackerModel().SetNote(newNote)
 				m.playNote(newNote)
 				return m, nil
@@ -124,6 +138,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tracker.LoopToRow = false // normal play toggles off loop mode
 			if tracker.IsPlaying {
 				tracker.PlaybackRow = 0
+				m.player.Reset()
 
 				// TODO: Loop to row is just a special play mode, that does not use 0..numRows range
 				if "P" == keyStr {
@@ -144,12 +159,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Global note playing (available in any mode)
 		if base, ok := noteKeyToName[msg.String()]; ok {
 			note := audio.Note{Base: base, Octave: audio.Octave(m.octave)}
-			m.playNote(note)
 
 			if m.activeScreen == trackerScreenIdx {
-				m.trackerModel().SetNote(note)
+				tr := m.trackerModel()
+				tr.SetNote(note)
+				row := tr.Tracks[tr.CursorTrack].Rows[tr.CursorRow]
+				if m.player.StartPreview(note, row.Arpeggio, tr.Tracks[tr.CursorTrack].Synth,
+					tr.BPMDuration(), m.sampleRate, m.globalVolume, tr.Speed) {
+					return m, m.previewTick()
+				}
+				return m, nil
 			}
 
+			m.playNote(note)
 			return m, nil
 		}
 
@@ -158,36 +180,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screens[m.activeScreen], cmd = m.screens[m.activeScreen].Update(msg)
 		return m, cmd
 
+	case previewTickMsg:
+		if m.player.TickPreview() {
+			return m, m.previewTick()
+		}
+		return m, nil
+
 	case tickMsg:
-		tracker := m.trackerModel()
-		if !tracker.IsPlaying {
+		tr := m.trackerModel()
+		if !tr.IsPlaying {
 			return m, nil
 		}
-
-		// Play all notes at current playback row
-		m.playRowNotes(tracker.PlaybackRow)
-
-		// Advance to next row
-		tracker.PlaybackRow++
-		if tracker.LoopToRow {
-			// Wrap within 0..loopEndRow inclusive
-			if tracker.PlaybackRow > tracker.LoopEndRow {
-				tracker.PlaybackRow = 0
-			}
-		} else {
-			if tracker.PlaybackRow >= tracker.NumRows {
-				tracker.PlaybackRow = 0 // Loop back to start
-			}
-		}
-
-		// Schedule next tick
+		m.player.Tick(tr, m.sampleRate, m.globalVolume)
 		return m, m.tick()
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 
-		m.trackerModel().Viewport = ui.Viewport{
+		m.trackerModel().Viewport = tracker.Viewport{
 			Height: m.height - 7, // tab bar (1) + blank line (1) + newline (1) + footer padding+text (2) + panel border (2)
 			Width:  m.width,
 		}
@@ -197,6 +208,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ui.TrackChanged:
 		// Sync synth panels with the newly selected track
 		m.synth().ApplyTrackChange(msg)
+
+	case tracker.RowEffectsApplied:
+		tm := m.trackerModel()
+		if msg.TrackIdx < len(tm.Tracks) && msg.RowIdx < tm.NumRows {
+			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Arpeggio = msg.Arpeggio
+		}
+		return m, nil
 
 	case ui.FileDialogConfirmed:
 		// Handle file dialog confirmation
@@ -224,13 +242,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case ui.VolumeChanged:
+	case tracker.VolumeChanged:
 		m.globalVolume = msg.Volume
 
-	case ui.BPMChanged:
+	case tracker.BPMChanged:
 		// BPM is already updated on the TrackerModel; nothing else to do here.
 
-	case ui.PlaySynthPresetNoteMsg:
+	case synth.PlaySynthPresetNoteMsg:
 		m.playNoteWithSynthPreset(msg.Note, msg.Preset)
 		return m, nil
 
@@ -244,19 +262,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// tick returns a command that sends a tickMsg after a delay
+// previewTick returns a command that sends a previewTickMsg after one sub-tick delay.
+func (m *model) previewTick() tea.Cmd {
+	trackerModel := m.trackerModel()
+	speed := trackerModel.Speed
+	if speed <= 0 {
+		speed = tracker.DefaultSpeed
+	}
+	duration := trackerModel.BPMDuration() / time.Duration(speed)
+	return tea.Tick(duration, func(t time.Time) tea.Msg {
+		return previewTickMsg(t)
+	})
+}
+
+// tick returns a command that sends a tickMsg after one sub-tick delay.
 func (m *model) tick() tea.Cmd {
-	duration := m.trackerModel().BPMDuration()
+	trackerModel := m.trackerModel()
+	speed := trackerModel.Speed
+	if speed <= 0 {
+		speed = tracker.DefaultSpeed
+	}
+	duration := trackerModel.BPMDuration() / time.Duration(speed)
 	return tea.Tick(duration, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
 
 // playNoteWithSynthPreset plays a note using the given synth preset's parameters.
-func (m *model) playNoteWithSynthPreset(note audio.Note, preset ui.SynthPreset) {
+func (m *model) playNoteWithSynthPreset(note audio.Note, preset synth.SynthPreset) {
 	duration := m.trackerModel().BPMDuration()
 	volumeAdjusted := &effects.Volume{
-		Streamer: preset.Synth.Streamer(m.sampleRate, note, duration),
+		Streamer: preset.Synth.Streamer(m.sampleRate, note.Frequency(), duration),
 		Base:     2,
 		Volume:   volumeToDecibels(m.globalVolume),
 		Silent:   m.globalVolume == 0,
@@ -270,7 +306,7 @@ func (m *model) playNote(note audio.Note) {
 
 	synth := m.synth().GetSynth()
 
-	synthStreamer := synth.Streamer(m.sampleRate, note, duration)
+	synthStreamer := synth.Streamer(m.sampleRate, note.Frequency(), duration)
 	volumeAdjusted := &effects.Volume{
 		Streamer: synthStreamer,
 		Base:     2,
@@ -280,47 +316,6 @@ func (m *model) playNote(note audio.Note) {
 
 	// Clear previous sound and play the new note
 	speaker.Play(volumeAdjusted)
-}
-
-// playRowNotes plays all notes in the specified row across all tracks
-func (m *model) playRowNotes(row int) {
-	tracker := m.trackerModel()
-	if row < 0 || row >= tracker.NumRows {
-		return
-	}
-
-	// TODO: duration should be adjustable
-	duration := tracker.BPMDuration()
-	var streamers []beep.Streamer
-
-	// Collect all note generators for this row
-	for trackIdx := 0; trackIdx < tracker.NumTracks; trackIdx++ {
-		track := tracker.Tracks[trackIdx]
-		trackRow := track.Rows[row]
-
-		// Skip empty notes
-		if audio.IsOff(trackRow.Note) {
-			continue
-		}
-
-		synthStreamer := track.Synth.Streamer(m.sampleRate, trackRow.Note, duration)
-		streamers = append(streamers, synthStreamer)
-	}
-
-	// If we have any notes to play, mix and play them
-	if len(streamers) > 0 {
-		mixed := beep.Mix(streamers...)
-
-		// global vol
-		volumeAdjusted := &effects.Volume{
-			Streamer: mixed,
-			Base:     2,
-			Volume:   volumeToDecibels(m.globalVolume),
-			Silent:   m.globalVolume == 0,
-		}
-
-		speaker.Play(volumeAdjusted)
-	}
 }
 
 func volumeToDecibels(volume float64) float64 {
@@ -363,18 +358,18 @@ func main() {
 	sampleRate := beep.SampleRate(44100)
 
 	// Create pattern with 8 tracks and 64 rows
-	tracker := ui.NewTracker(8, 64, 0, 0)
-	track := tracker.CurrentTrack()
+	trackerModel := tracker.NewTracker(8, 64, 0, 0)
+	track := trackerModel.CurrentTrack()
 
 	p := tea.NewProgram(
 		model{
 			sampleRate: sampleRate,
 			screens: []ui.Screen{
-				ui.NewTrackerScreen(tracker),
-				ui.NewSynthScreen(track.Synth),
+				tracker.NewTrackerScreen(trackerModel),
+				synth.NewSynthScreen(track.Synth),
 			},
 			activeScreen:    trackerScreenIdx,
-			synthPresetView: ui.NewSynthPresetView(),
+			synthPresetView: synth.NewSynthPresetView(),
 			octave:          4,
 			globalVolume:    1.0,
 		},

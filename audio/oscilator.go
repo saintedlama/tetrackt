@@ -105,3 +105,9 @@ func (g *oscillatorGenerator) Stream(samples [][2]float64) (n int, ok bool) {
 func (g *oscillatorGenerator) Err() error {
 	return nil
 }
+
+// SetFrequency retunes the oscillator to the given frequency in Hz.
+// Safe to call between audio blocks via speaker.Lock/Unlock.
+func (g *oscillatorGenerator) SetFrequency(hz float64) {
+	g.frequency = hz
+}

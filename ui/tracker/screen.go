@@ -1,4 +1,4 @@
-package ui
+package tracker
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 )
 
@@ -49,7 +50,7 @@ func (t *TrackerScreen) SetGlobalVolume(v float64) {
 }
 
 // Update handles tab navigation between tracker/volume panels and key events.
-func (t *TrackerScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
+func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -121,7 +122,7 @@ func (t *TrackerScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		_, cmd := t.Tracker.Update(msg)
 		return t, cmd
 
-	case SynthUpdated:
+	case ui.SynthUpdated:
 		t.Tracker.Tracks[t.Tracker.CursorTrack].Synth = msg.Synth
 		return t, nil
 	}
@@ -142,8 +143,8 @@ func (t *TrackerScreen) View() string {
 	volumeRow := fmt.Sprintf("%s  %s  %3d%%", volLabel, t.volumeBar.View(), int(t.GlobalVolume*100))
 	bpmRow := fmt.Sprintf("%s  %3d BPM", bpmLabel, t.Tracker.BPM)
 	settingsContent := volumeRow + "\n" + bpmRow
-	trackerPanel := RenderPanel("Tracker", common.ColorAccentPrimary, t.Tracker.View(), t.activePanel == 0)
-	settingsPanel := RenderPanel("Settings", common.ColorAccentModulation, settingsContent, t.activePanel == 1)
+	trackerPanel := ui.RenderPanel("Tracker", common.ColorAccentPrimary, t.Tracker.View(), t.activePanel == 0)
+	settingsPanel := ui.RenderPanel("Settings", common.ColorAccentModulation, settingsContent, t.activePanel == 1)
 	return lipgloss.JoinHorizontal(lipgloss.Top, trackerPanel, settingsPanel)
 }
 
@@ -152,5 +153,5 @@ func (t *TrackerScreen) Title() string { return "Tracker" }
 
 // Footer returns the help text shown in the footer bar on the Tracker screen.
 func (t *TrackerScreen) Footer() string {
-	return "Tab/Shift+Tab: Switch panel | ↑↓←→: Navigate | 1-7: Notes | Shift+1-6: Sharp Notes | Delete: Clear | +/-: Octave | p: Play/Pause | P: Loop | S: Save | L: Load | T: Synth | Q: Quit"
+	return "Tab/Shift+Tab: Switch panel | ↑↓←→: Navigate | 1-7: Notes | Shift+1-6: Sharp Notes | Delete: Clear | +/-: Octave | E: Row effects | p: Play/Pause | P: Loop | S: Save | L: Load | T: Synth | Q: Quit"
 }

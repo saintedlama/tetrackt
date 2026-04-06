@@ -5,14 +5,16 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/tetrackt/tetrackt/audio"
-	"github.com/tetrackt/tetrackt/ui"
+	utracker "github.com/tetrackt/tetrackt/ui/tracker"
 )
 
 // SavedTrackRow is the YAML-serializable form of TrackRow
 type SavedTrackRow struct {
-	Base   string `yaml:"base"`
-	Octave int    `yaml:"octave"`
-	Volume int    `yaml:"volume"`
+	Base                 string `yaml:"base"`
+	Octave               int    `yaml:"octave"`
+	Volume               int    `yaml:"volume"`
+	ArpeggioOffsets      []int  `yaml:"arpeggio_offsets,omitempty"`
+	ArpeggioTicksPerStep int    `yaml:"arpeggio_ticks_per_step,omitempty"`
 }
 
 // SavedTrack is the YAML-serializable form of Track
@@ -48,15 +50,17 @@ type SavedSong struct {
 	NumRows   int          `yaml:"num_rows"`
 	NumTracks int          `yaml:"num_tracks"`
 	BPM       int          `yaml:"bpm"`
+	Speed     int          `yaml:"speed,omitempty"`
 	Tracks    []SavedTrack `yaml:"tracks"`
 }
 
 // TracksToSong converts the runtime TrackerModel to a SavedSong for YAML serialization
-func TracksToSong(tracker *ui.TrackerModel) *SavedSong {
+func TracksToSong(tracker *utracker.TrackerModel) *SavedSong {
 	saved := &SavedSong{
 		NumRows:   tracker.NumRows,
 		NumTracks: tracker.NumTracks,
 		BPM:       tracker.BPM,
+		Speed:     tracker.Speed,
 		Tracks:    make([]SavedTrack, tracker.NumTracks),
 	}
 
@@ -64,9 +68,11 @@ func TracksToSong(tracker *ui.TrackerModel) *SavedSong {
 		rows := make([]SavedTrackRow, len(track.Rows))
 		for j, row := range track.Rows {
 			rows[j] = SavedTrackRow{
-				Base:   string(row.Note.Base),
-				Octave: int(row.Note.Octave),
-				Volume: row.Volume,
+				Base:                 string(row.Note.Base),
+				Octave:               int(row.Note.Octave),
+				Volume:               row.Volume,
+				ArpeggioOffsets:      row.Arpeggio.Offsets,
+				ArpeggioTicksPerStep: row.Arpeggio.TicksPerStep,
 			}
 		}
 		s := track.Synth
@@ -102,7 +108,7 @@ func TracksToSong(tracker *ui.TrackerModel) *SavedSong {
 
 // SongToTracks updates an existing TrackerModel with data from a SavedSong
 // This fixes the TODO: instead of creating a new model, it updates the existing one
-func SongToTracks(saved *SavedSong, tracker *ui.TrackerModel) {
+func SongToTracks(saved *SavedSong, tracker *utracker.TrackerModel) {
 	// Update tracker dimensions
 	tracker.NumRows = saved.NumRows
 	tracker.NumTracks = saved.NumTracks
@@ -111,12 +117,19 @@ func SongToTracks(saved *SavedSong, tracker *ui.TrackerModel) {
 	if saved.BPM > 0 {
 		tracker.BPM = saved.BPM
 	} else {
-		tracker.BPM = ui.DefaultBPM
+		tracker.BPM = utracker.DefaultBPM
+	}
+
+	// Restore Speed; fall back to default for old saves that omit it
+	if saved.Speed > 0 {
+		tracker.Speed = saved.Speed
+	} else {
+		tracker.Speed = utracker.DefaultSpeed
 	}
 
 	// Resize tracks slice if needed
 	if len(tracker.Tracks) != saved.NumTracks {
-		tracker.Tracks = make([]ui.Track, saved.NumTracks)
+		tracker.Tracks = make([]utracker.Track, saved.NumTracks)
 	}
 
 	// Update each track with saved data
@@ -159,15 +172,19 @@ func SongToTracks(saved *SavedSong, tracker *ui.TrackerModel) {
 
 		// Resize rows slice if needed
 		if len(track.Rows) != saved.NumRows {
-			track.Rows = make([]ui.TrackRow, saved.NumRows)
+			track.Rows = make([]utracker.TrackRow, saved.NumRows)
 		}
 
 		// Update each row with saved data
 		for j, row := range savedTrack.Rows {
 			if j < len(track.Rows) {
-				track.Rows[j] = ui.TrackRow{
+				track.Rows[j] = utracker.TrackRow{
 					Note:   audio.Note{Base: audio.Base(row.Base), Octave: audio.Octave(row.Octave)},
 					Volume: row.Volume,
+					Arpeggio: audio.ArpeggioEffect{
+						Offsets:      row.ArpeggioOffsets,
+						TicksPerStep: row.ArpeggioTicksPerStep,
+					},
 				}
 			}
 		}
