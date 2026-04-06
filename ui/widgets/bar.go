@@ -7,10 +7,10 @@ import (
 )
 
 var (
-	// Left (filled) side of the bar — orange accent, matching envelope colour.
-	barLeftStyle = lipgloss.NewStyle().SetString("█").Foreground(lipgloss.Color("#ff7700"))
-	// Right (empty) side of the bar — cyan accent, matching oscillator colour.
-	barRightStyle = lipgloss.NewStyle().SetString("█").Foreground(lipgloss.Color("#00d4e8"))
+	// barFilledStyle matches ColorAccentEnvelope (#ff7700) from styles.go.
+	barFilledStyle = lipgloss.NewStyle().SetString("▪").Foreground(lipgloss.Color("#ff7700"))
+	// barEmptyStyle matches ColorGrayMedium (#3c3c3c) from styles.go.
+	barEmptyStyle = lipgloss.NewStyle().SetString("▫").Foreground(lipgloss.Color("#3c3c3c"))
 )
 
 // Bar is a horizontal fill indicator that visualises a value within a range.
@@ -43,9 +43,9 @@ func (b Bar) View() string {
 	var bar strings.Builder
 	for i := 0; i < b.width; i++ {
 		if i < filledWidth {
-			bar.WriteString(barLeftStyle.Render())
+			bar.WriteString(barFilledStyle.Render())
 		} else {
-			bar.WriteString(barRightStyle.Render())
+			bar.WriteString(barEmptyStyle.Render())
 		}
 	}
 

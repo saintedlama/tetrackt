@@ -77,14 +77,23 @@ func (s *SynthScreen) ModeLabel() string {
 	return labels[s.ActivePanel]
 }
 
-// View renders all five synth panels horizontally, taking the full available
-// terminal height.
+// View renders the synth panels in a 2x2 grid with mixer and filter stacked on the right.
+//
+//	Row 1: Osc1  Env1  │ Mixer
+//	Row 2: Osc2  Env2  │ Filter
 func (s *SynthScreen) View() string {
-	panelViews := make([]string, len(s.panels))
-	for i, p := range s.panels {
-		panelViews[i] = RenderPanel(p.Title, p.Color, p.Child.View(), i == s.ActivePanel)
+	render := func(idx int) string {
+		p := s.panels[idx]
+		return RenderPanel(p.Title, p.Color, p.Child.View(), idx == s.ActivePanel)
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, panelViews...)
+
+	row1 := lipgloss.JoinHorizontal(lipgloss.Top, render(0), render(1))
+	row2 := lipgloss.JoinHorizontal(lipgloss.Top, render(2), render(3))
+	left := lipgloss.JoinVertical(lipgloss.Left, row1, row2)
+
+	right := lipgloss.JoinVertical(lipgloss.Left, render(4), render(5))
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 }
 
 // Footer returns the help text shown in the footer bar on the Synth screen.

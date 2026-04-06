@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
 	"github.com/tetrackt/tetrackt/ui/widgets"
 )
@@ -40,16 +41,22 @@ func (m *Mixer) Init() tea.Cmd {
 	return nil
 }
 
+var mixerSelectedStyle = lipgloss.NewStyle().
+	Background(ColorGrayDark).
+	Foreground(ColorAccentPrimary)
+
 func (m *Mixer) View() string {
 	var sb strings.Builder
-	marker1, marker2 := " ", " "
-	if m.selected == 0 {
-		marker1 = ">"
-	} else {
-		marker2 = ">"
+	renderRow := func(label string, bar widgets.Bar, vol float64, selected bool) string {
+		labelPart := label + ":"
+		if selected {
+			labelPart = mixerSelectedStyle.Render(labelPart)
+		}
+		return fmt.Sprintf("%s %s %3d%%", labelPart, bar.View(), int(math.Round(vol*100)))
 	}
-	fmt.Fprintf(&sb, "%s Osc1: %s %3d%%\n", marker1, m.Bar1.View(), int(math.Round(m.Mixer.Volume1*100)))
-	fmt.Fprintf(&sb, "%s Osc2: %s %3d%%", marker2, m.Bar2.View(), int(math.Round(m.Mixer.Volume2*100)))
+	sb.WriteString(renderRow("Osc1", m.Bar1, m.Mixer.Volume1, m.selected == 0))
+	sb.WriteString("\n")
+	sb.WriteString(renderRow("Osc2", m.Bar2, m.Mixer.Volume2, m.selected == 1))
 	return sb.String()
 }
 

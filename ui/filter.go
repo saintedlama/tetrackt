@@ -58,12 +58,19 @@ func (m *FilterModel) Init() tea.Cmd { return nil }
 
 func (m *FilterModel) View() string {
 	var sb strings.Builder
+	renderBarRow := func(label, barView string, pct int, selected bool) string {
+		l := label
+		if selected {
+			l = m.selectedStyle.Render(label)
+		}
+		return fmt.Sprintf("%s %s %3d%%", l, barView, pct)
+	}
 	typeStr := renderFieldSelected(m.filterTypeStyle.Render(string(m.Filter.Type)), m.editField == filterFieldType, m.selectedStyle)
 	sb.WriteString(typeStr)
 	sb.WriteString("\n")
-	sb.WriteString(renderFieldSelected(fmt.Sprintf("Cutoff %s %3d%%", m.cutoffBar.View(), int(m.Filter.Cutoff*100)), m.editField == filterFieldCutoff, m.selectedStyle))
+	sb.WriteString(renderBarRow("Cutoff", m.cutoffBar.View(), int(m.Filter.Cutoff*100), m.editField == filterFieldCutoff))
 	sb.WriteString("\n")
-	sb.WriteString(renderFieldSelected(fmt.Sprintf("Reso   %s %3d%%", m.resonanceBar.View(), int(m.Filter.Resonance*100)), m.editField == filterFieldResonance, m.selectedStyle))
+	sb.WriteString(renderBarRow("Reso  ", m.resonanceBar.View(), int(m.Filter.Resonance*100), m.editField == filterFieldResonance))
 	return sb.String()
 }
 

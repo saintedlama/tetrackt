@@ -29,9 +29,8 @@ var (
 			Padding(1, 1)
 
 	selectedStyle = lipgloss.NewStyle().
-			Background(ui.ColorAccentInstrument).
-			Foreground(ui.ColorWhite).
-			Bold(true)
+			Background(ui.ColorGrayDark).
+			Foreground(ui.ColorAccentPrimary)
 
 	tabActiveStyle = lipgloss.NewStyle().
 			Bold(true).
