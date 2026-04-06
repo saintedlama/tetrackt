@@ -260,7 +260,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case 1: // Env1
 			m.synth().Env1().Envelope = msg.Envelope
 			tracker.Tracks[tracker.CursorTrack].Envelope1 = msg.Envelope
-		case 3: // Env2
+		case 4: // Env2
 			m.synth().Env2().Envelope = msg.Envelope
 			tracker.Tracks[tracker.CursorTrack].Envelope2 = msg.Envelope
 		}
@@ -271,7 +271,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.synth().ActivePanel {
 		case 0: // Osc1
 			tracker.Tracks[tracker.CursorTrack].Oscillator1 = msg.Oscillator
-		case 2: // Osc2
+		case 3: // Osc2
 			tracker.Tracks[tracker.CursorTrack].Oscillator2 = msg.Oscillator
 		}
 	case ui.EnvelopeUpdated:
@@ -279,7 +279,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.synth().ActivePanel {
 		case 1: // Env1
 			tracker.Tracks[tracker.CursorTrack].Envelope1 = msg.Envelope
-		case 3: // Env2
+		case 4: // Env2
 			tracker.Tracks[tracker.CursorTrack].Envelope2 = msg.Envelope
 		}
 	case ui.MixerUpdated:
@@ -292,10 +292,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		tracker := m.trackerModel()
 		track := &tracker.Tracks[tracker.CursorTrack]
 		switch m.synth().ActivePanel {
-		case 6: // LFO1
+		case 2: // LFO1
 			track.LFO1 = msg.LFO
 			track.LFO1Dest = msg.Dest
-		case 7: // LFO2
+		case 5: // LFO2
 			track.LFO2 = msg.LFO
 			track.LFO2Dest = msg.Dest
 		}
@@ -504,14 +504,14 @@ func main() {
 	track := tracker.CurrentTrack()
 
 	synthPanels := []ui.Panel{
-		ui.NewPanel("Oscillator 1", common.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator1)),
-		ui.NewPanel("Envelope 1", common.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope1)),
-		ui.NewPanel("Oscillator 2", common.ColorAccentOscillator, ui.NewOscillatorModel(selectedStyle, track.Oscillator2)),
+		ui.NewPanel("Oscillator 1", common.ColorAccentPrimary, ui.NewOscillatorModel(selectedStyle, track.Oscillator1)),
+		ui.NewPanel("Envelope 1", common.ColorAccentPrimary, ui.NewEnvelopeModel(selectedStyle, track.Envelope1)),
+		ui.NewPanel("LFO 1", common.ColorAccentPrimary, ui.NewLFOModel(selectedStyle, track.LFO1, track.LFO1Dest)),
+		ui.NewPanel("Oscillator 2", common.ColorAccentEnvelope, ui.NewOscillatorModel(selectedStyle, track.Oscillator2)),
 		ui.NewPanel("Envelope 2", common.ColorAccentEnvelope, ui.NewEnvelopeModel(selectedStyle, track.Envelope2)),
+		ui.NewPanel("LFO 2", common.ColorAccentEnvelope, ui.NewLFOModel(selectedStyle, track.LFO2, track.LFO2Dest)),
 		ui.NewPanel("Mixer", common.ColorAccentModulation, ui.NewMixer(track.Mixer.Volume1, track.Mixer.Volume2)),
-		ui.NewPanel("Filter", common.ColorAccentPrimary, ui.NewFilterModel(selectedStyle, track.Filter)),
-		ui.NewPanel("LFO 1", common.ColorAccentModulation, ui.NewLFOModel(selectedStyle, track.LFO1, track.LFO1Dest)),
-		ui.NewPanel("LFO 2", common.ColorAccentModulation, ui.NewLFOModel(selectedStyle, track.LFO2, track.LFO2Dest)),
+		ui.NewPanel("Filter", common.ColorAccentModulation, ui.NewFilterModel(selectedStyle, track.Filter)),
 	}
 
 	p := tea.NewProgram(

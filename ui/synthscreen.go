@@ -47,14 +47,15 @@ func (s *SynthScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 
 // Accessors for synth component children, used by main for audio playback and
 // cross-screen state synchronisation.
+// Panel order: 0=Osc1, 1=Env1, 2=LFO1, 3=Osc2, 4=Env2, 5=LFO2, 6=Mixer, 7=Filter
 func (s *SynthScreen) Osc1() *OscillatorModel  { return s.panels[0].Child.(*OscillatorModel) }
 func (s *SynthScreen) Env1() *EnvelopeModel    { return s.panels[1].Child.(*EnvelopeModel) }
-func (s *SynthScreen) Osc2() *OscillatorModel  { return s.panels[2].Child.(*OscillatorModel) }
-func (s *SynthScreen) Env2() *EnvelopeModel    { return s.panels[3].Child.(*EnvelopeModel) }
-func (s *SynthScreen) GetMixer() *Mixer        { return s.panels[4].Child.(*Mixer) }
-func (s *SynthScreen) GetFilter() *FilterModel { return s.panels[5].Child.(*FilterModel) }
-func (s *SynthScreen) LFO1() *LFOModel         { return s.panels[6].Child.(*LFOModel) }
-func (s *SynthScreen) LFO2() *LFOModel         { return s.panels[7].Child.(*LFOModel) }
+func (s *SynthScreen) LFO1() *LFOModel         { return s.panels[2].Child.(*LFOModel) }
+func (s *SynthScreen) Osc2() *OscillatorModel  { return s.panels[3].Child.(*OscillatorModel) }
+func (s *SynthScreen) Env2() *EnvelopeModel    { return s.panels[4].Child.(*EnvelopeModel) }
+func (s *SynthScreen) LFO2() *LFOModel         { return s.panels[5].Child.(*LFOModel) }
+func (s *SynthScreen) GetMixer() *Mixer        { return s.panels[6].Child.(*Mixer) }
+func (s *SynthScreen) GetFilter() *FilterModel { return s.panels[7].Child.(*FilterModel) }
 
 // ApplyTrackChange updates all panels to reflect the settings of the newly
 // selected track.
@@ -75,24 +76,23 @@ func (s *SynthScreen) ApplyTrackChange(msg TrackChanged) {
 // Title returns the tab label for the SynthScreen.
 func (s *SynthScreen) Title() string { return "Synth" }
 
-// View renders the synth panels in a 2x2 + right-column layout:
+// View renders the synth panels grouped by voice:
 //
-//	Row 1: Osc1  Env1  │ Mixer  │ LFO1
-//	Row 2: Osc2  Env2  │ Filter │ LFO2
+//	Voice 1: Osc1  Env1  LFO1  │ Mixer
+//	Voice 2: Osc2  Env2  LFO2  │ Filter
 func (s *SynthScreen) View() string {
 	render := func(idx int) string {
 		p := s.panels[idx]
 		return RenderPanel(p.Title, p.Color, p.Child.View(), idx == s.ActivePanel)
 	}
 
-	row1 := lipgloss.JoinHorizontal(lipgloss.Top, render(0), render(1))
-	row2 := lipgloss.JoinHorizontal(lipgloss.Top, render(2), render(3))
-	left := lipgloss.JoinVertical(lipgloss.Left, row1, row2)
+	voice1 := lipgloss.JoinHorizontal(lipgloss.Top, render(0), render(1), render(2))
+	voice2 := lipgloss.JoinHorizontal(lipgloss.Top, render(3), render(4), render(5))
+	left := lipgloss.JoinVertical(lipgloss.Left, voice1, voice2)
 
-	mid := lipgloss.JoinVertical(lipgloss.Left, render(4), render(5))
 	right := lipgloss.JoinVertical(lipgloss.Left, render(6), render(7))
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, mid, right)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 }
 
 // Footer returns the help text shown in the footer bar on the Synth screen.
