@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -41,6 +42,10 @@ type Viewport struct {
 	Height int
 }
 
+const DefaultBPM = 160
+const MinBPM = 40
+const MaxBPM = 300
+
 // TrackerModel represents the state of the tracker pattern editor
 type TrackerModel struct {
 	Tracks      []Track
@@ -54,6 +59,16 @@ type TrackerModel struct {
 	PlaybackRow int
 	viewportRow int
 	Viewport    Viewport
+	BPM         int
+}
+
+// BPMDuration returns the duration of one row at the current BPM.
+func (m *TrackerModel) BPMDuration() time.Duration {
+	bpm := m.BPM
+	if bpm <= 0 {
+		bpm = DefaultBPM
+	}
+	return time.Duration(60000/bpm) * time.Millisecond
 }
 
 // Track represents a single track in the pattern
@@ -82,8 +97,8 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 				audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
 				audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 				audio.NewFilter(),
-					audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0, Dest: audio.ModPitch},
-					audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0, Dest: audio.ModVolume},
+				audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0, Dest: audio.ModPitch},
+				audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0, Dest: audio.ModVolume},
 			),
 			Rows: make([]TrackRow, numRows),
 		}
@@ -106,6 +121,7 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 		CursorRow:   0,
 		viewportRow: 0,
 		Viewport:    Viewport{Width: viewportWidth, Height: viewportHeight},
+		BPM:         DefaultBPM,
 	}
 }
 

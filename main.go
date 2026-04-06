@@ -64,8 +64,7 @@ var noteKeyToName = ui.NoteKeys
 func (m model) Init() tea.Cmd {
 	// Initialize speaker with sample rate
 	sampleRate := m.sampleRate
-	buffersize := sampleRate.N(time.Millisecond * 250)
-
+	buffersize := sampleRate.N(time.Millisecond * 100)
 	speaker.Init(sampleRate, buffersize)
 
 	return nil
@@ -228,6 +227,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ui.VolumeChanged:
 		m.globalVolume = msg.Volume
 
+	case ui.BPMChanged:
+		// BPM is already updated on the TrackerModel; nothing else to do here.
+
 	case ui.PlaySynthPresetNoteMsg:
 		m.playNoteWithSynthPreset(msg.Note, msg.Preset)
 		return m, nil
@@ -244,14 +246,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // tick returns a command that sends a tickMsg after a delay
 func (m *model) tick() tea.Cmd {
-	return tea.Tick(time.Millisecond*250, func(t time.Time) tea.Msg {
+	duration := m.trackerModel().BPMDuration()
+	return tea.Tick(duration, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
 
 // playNoteWithSynthPreset plays a note using the given synth preset's parameters.
 func (m *model) playNoteWithSynthPreset(note audio.Note, preset ui.SynthPreset) {
-	duration := time.Millisecond * 250
+	duration := m.trackerModel().BPMDuration()
 	volumeAdjusted := &effects.Volume{
 		Streamer: preset.Synth.Streamer(m.sampleRate, note, duration),
 		Base:     2,
@@ -263,8 +266,7 @@ func (m *model) playNoteWithSynthPreset(note audio.Note, preset ui.SynthPreset) 
 
 // playNote plays a note at the given frequency using the current oscillator
 func (m *model) playNote(note audio.Note) {
-	// TODO: duration should be adjustable
-	duration := time.Millisecond * 250
+	duration := m.trackerModel().BPMDuration()
 
 	synth := m.synth().GetSynth()
 
@@ -288,7 +290,7 @@ func (m *model) playRowNotes(row int) {
 	}
 
 	// TODO: duration should be adjustable
-	duration := time.Millisecond * 250
+	duration := tracker.BPMDuration()
 	var streamers []beep.Streamer
 
 	// Collect all note generators for this row

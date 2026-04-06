@@ -47,6 +47,7 @@ type SavedTrack struct {
 type SavedSong struct {
 	NumRows   int          `yaml:"num_rows"`
 	NumTracks int          `yaml:"num_tracks"`
+	BPM       int          `yaml:"bpm"`
 	Tracks    []SavedTrack `yaml:"tracks"`
 }
 
@@ -55,6 +56,7 @@ func TracksToSong(tracker *ui.TrackerModel) *SavedSong {
 	saved := &SavedSong{
 		NumRows:   tracker.NumRows,
 		NumTracks: tracker.NumTracks,
+		BPM:       tracker.BPM,
 		Tracks:    make([]SavedTrack, tracker.NumTracks),
 	}
 
@@ -104,6 +106,13 @@ func SongToTracks(saved *SavedSong, tracker *ui.TrackerModel) {
 	// Update tracker dimensions
 	tracker.NumRows = saved.NumRows
 	tracker.NumTracks = saved.NumTracks
+
+	// Restore BPM; fall back to default for old saves that omit it
+	if saved.BPM > 0 {
+		tracker.BPM = saved.BPM
+	} else {
+		tracker.BPM = ui.DefaultBPM
+	}
 
 	// Resize tracks slice if needed
 	if len(tracker.Tracks) != saved.NumTracks {

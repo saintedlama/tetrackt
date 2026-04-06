@@ -15,15 +15,23 @@ type VolumeChanged struct {
 	Volume float64
 }
 
+// BPMChanged is emitted when the user adjusts BPM via the BPM panel.
+type BPMChanged struct {
+	BPM int
+}
+
 // TrackerScreen is the pattern editor screen.
 // It wraps TrackerModel and exposes the Tracker field for main to access
 // playback state and perform audio-related mutations.
 type TrackerScreen struct {
-	Tracker      *TrackerModel
-	GlobalVolume float64
-	volumeBar    common.Bar
-	activePanel  int // 0=tracker, 1=volume
+	Tracker       *TrackerModel
+	GlobalVolume  float64
+	volumeBar     common.Bar
+	activePanel   int // 0=tracker, 1=settings
+	settingsFocus int // 0=volume, 1=bpm (within the settings panel)
 }
+
+const trackerPanelCount = 2
 
 // NewTrackerScreen creates a new TrackerScreen wrapping the given tracker.
 func NewTrackerScreen(tracker *TrackerModel) *TrackerScreen {
@@ -46,33 +54,63 @@ func (t *TrackerScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "tab":
-			t.activePanel = (t.activePanel + 1) % 2
+			t.activePanel = (t.activePanel + 1) % trackerPanelCount
 			return t, nil
 		case "shift+tab":
-			t.activePanel = (t.activePanel - 1 + 2) % 2
+			t.activePanel = (t.activePanel - 1 + trackerPanelCount) % trackerPanelCount
 			return t, nil
 		}
 
 		if t.activePanel == 1 {
-			// Volume panel is active — adjust global volume
+			// Settings panel is active — up/down switches focus, left/right adjusts value
+			switch msg.String() {
+			case "up":
+				t.settingsFocus = (t.settingsFocus - 1 + 2) % 2
+				return t, nil
+			case "down":
+				t.settingsFocus = (t.settingsFocus + 1) % 2
+				return t, nil
+			}
+
+			if t.settingsFocus == 0 {
+				// Volume row focused
+				switch msg.String() {
+				case "left":
+					t.GlobalVolume -= 0.05
+				case "shift+left":
+					t.GlobalVolume -= 0.1
+				case "right":
+					t.GlobalVolume += 0.05
+				case "shift+right":
+					t.GlobalVolume += 0.1
+				}
+				t.GlobalVolume = math.Round(t.GlobalVolume*100) / 100
+				if t.GlobalVolume < 0 {
+					t.GlobalVolume = 0
+				} else if t.GlobalVolume > 1 {
+					t.GlobalVolume = 1
+				}
+				t.volumeBar.Value = t.GlobalVolume
+				return t, func() tea.Msg { return VolumeChanged{Volume: t.GlobalVolume} }
+			}
+
+			// BPM row focused
 			switch msg.String() {
 			case "left":
-				t.GlobalVolume -= 0.05
+				t.Tracker.BPM--
 			case "shift+left":
-				t.GlobalVolume -= 0.1
+				t.Tracker.BPM -= 10
 			case "right":
-				t.GlobalVolume += 0.05
+				t.Tracker.BPM++
 			case "shift+right":
-				t.GlobalVolume += 0.1
+				t.Tracker.BPM += 10
 			}
-			t.GlobalVolume = math.Round(t.GlobalVolume*100) / 100
-			if t.GlobalVolume < 0 {
-				t.GlobalVolume = 0
-			} else if t.GlobalVolume > 1 {
-				t.GlobalVolume = 1
+			if t.Tracker.BPM < MinBPM {
+				t.Tracker.BPM = MinBPM
+			} else if t.Tracker.BPM > MaxBPM {
+				t.Tracker.BPM = MaxBPM
 			}
-			t.volumeBar.Value = t.GlobalVolume
-			return t, func() tea.Msg { return VolumeChanged{Volume: t.GlobalVolume} }
+			return t, func() tea.Msg { return BPMChanged{BPM: t.Tracker.BPM} }
 		}
 
 		// Tracker panel is active
@@ -90,12 +128,23 @@ func (t *TrackerScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	return t, nil
 }
 
-// View renders the tracker grid and a global volume panel side by side.
+// View renders the tracker grid and a combined settings panel side by side.
 func (t *TrackerScreen) View() string {
-	volumeContent := fmt.Sprintf("%s  %3d%%", t.volumeBar.View(), int(t.GlobalVolume*100))
+	volLabel := "  Volume"
+	bpmLabel := "  BPM   "
+	if t.activePanel == 1 {
+		if t.settingsFocus == 0 {
+			volLabel = "> Volume"
+		} else {
+			bpmLabel = "> BPM   "
+		}
+	}
+	volumeRow := fmt.Sprintf("%s  %s  %3d%%", volLabel, t.volumeBar.View(), int(t.GlobalVolume*100))
+	bpmRow := fmt.Sprintf("%s  %3d BPM", bpmLabel, t.Tracker.BPM)
+	settingsContent := volumeRow + "\n" + bpmRow
 	trackerPanel := RenderPanel("Tracker", common.ColorAccentPrimary, t.Tracker.View(), t.activePanel == 0)
-	volumePanel := RenderPanel("Volume", common.ColorAccentModulation, volumeContent, t.activePanel == 1)
-	return lipgloss.JoinHorizontal(lipgloss.Top, trackerPanel, volumePanel)
+	settingsPanel := RenderPanel("Settings", common.ColorAccentModulation, settingsContent, t.activePanel == 1)
+	return lipgloss.JoinHorizontal(lipgloss.Top, trackerPanel, settingsPanel)
 }
 
 // Title returns the tab label for the TrackerScreen.
