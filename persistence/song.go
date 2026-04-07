@@ -14,6 +14,7 @@ type SavedTrackRow struct {
 	Octave          int    `yaml:"octave"`
 	Volume          int    `yaml:"volume"`
 	RowTicks        int    `yaml:"row_ticks,omitempty"`
+	Continuous      bool   `yaml:"continuous,omitempty"`
 	ArpeggioOffsets []int  `yaml:"arpeggio_offsets,omitempty"`
 }
 
@@ -72,6 +73,7 @@ func TracksToSong(tracker *utracker.TrackerModel) *SavedSong {
 				Octave:          int(row.Note.Octave),
 				Volume:          row.Volume,
 				RowTicks:        row.Ticks,
+				Continuous:      row.Continuous,
 				ArpeggioOffsets: row.Arpeggio.Offsets,
 			}
 		}
@@ -179,9 +181,10 @@ func SongToTracks(saved *SavedSong, tracker *utracker.TrackerModel) {
 		for j, row := range savedTrack.Rows {
 			if j < len(track.Rows) {
 				track.Rows[j] = utracker.TrackRow{
-					Note:   audio.Note{Base: audio.Base(row.Base), Octave: audio.Octave(row.Octave)},
-					Volume: row.Volume,
-					Ticks:  row.RowTicks,
+					Note:       audio.Note{Base: audio.Base(row.Base), Octave: audio.Octave(row.Octave)},
+					Volume:     row.Volume,
+					Ticks:      row.RowTicks,
+					Continuous: row.Continuous,
 					Arpeggio: audio.ArpeggioEffect{
 						Offsets: row.ArpeggioOffsets,
 					},

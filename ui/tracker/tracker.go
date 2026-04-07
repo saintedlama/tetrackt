@@ -83,10 +83,11 @@ type Track struct {
 
 // TrackRow represents a single row in a track
 type TrackRow struct {
-	Note     audio.Note
-	Volume   int // 0-64
-	Ticks    int // per-row tick count; 0 = use global Speed
-	Arpeggio audio.ArpeggioEffect
+	Note       audio.Note
+	Volume     int  // 0-64
+	Ticks      int  // per-row tick count; 0 = use global Speed
+	Continuous bool // synthesise this row as a continuous stream across ticks
+	Arpeggio   audio.ArpeggioEffect
 }
 
 // NewTracker creates a new pattern with the specified number of tracks and rows

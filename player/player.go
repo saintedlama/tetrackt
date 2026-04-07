@@ -47,7 +47,8 @@ func arpFrequencies(baseFreq float64, arp audio.ArpeggioEffect) ([]float64, int)
 // Arp cycling is handled internally by the streamer; always returns false.
 func (p *Player) StartPreview(note audio.Note, arp audio.ArpeggioEffect, s *audio.Synth, duration time.Duration, sampleRate beep.SampleRate, globalVolume float64, speed int) bool {
 	frequencies, tickCount := arpFrequencies(note.Frequency(), arp)
-	voice := s.Streamer(sampleRate, frequencies, tickCount, true, duration)
+	continuous := arp.IsActive()
+	voice := s.Streamer(sampleRate, frequencies, tickCount, continuous, duration)
 	p.previewVoice = voice
 
 	volumeAdjusted := &effects.Volume{
@@ -117,7 +118,8 @@ func (p *Player) playRowNotes(trackerModel *tracker.TrackerModel, row int, sampl
 		}
 
 		frequencies, tickCount := arpFrequencies(trackRow.Note.Frequency(), trackRow.Arpeggio)
-		voice := track.Synth.Streamer(sampleRate, frequencies, tickCount, true, duration)
+		continuous := trackRow.Continuous || trackRow.Arpeggio.IsActive()
+		voice := track.Synth.Streamer(sampleRate, frequencies, tickCount, continuous, duration)
 		voices[trackIdx] = voice
 		streamers = append(streamers, voice)
 	}
