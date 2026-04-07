@@ -85,6 +85,7 @@ type Track struct {
 type TrackRow struct {
 	Note     audio.Note
 	Volume   int // 0-64
+	Ticks    int // per-row tick count; 0 = use global Speed
 	Arpeggio audio.ArpeggioEffect
 }
 

@@ -14,18 +14,11 @@ import (
 
 // TODO: This file cries for a refactoring!
 
-// Player owns sequencer playback state: sub-tick clock, active voices, and arp stepping.
-// It is the single place that understands the relationship between BPM, Speed, rows, and arpeggio.
+// Player owns sequencer playback state: sub-tick clock and active voices.
 type Player struct {
 	subTickCount int
-	activeVoices []*audio.ActiveVoice
-
-	// preview state for live note-key arp preview
-	previewVoice   *audio.ActiveVoice
-	previewNote    audio.Note
-	previewArp     audio.ArpeggioEffect
-	previewSubTick int
-	previewSpeed   int
+	activeVoices []beep.Streamer
+	previewVoice beep.Streamer
 }
 
 // Reset clears playback state. Call when playback starts or restarts.
@@ -35,19 +28,27 @@ func (p *Player) Reset() {
 	p.previewVoice = nil
 }
 
-// StartPreview plays a single note preview using the given synth and arpeggio.
-// Returns true if the arp is active, indicating the caller should drive
-// TickPreview calls via a timer.
-func (p *Player) StartPreview(note audio.Note, arp audio.ArpeggioEffect, s *audio.Synth, duration time.Duration, sampleRate beep.SampleRate, globalVolume float64, speed int) bool {
-	voice := s.Streamer(sampleRate, note.Frequency(), duration)
-	p.previewVoice = voice
-	p.previewNote = note
-	p.previewArp = arp
-	p.previewSubTick = 0
-	if speed <= 0 {
-		speed = tracker.DefaultSpeed
+// arpFrequencies converts an ArpeggioEffect into a frequency slice suitable for
+// Synth.Streamer. Each offset is applied as a frequency multiplier 2^(offset/12),
+// making the computation strictly frequency-based with no note-type involvement.
+// Returns ([]float64{baseFreq}, 1) when the arp is inactive.
+func arpFrequencies(baseFreq float64, arp audio.ArpeggioEffect) ([]float64, int) {
+	if !arp.IsActive() {
+		return []float64{baseFreq}, 1
 	}
-	p.previewSpeed = speed
+	freqs := make([]float64, len(arp.Offsets))
+	for i, offset := range arp.Offsets {
+		freqs[i] = baseFreq * math.Pow(2.0, float64(offset)/12.0)
+	}
+	return freqs, len(arp.Offsets)
+}
+
+// StartPreview plays a single note preview using the given synth and arpeggio.
+// Arp cycling is handled internally by the streamer; always returns false.
+func (p *Player) StartPreview(note audio.Note, arp audio.ArpeggioEffect, s *audio.Synth, duration time.Duration, sampleRate beep.SampleRate, globalVolume float64, speed int) bool {
+	frequencies, tickCount := arpFrequencies(note.Frequency(), arp)
+	voice := s.Streamer(sampleRate, frequencies, tickCount, true, duration)
+	p.previewVoice = voice
 
 	volumeAdjusted := &effects.Volume{
 		Streamer: voice,
@@ -56,35 +57,16 @@ func (p *Player) StartPreview(note audio.Note, arp audio.ArpeggioEffect, s *audi
 		Silent:   globalVolume == 0,
 	}
 	speaker.Play(volumeAdjusted)
-	return arp.IsActive()
+	return false
 }
 
-// TickPreview advances the arp by one sub-tick for the current live preview.
-// Returns true while the preview is still running; false when done.
+// TickPreview is a no-op; arp cycling is handled internally by the streamer.
 func (p *Player) TickPreview() bool {
-	if p.previewVoice == nil || !p.previewArp.IsActive() {
-		return false
-	}
-
-	p.previewSubTick++
-	if p.previewSubTick >= p.previewSpeed {
-		p.previewVoice = nil
-		return false
-	}
-
-	step := (p.previewSubTick / p.previewArp.TicksPerStep) % len(p.previewArp.Offsets)
-	transposed, ok := p.previewNote.Transpose(p.previewArp.Offsets[step])
-	if ok {
-		speaker.Lock()
-		p.previewVoice.SetFrequency(transposed.Frequency())
-		speaker.Unlock()
-	}
-	return true
+	return false
 }
 
 // Tick processes one sub-tick of playback:
 //   - On the first sub-tick of a row, starts audio for all notes in that row.
-//   - On every sub-tick, applies arpeggio retuning to active voices.
 //   - Advances the row counter once all sub-ticks for the row are consumed.
 func (p *Player) Tick(trackerModel *tracker.TrackerModel, sampleRate beep.SampleRate, globalVolume float64) {
 	speed := trackerModel.Speed
@@ -96,28 +78,6 @@ func (p *Player) Tick(trackerModel *tracker.TrackerModel, sampleRate beep.Sample
 
 	if p.subTickCount == 0 {
 		p.activeVoices = p.playRowNotes(trackerModel, row, sampleRate, globalVolume)
-	}
-
-	// Apply arpeggio retuning for each active voice on this sub-tick
-	for trackIdx, voice := range p.activeVoices {
-		if voice == nil || trackIdx >= len(trackerModel.Tracks) {
-			continue
-		}
-		trackRows := trackerModel.Tracks[trackIdx].Rows
-		if row >= len(trackRows) {
-			continue
-		}
-		arp := trackRows[row].Arpeggio
-		if !arp.IsActive() {
-			continue
-		}
-		step := (p.subTickCount / arp.TicksPerStep) % len(arp.Offsets)
-		transposed, ok := trackRows[row].Note.Transpose(arp.Offsets[step])
-		if ok {
-			speaker.Lock()
-			voice.SetFrequency(transposed.Frequency())
-			speaker.Unlock()
-		}
 	}
 
 	// Advance sub-tick counter; advance row when all sub-ticks are consumed
@@ -139,13 +99,13 @@ func (p *Player) Tick(trackerModel *tracker.TrackerModel, sampleRate beep.Sample
 
 // playRowNotes starts audio for all non-empty notes in the given row and returns
 // a slice of active voices indexed by track (nil for empty/off rows).
-func (p *Player) playRowNotes(trackerModel *tracker.TrackerModel, row int, sampleRate beep.SampleRate, globalVolume float64) []*audio.ActiveVoice {
+func (p *Player) playRowNotes(trackerModel *tracker.TrackerModel, row int, sampleRate beep.SampleRate, globalVolume float64) []beep.Streamer {
 	if row < 0 || row >= trackerModel.NumRows {
 		return nil
 	}
 
 	duration := trackerModel.BPMDuration()
-	voices := make([]*audio.ActiveVoice, trackerModel.NumTracks)
+	voices := make([]beep.Streamer, trackerModel.NumTracks)
 	var streamers []beep.Streamer
 
 	for trackIdx := 0; trackIdx < trackerModel.NumTracks; trackIdx++ {
@@ -156,7 +116,8 @@ func (p *Player) playRowNotes(trackerModel *tracker.TrackerModel, row int, sampl
 			continue
 		}
 
-		voice := track.Synth.Streamer(sampleRate, trackRow.Note.Frequency(), duration)
+		frequencies, tickCount := arpFrequencies(trackRow.Note.Frequency(), trackRow.Arpeggio)
+		voice := track.Synth.Streamer(sampleRate, frequencies, tickCount, true, duration)
 		voices[trackIdx] = voice
 		streamers = append(streamers, voice)
 	}

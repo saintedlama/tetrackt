@@ -39,30 +39,105 @@ func NewSynth(oscillator1 Oscillator, envelope1 Envelope, oscillator2 Oscillator
 	}
 }
 
-// ActiveVoice is the handle returned by Synth.Streamer. It wraps the composed
-// beep.Streamer and exposes SetFrequency for live retuning (e.g. arpeggio).
-type ActiveVoice struct {
-	beep.Streamer
-	osc1 *oscillatorGenerator
-	osc2 *oscillatorGenerator
+// tickingStreamer wraps a synthesis pipeline and retunes oscillators at tick
+// boundaries, enabling continuous arpeggio cycling within a single ADSR envelope.
+type tickingStreamer struct {
+	inner          beep.Streamer
+	osc1           *oscillatorGenerator
+	osc2           *oscillatorGenerator
+	frequencies    []float64
+	samplesPerTick int
+	sampleCount    int
+	tickIdx        int
 }
 
-// SetFrequency retunes both oscillators to hz. Call between speaker.Lock/Unlock.
-func (av *ActiveVoice) SetFrequency(hz float64) {
-	av.osc1.SetFrequency(hz)
-	av.osc2.SetFrequency(hz)
+func (t *tickingStreamer) Stream(samples [][2]float64) (int, bool) {
+	total := 0
+	for len(samples) > 0 {
+		toNext := t.samplesPerTick - t.sampleCount
+		if toNext <= 0 {
+			toNext = 1
+		}
+		chunk := samples
+		if len(chunk) > toNext {
+			chunk = chunk[:toNext]
+		}
+		n, ok := t.inner.Stream(chunk)
+		total += n
+		t.sampleCount += n
+		samples = samples[n:]
+		if t.sampleCount >= t.samplesPerTick {
+			t.sampleCount = 0
+			t.tickIdx++
+			freq := t.frequencies[t.tickIdx%len(t.frequencies)]
+			t.osc1.SetFrequency(freq)
+			t.osc2.SetFrequency(freq)
+		}
+		if !ok || n == 0 {
+			break
+		}
+	}
+	return total, total > 0
 }
 
-func (s *Synth) Streamer(sampleRate beep.SampleRate, frequency float64, d time.Duration) *ActiveVoice {
+func (t *tickingStreamer) Err() error { return t.inner.Err() }
+
+// Streamer builds a playback pipeline for the given frequencies over duration d.
+//
+// frequencies is cycled across tickCount equal-length ticks. Passing a single
+// frequency with tickCount=1 is equivalent to the previous single-note API.
+//
+// When continuous=true the ADSR envelope and LFOs run uninterrupted across all
+// ticks (authentic chiptune behaviour); oscillators are simply retuned at each
+// tick boundary. When continuous=false each tick gets a fresh synthesis chain
+// (envelope + LFOs reset), producing a gate/stutter effect.
+func (s *Synth) Streamer(sampleRate beep.SampleRate, frequencies []float64, tickCount int, continuous bool, d time.Duration) beep.Streamer {
+	if len(frequencies) == 0 {
+		frequencies = []float64{0}
+	}
+	if tickCount <= 0 {
+		tickCount = 1
+	}
+	totalSamples := sampleRate.N(d)
+
+	if continuous && tickCount > 1 {
+		// One synthesis chain; oscillators retune at tick boundaries.
+		chain, osc1, osc2 := s.buildChain(sampleRate, frequencies[0], totalSamples)
+		samplesPerTick := totalSamples / tickCount
+		ticking := &tickingStreamer{
+			inner:          chain,
+			osc1:           osc1,
+			osc2:           osc2,
+			frequencies:    frequencies,
+			samplesPerTick: samplesPerTick,
+		}
+		return beep.Take(totalSamples, ticking)
+	}
+
+	if tickCount == 1 {
+		chain, _, _ := s.buildChain(sampleRate, frequencies[0], totalSamples)
+		return beep.Take(totalSamples, chain)
+	}
+
+	// continuous=false with multiple ticks: fresh ADSR/LFO per tick.
+	tickSamples := totalSamples / tickCount
+	seqStreamers := make([]beep.Streamer, tickCount)
+	for i := 0; i < tickCount; i++ {
+		freq := frequencies[i%len(frequencies)]
+		chain, _, _ := s.buildChain(sampleRate, freq, tickSamples)
+		seqStreamers[i] = beep.Take(tickSamples, chain)
+	}
+	return beep.Seq(seqStreamers...)
+}
+
+// buildChain constructs a full synthesis pipeline for a single frequency and
+// sample duration. Returns the terminal streamer and both oscillator handles.
+func (s *Synth) buildChain(sampleRate beep.SampleRate, frequency float64, sampleDuration int) (beep.Streamer, *oscillatorGenerator, *oscillatorGenerator) {
+	sr := float64(sampleRate)
+
 	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth)
 	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth)
 
-	sampleDuration := sampleRate.N(d)
-	sr := float64(sampleRate)
-
-	// Helper: create a fresh lfoGenerator for the given destination, or nil.
-	// LFO1 is checked before LFO2; if both target the same destination, LFO1 wins.
-	// An LFO with Depth == 0 is considered disabled.
 	makeLFO := func(dest ModDest) *lfoGenerator {
 		if s.LFO1.Depth > 0 && s.LFO1.Dest == dest {
 			return newLFOGenerator(s.LFO1, sr)
@@ -88,9 +163,5 @@ func (s *Synth) Streamer(sampleRate beep.SampleRate, frequency float64, d time.D
 	mixed := beep.Mix(mix1, mix2)
 	filtered := NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
 
-	return &ActiveVoice{
-		Streamer: beep.Take(sampleDuration, filtered),
-		osc1:     osc1,
-		osc2:     osc2,
-	}
+	return filtered, osc1, osc2
 }

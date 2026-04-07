@@ -100,7 +100,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activeScreen == trackerScreenIdx {
 				tm := m.trackerModel()
 				row := tm.Tracks[tm.CursorTrack].Rows[tm.CursorRow]
-				return ui.NewDialogModel(tracker.NewRowEffectsDialog(row.Arpeggio, tm.CursorTrack, tm.CursorRow), m, m.width, m.height), nil
+				return ui.NewDialogModel(tracker.NewRowEffectsDialog(row, tm.CursorTrack, tm.CursorRow), m, m.width, m.height), nil
 			}
 		case "t":
 			m.activeScreen = (m.activeScreen + 1) % len(m.screens)
@@ -213,6 +213,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		tm := m.trackerModel()
 		if msg.TrackIdx < len(tm.Tracks) && msg.RowIdx < tm.NumRows {
 			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Arpeggio = msg.Arpeggio
+			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Ticks = msg.Ticks
 		}
 		return m, nil
 
@@ -292,7 +293,7 @@ func (m *model) tick() tea.Cmd {
 func (m *model) playNoteWithSynthPreset(note audio.Note, preset synth.SynthPreset) {
 	duration := m.trackerModel().BPMDuration()
 	volumeAdjusted := &effects.Volume{
-		Streamer: preset.Synth.Streamer(m.sampleRate, note.Frequency(), duration),
+		Streamer: preset.Synth.Streamer(m.sampleRate, []float64{note.Frequency()}, 1, false, duration),
 		Base:     2,
 		Volume:   volumeToDecibels(m.globalVolume),
 		Silent:   m.globalVolume == 0,
@@ -306,7 +307,7 @@ func (m *model) playNote(note audio.Note) {
 
 	synth := m.synth().GetSynth()
 
-	synthStreamer := synth.Streamer(m.sampleRate, note.Frequency(), duration)
+	synthStreamer := synth.Streamer(m.sampleRate, []float64{note.Frequency()}, 1, false, duration)
 	volumeAdjusted := &effects.Volume{
 		Streamer: synthStreamer,
 		Base:     2,

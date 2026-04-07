@@ -10,11 +10,11 @@ import (
 
 // SavedTrackRow is the YAML-serializable form of TrackRow
 type SavedTrackRow struct {
-	Base                 string `yaml:"base"`
-	Octave               int    `yaml:"octave"`
-	Volume               int    `yaml:"volume"`
-	ArpeggioOffsets      []int  `yaml:"arpeggio_offsets,omitempty"`
-	ArpeggioTicksPerStep int    `yaml:"arpeggio_ticks_per_step,omitempty"`
+	Base            string `yaml:"base"`
+	Octave          int    `yaml:"octave"`
+	Volume          int    `yaml:"volume"`
+	RowTicks        int    `yaml:"row_ticks,omitempty"`
+	ArpeggioOffsets []int  `yaml:"arpeggio_offsets,omitempty"`
 }
 
 // SavedTrack is the YAML-serializable form of Track
@@ -68,11 +68,11 @@ func TracksToSong(tracker *utracker.TrackerModel) *SavedSong {
 		rows := make([]SavedTrackRow, len(track.Rows))
 		for j, row := range track.Rows {
 			rows[j] = SavedTrackRow{
-				Base:                 string(row.Note.Base),
-				Octave:               int(row.Note.Octave),
-				Volume:               row.Volume,
-				ArpeggioOffsets:      row.Arpeggio.Offsets,
-				ArpeggioTicksPerStep: row.Arpeggio.TicksPerStep,
+				Base:            string(row.Note.Base),
+				Octave:          int(row.Note.Octave),
+				Volume:          row.Volume,
+				RowTicks:        row.Ticks,
+				ArpeggioOffsets: row.Arpeggio.Offsets,
 			}
 		}
 		s := track.Synth
@@ -181,9 +181,9 @@ func SongToTracks(saved *SavedSong, tracker *utracker.TrackerModel) {
 				track.Rows[j] = utracker.TrackRow{
 					Note:   audio.Note{Base: audio.Base(row.Base), Octave: audio.Octave(row.Octave)},
 					Volume: row.Volume,
+					Ticks:  row.RowTicks,
 					Arpeggio: audio.ArpeggioEffect{
-						Offsets:      row.ArpeggioOffsets,
-						TicksPerStep: row.ArpeggioTicksPerStep,
+						Offsets: row.ArpeggioOffsets,
 					},
 				}
 			}

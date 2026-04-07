@@ -36,17 +36,17 @@ type Envelope struct {
 	Attack, Decay, Sustain, Release float64
 }
 
-// ArpeggioEffect cycles through semitone offsets each sub-tick to simulate chords.
-// Offsets[0] should be 0 (root) by convention.
-// An empty Offsets slice or TicksPerStep <= 0 means the effect is inactive.
+// ArpeggioEffect cycles through frequency offsets, one per tick.
+// Offsets are semitone values relative to the base frequency and are converted
+// to multipliers via 2^(offset/12), making the effect purely frequency-based.
+// An empty Offsets slice means the effect is inactive.
 type ArpeggioEffect struct {
-	Offsets      []int // semitone offsets, e.g. [0, 4, 7] for a major chord
-	TicksPerStep int   // sub-ticks before advancing to the next offset
+	Offsets []int // one semitone offset per tick, e.g. [0, 4, 7, 4] for a 4-tick major arp
 }
 
 // IsActive reports whether the arpeggio effect will produce any retuning.
 func (a ArpeggioEffect) IsActive() bool {
-	return len(a.Offsets) > 1 && a.TicksPerStep > 0
+	return len(a.Offsets) > 0
 }
 
 // Creates a beep.Streamer that applies ADSR envelope to the provided streamer

@@ -131,17 +131,18 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 
 // View renders the tracker grid and a combined settings panel side by side.
 func (t *TrackerScreen) View() string {
-	volLabel := "  Volume"
-	bpmLabel := "  BPM   "
-	if t.activePanel == 1 {
-		if t.settingsFocus == 0 {
-			volLabel = "> Volume"
-		} else {
-			bpmLabel = "> BPM   "
+	render := func(focused bool, text string) string {
+		if focused {
+			return common.StyleSelected.Render(text)
 		}
+		return text
 	}
-	volumeRow := fmt.Sprintf("%s  %s  %3d%%", volLabel, t.volumeBar.View(), int(t.GlobalVolume*100))
-	bpmRow := fmt.Sprintf("%s  %3d BPM", bpmLabel, t.Tracker.BPM)
+
+	settingsPanelActive := t.activePanel == 1
+	volumeRow := render(settingsPanelActive && t.settingsFocus == 0, "Volume") +
+		fmt.Sprintf("  %s  %3d%%", t.volumeBar.View(), int(t.GlobalVolume*100))
+	bpmRow := render(settingsPanelActive && t.settingsFocus == 1, "BPM") +
+		fmt.Sprintf("     %3d", t.Tracker.BPM)
 	settingsContent := volumeRow + "\n" + bpmRow
 	trackerPanel := ui.RenderPanel("Tracker", common.ColorAccentPrimary, t.Tracker.View(), t.activePanel == 0)
 	settingsPanel := ui.RenderPanel("Settings", common.ColorAccentModulation, settingsContent, t.activePanel == 1)
