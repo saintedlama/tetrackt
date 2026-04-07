@@ -1,6 +1,6 @@
 # Chiptune-3: Arpeggio Effect
 
-**Status:** Planned
+**Status:** Done
 
 **Priority:** High
 
