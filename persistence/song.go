@@ -23,10 +23,12 @@ type SavedTrack struct {
 	Oscillator1           string          `yaml:"oscillator1"`
 	Oscillator1Phase      float64         `yaml:"oscillator1_phase"`
 	Oscillator1PulseWidth float64         `yaml:"oscillator1_pulse_width"`
+	Oscillator1Detune     float64         `yaml:"oscillator1_detune,omitempty"`
 	Envelope1             audio.Envelope  `yaml:"envelope1"`
 	Oscillator2           string          `yaml:"oscillator2"`
 	Oscillator2Phase      float64         `yaml:"oscillator2_phase"`
 	Oscillator2PulseWidth float64         `yaml:"oscillator2_pulse_width"`
+	Oscillator2Detune     float64         `yaml:"oscillator2_detune,omitempty"`
 	Envelope2             audio.Envelope  `yaml:"envelope2"`
 	MixerVolume1          float64         `yaml:"mixer_volume1"`
 	MixerVolume2          float64         `yaml:"mixer_volume2"`
@@ -82,10 +84,12 @@ func TracksToSong(tracker *utracker.TrackerModel) *SavedSong {
 			Oscillator1:           string(s.Oscillator1.Type),
 			Oscillator1Phase:      s.Oscillator1.Phase,
 			Oscillator1PulseWidth: s.Oscillator1.PulseWidth,
+			Oscillator1Detune:     s.Oscillator1.Detune,
 			Envelope1:             s.Envelope1,
 			Oscillator2:           string(s.Oscillator2.Type),
 			Oscillator2Phase:      s.Oscillator2.Phase,
 			Oscillator2PulseWidth: s.Oscillator2.PulseWidth,
+			Oscillator2Detune:     s.Oscillator2.Detune,
 			Envelope2:             s.Envelope2,
 			MixerVolume1:          s.Mixer.Volume1,
 			MixerVolume2:          s.Mixer.Volume2,
@@ -142,12 +146,14 @@ func SongToTracks(saved *SavedSong, tracker *utracker.TrackerModel) {
 				Type:       audio.OscillatorType(savedTrack.Oscillator1),
 				Phase:      savedTrack.Oscillator1Phase,
 				PulseWidth: savedTrack.Oscillator1PulseWidth,
+				Detune:     savedTrack.Oscillator1Detune,
 			},
 			savedTrack.Envelope1,
 			audio.Oscillator{
 				Type:       audio.OscillatorType(savedTrack.Oscillator2),
 				Phase:      savedTrack.Oscillator2Phase,
 				PulseWidth: savedTrack.Oscillator2PulseWidth,
+				Detune:     savedTrack.Oscillator2Detune,
 			},
 			savedTrack.Envelope2,
 			audio.Mixer{Volume1: savedTrack.MixerVolume1, Volume2: savedTrack.MixerVolume2},

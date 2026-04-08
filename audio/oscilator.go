@@ -11,6 +11,7 @@ type Oscillator struct {
 	Type       OscillatorType
 	Phase      float64 // normalized initial phase [0..1)
 	PulseWidth float64 // duty cycle [0.01..0.99]; only used by Square; 0 defaults to 0.5
+	Detune     float64 // fine tuning in cents (±1200 = ±1 octave); 0 = no detune
 }
 
 // OscillatorType represents the type of oscillator waveform to generate
@@ -28,27 +29,35 @@ const (
 
 // NewOscillator creates an oscillatorGenerator for the specified waveform.
 // pulseWidth is used only by Square; a zero value defaults to 0.5 (50% duty).
-func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate, initialPhase float64, pulseWidth float64) *oscillatorGenerator {
+// detuneCents shifts the oscillator frequency by the given number of cents
+// (100 cents = 1 semitone, 1200 cents = 1 octave); 0 disables detune.
+func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate, initialPhase float64, pulseWidth float64, detuneCents float64) *oscillatorGenerator {
 	pw := pulseWidth
 	if pw == 0 {
 		pw = 0.5
 	}
+	mult := 1.0
+	if detuneCents != 0 {
+		mult = math.Pow(2, detuneCents/1200.0)
+	}
 	return &oscillatorGenerator{
-		oscillatorType: oscillatorType,
-		frequency:      frequency,
-		sampleRate:     sampleRate,
-		phase:          math.Mod(initialPhase, 1.0),
-		pulseWidth:     pw,
+		oscillatorType:   oscillatorType,
+		frequency:        frequency * mult,
+		detuneMultiplier: mult,
+		sampleRate:       sampleRate,
+		phase:            math.Mod(initialPhase, 1.0),
+		pulseWidth:       pw,
 	}
 }
 
 // oscillatorGenerator implements beep.Streamer for oscillator waveform generation
 type oscillatorGenerator struct {
-	oscillatorType OscillatorType
-	frequency      float64
-	sampleRate     beep.SampleRate
-	phase          float64
-	pulseWidth     float64 // resolved duty cycle [0.01..0.99]
+	oscillatorType   OscillatorType
+	frequency        float64
+	detuneMultiplier float64 // pre-computed 2^(cents/1200); applied by SetFrequency during arp retune
+	sampleRate       beep.SampleRate
+	phase            float64
+	pulseWidth       float64 // resolved duty cycle [0.01..0.99]
 }
 
 // Stream fills the samples buffer with oscillator waveform data
@@ -106,8 +115,13 @@ func (g *oscillatorGenerator) Err() error {
 	return nil
 }
 
-// SetFrequency retunes the oscillator to the given frequency in Hz.
+// SetFrequency retunes the oscillator to the given base frequency in Hz.
+// The stored detune multiplier is applied so that arpeggio retunes preserve detune.
 // Safe to call between audio blocks via speaker.Lock/Unlock.
 func (g *oscillatorGenerator) SetFrequency(hz float64) {
-	g.frequency = hz
+	m := g.detuneMultiplier
+	if m == 0 {
+		m = 1.0
+	}
+	g.frequency = hz * m
 }

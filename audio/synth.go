@@ -135,8 +135,8 @@ func (s *Synth) Streamer(sampleRate beep.SampleRate, frequencies []float64, tick
 func (s *Synth) buildChain(sampleRate beep.SampleRate, frequency float64, sampleDuration int) (beep.Streamer, *oscillatorGenerator, *oscillatorGenerator) {
 	sr := float64(sampleRate)
 
-	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth)
-	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth)
+	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth, s.Oscillator1.Detune)
+	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth, s.Oscillator2.Detune)
 
 	makeLFO := func(dest ModDest) *lfoGenerator {
 		if s.LFO1.Depth > 0 && s.LFO1.Dest == dest {
@@ -148,8 +148,8 @@ func (s *Synth) buildChain(sampleRate beep.SampleRate, frequency float64, sample
 		return nil
 	}
 
-	src1 := newModulatedOscillatorStreamer(osc1, frequency, osc1.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth))
-	src2 := newModulatedOscillatorStreamer(osc2, frequency, osc2.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth))
+	src1 := newModulatedOscillatorStreamer(osc1, osc1.frequency, osc1.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth))
+	src2 := newModulatedOscillatorStreamer(osc2, osc2.frequency, osc2.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth))
 
 	streamer1 := NewEnvelope(src1, sampleDuration, s.Envelope1)
 	streamer2 := NewEnvelope(src2, sampleDuration, s.Envelope2)

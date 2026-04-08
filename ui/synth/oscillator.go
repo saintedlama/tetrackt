@@ -18,6 +18,7 @@ const (
 	oscillatorType editField = iota
 	oscillatorPhase
 	oscillatorPulseWidth
+	oscillatorDetune
 	oscillatorFieldCount
 )
 
@@ -63,6 +64,9 @@ func (m *OscillatorModel) View() string {
 	oscillatorView.WriteString("\n")
 	oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("PW:   %3d%%", int(pw*100)), m.editField == oscillatorPulseWidth))
 
+	oscillatorView.WriteString("\n")
+	oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("Dtune:%+5.0fc", m.Oscillator.Detune), m.editField == oscillatorDetune))
+
 	return oscillatorView.String()
 }
 
@@ -93,8 +97,15 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 					pw = 0.5
 				}
 				m.Oscillator.PulseWidth = max(0.01, pw-0.05)
+			case oscillatorDetune:
+				m.Oscillator.Detune = clampDetune(m.Oscillator.Detune - 1)
 			}
 			cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
+		case "shift+left":
+			if m.editField == oscillatorDetune {
+				m.Oscillator.Detune = clampDetune(m.Oscillator.Detune - 10)
+				cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
+			}
 		case "right":
 			switch m.editField {
 			case oscillatorType:
@@ -111,8 +122,15 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 					pw = 0.5
 				}
 				m.Oscillator.PulseWidth = min(0.99, pw+0.05)
+			case oscillatorDetune:
+				m.Oscillator.Detune = clampDetune(m.Oscillator.Detune + 1)
 			}
 			cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
+		case "shift+right":
+			if m.editField == oscillatorDetune {
+				m.Oscillator.Detune = clampDetune(m.Oscillator.Detune + 10)
+				cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
+			}
 		}
 	}
 
@@ -143,4 +161,14 @@ func calcOscWidth(oscillatorList []audio.OscillatorType) int {
 		oscWidth = max(oscWidth, len(osc))
 	}
 	return oscWidth
+}
+
+func clampDetune(v float64) float64 {
+	if v < -1200 {
+		return -1200
+	}
+	if v > 1200 {
+		return 1200
+	}
+	return v
 }

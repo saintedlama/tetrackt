@@ -1,6 +1,6 @@
 # Chiptune-5: Fine Tuning / Detune
 
-**Status:** Planned
+**Status:** Done
 
 **Priority:** Medium
 
@@ -67,9 +67,9 @@ If `Oscillator` is serialised (JSON/binary), add `Detune` to the schema. Zero va
 
 ## Impact
 
-| Dimension | Assessment |
-|---|---|
-| Files touched | `audio/notes.go`, `audio/oscillator.go`, `audio/synth.go`, optionally `persistence/` |
-| Invasiveness | Low — two small, localised changes |
+| Dimension           | Assessment                                                                                                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Files touched       | `audio/notes.go`, `audio/oscillator.go`, `audio/synth.go`, optionally `persistence/`                                                                                                  |
+| Invasiveness        | Low — two small, localised changes                                                                                                                                                    |
 | Additive / breaking | `Detune` field is purely additive (zero value = no effect). `Transpose` semitone fix **is breaking**: existing call sites that pass an octave delta must be updated to multiply by 12 |
-| Risk | Transpose change affects any code that calls `Transpose`; a project-wide grep for `\.Transpose(` is required before merging |
+| Risk                | Transpose change affects any code that calls `Transpose`; a project-wide grep for `\.Transpose(` is required before merging                                                           |

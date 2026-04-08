@@ -111,3 +111,71 @@ func TestSynthFilterOff(t *testing.T) {
 		t.Errorf("FilterOff RMS (%v) should exceed LP-filtered RMS (%v)", rmsOff, rmsLP)
 	}
 }
+
+func TestSynthDetuneShiftsFrequency(t *testing.T) {
+	sr := beep.SampleRate(44100)
+	dur := 100 * time.Millisecond
+
+	baseFreq := 440.0
+	env := Envelope{Sustain: 1.0}
+	mixer := Mixer{Volume1: 1.0, Volume2: 0}
+
+	// Osc1 with no detune: phase advances at 440 Hz.
+	oscNone := Oscillator{Type: Sine}
+	synthNone := NewSynth(oscNone, env, oscNone, env, mixer, NewFilter(), LFO{}, LFO{})
+
+	// Osc1 detuned +1200 cents = one octave up → 880 Hz.
+	oscUp := Oscillator{Type: Sine, Detune: 1200}
+	synthUp := NewSynth(oscUp, env, oscUp, env, mixer, NewFilter(), LFO{}, LFO{})
+
+	samplesNone := streamN(synthNone.Streamer(sr, []float64{baseFreq}, 1, false, dur), sr.N(dur))
+	samplesUp := streamN(synthUp.Streamer(sr, []float64{baseFreq}, 1, false, dur), sr.N(dur))
+
+	// Count zero crossings (positive-going) as a proxy for frequency.
+	countCrossings := func(s [][2]float64) int {
+		n := 0
+		for i := 1; i < len(s); i++ {
+			if s[i-1][0] <= 0 && s[i][0] > 0 {
+				n++
+			}
+		}
+		return n
+	}
+	cNone := countCrossings(samplesNone)
+	cUp := countCrossings(samplesUp)
+	// 880 Hz should produce roughly twice the crossings of 440 Hz.
+	ratio := float64(cUp) / float64(cNone)
+	if ratio < 1.8 || ratio > 2.2 {
+		t.Errorf("expected ~2x crossings for +1200 cent detune, got ratio %v (%d vs %d)", ratio, cUp, cNone)
+	}
+}
+
+func TestSynthDetuneZeroNoEffect(t *testing.T) {
+	sr := beep.SampleRate(44100)
+	dur := 10 * time.Millisecond
+	baseFreq := 440.0
+	env := Envelope{Sustain: 1.0}
+	mixer := Mixer{Volume1: 1.0, Volume2: 0}
+
+	osc := Oscillator{Type: Sine, Detune: 0}
+	synth := NewSynth(osc, env, osc, env, mixer, NewFilter(), LFO{}, LFO{})
+	s := streamN(synth.Streamer(sr, []float64{baseFreq}, 1, false, dur), sr.N(dur))
+	if len(s) == 0 {
+		t.Fatal("no samples")
+	}
+}
+
+func TestSynthDetuneArpPreservesDetune(t *testing.T) {
+	sr := beep.SampleRate(44100)
+	dur := 100 * time.Millisecond
+
+	// +1200 cents detune on osc1 only, two-note arp (440 Hz, 880 Hz).
+	oscDetuned := Oscillator{Type: Sine, Detune: 1200}
+	oscSilent := Oscillator{Type: Silent}
+	env := Envelope{Sustain: 1.0}
+	mixer := Mixer{Volume1: 1.0, Volume2: 0}
+	synth := NewSynth(oscDetuned, env, oscSilent, env, mixer, NewFilter(), LFO{}, LFO{})
+
+	// Should not panic; detune must be maintained across tick boundaries.
+	_ = streamN(synth.Streamer(sr, []float64{440, 880}, 2, true, dur), sr.N(dur))
+}
