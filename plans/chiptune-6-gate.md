@@ -6,22 +6,34 @@
 
 ## Problem
 
-`Synth.Streamer` takes a fixed `time.Duration`. ADSR sustain duration is derived by subtracting attack+decay+release from the total note length — there is no real "hold until note-off" concept.
+`Synth.Streamer` requires a fixed duration upfront — envelope sustain duration is derived by subtracting attack+decay+release from the total note length. There is no "hold until note-off" concept.
 
 ## Why It Matters
 
-In a real tracker, the note length is decoupled from note-off: a pattern cell sets when note-on fires; the envelope sustains indefinitely until the next note-on or an explicit cut command. The current model bakes duration in at note creation time, which prevents proper tracker integration and live play.
+In a real tracker, note length is decoupled from note-off: a pattern cell sets when note-on fires; the envelope sustains indefinitely until the next note-on or an explicit cut command. The current model bakes duration in at note creation time, which prevents proper tracker integration and live play.
 
 ## Required
 
 - Gate-based envelope: `NoteOn()` / `NoteOff()` transitions
 - Streamer that sustains in the sustain stage until `NoteOff()` is called
 
+## Current Implementation Context
+
+The existing envelope system uses these types/names (must be consistent with):
+
+- `Stages` (`StageOff`, `StageAttack`, `StageDecay`, `StageSustain`, `StageRelease`) in `effects.go`
+- `envelopeGenerator` — exponential ramps via `calculateMultiplier` (log-space multiplier per sample, not linear)
+- `Envelope` struct with `Attack, Decay, Sustain, Release float64` (fractional proportions of total duration)
+- `Synth.Streamer(sampleRate, frequencies []float64, tickCount int, continuous bool, d time.Duration)` — current signature
+- `buildChain(sampleRate, frequency float64, sampleDuration int)` — takes sample count, not duration
+
+`GatedEnvelope` must use the same exponential ramp approach as `envelopeGenerator` (i.e. use `calculateMultiplier`) so the sound character is consistent.
+
 ## Implementation Plan
 
 ### 1. `GatedEnvelope` type (`effects.go`)
 
-Add a new type alongside the existing `envelopeGenerator`. It holds ADSR *absolute* sample counts (attack, decay, release) and a level for sustain, but no `sustainSamples` — sustain duration is open-ended.
+Add a new type alongside the existing `envelopeGenerator`. Uses absolute sample counts (A/D/R) and a sustain level; no `sustainSamples` — sustain is open-ended.
 
 ```go
 type gateState int
@@ -41,50 +53,56 @@ type GatedEnvelope struct {
     releaseSamples int
     sustainLevel   float64
 
-    mu       sync.Mutex
-    state    gateState
-    pos      int // samples elapsed in current stage
-    releaseLevel float64 // amplitude at the moment NoteOff fired
+    mu           sync.Mutex
+    state        gateState
+    pos          int     // samples elapsed in current stage
+    currentLevel float64 // running amplitude (exponential)
+    multiplier   float64 // per-sample multiplier for current stage
+    releaseLevel float64 // amplitude snapshot at NoteOff
 }
 ```
 
 `NewGatedEnvelope(sampleRate beep.SampleRate, a, d, r time.Duration, sustainLevel float64) *GatedEnvelope`
-converts durations to sample counts; starts in `gateIdle`.
+converts durations to sample counts; starts in `gateIdle`. Also pre-computes the attack and decay multipliers using `calculateMultiplier`.
 
 ### 2. State machine transitions
 
-| Event / condition | From | To |
-|---|---|---|
-| `NoteOn()` called | Idle | Attack |
-| Attack samples exhausted | Attack | Decay |
-| Decay samples exhausted | Decay | Sustain |
-| `NoteOff()` called | Attack / Decay / Sustain | Release (snapshot `releaseLevel`) |
-| Release samples exhausted | Release | Done |
+| Event / condition         | From                     | To                                                            |
+| ------------------------- | ------------------------ | ------------------------------------------------------------- |
+| `NoteOn()` called         | Idle                     | Attack (set `currentLevel=0.0001`, compute attack multiplier) |
+| Attack samples exhausted  | Attack                   | Decay (set `currentLevel=1.0`, compute decay multiplier)      |
+| Decay samples exhausted   | Decay                    | Sustain (`currentLevel=sustainLevel`, `multiplier=1.0`)       |
+| `NoteOff()` called        | Attack / Decay / Sustain | Release (snapshot `releaseLevel`, compute release multiplier) |
+| `NoteOff()` called        | Idle                     | Done (no sound was playing)                                   |
+| Release samples exhausted | Release                  | Done                                                          |
 
-`Amplitude(pos int) float64` is replaced by a stateful `Next() (float64, bool)` that advances `pos` and applies the appropriate linear ramp for the current stage. Returns `(0, false)` when `gateDone`.
+`Next() (float64, bool)` advances `pos` and applies the exponential multiplier for the current stage. Returns `(0, false)` when `gateDone`, `(currentLevel, true)` otherwise.
 
 ### 3. Thread safety
 
-`NoteOff()` acquires `mu` before transitioning state and snapshotting `releaseLevel`. `Next()` also acquires `mu` for the state read/write, keeping the critical section small (a single sample tick). A plain `sync.Mutex` is sufficient; contention is negligible at audio-thread cadence.
+`NoteOff()` acquires `mu` before transitioning state and snapshotting `releaseLevel`. `Next()` also acquires `mu` for the state read/write, keeping the critical section small (one sample tick). A plain `sync.Mutex` is sufficient; contention is negligible at audio-thread cadence.
 
 ### 4. `GatedStreamer` (`synth.go`)
 
 ```go
 // GatedStreamer returns a Streamer that sustains until env.NoteOff() is called.
-// The caller is responsible for calling env.NoteOn() before streaming begins.
-func (s *Synth) GatedStreamer(note Note, env *GatedEnvelope) beep.Streamer
+// The caller must call env.NoteOn() before streaming begins.
+// The pipeline (oscillators, LFOs, filter) is built without a fixed duration —
+// oscillator sources run indefinitely; the GatedEnvelope signals end-of-stream.
+func (s *Synth) GatedStreamer(sampleRate beep.SampleRate, frequency float64, env *GatedEnvelope) beep.Streamer
 ```
 
-Internally it generates oscillator samples and multiplies each by `env.Next()`. It returns `(n, false)` once `env` reaches `gateDone` (no `beep.Take` wrapper needed — the envelope itself signals end-of-stream).
+Internally calls a variant of `buildChain` that does **not** wrap sources in `NewEnvelope` or `beep.Take` — instead the gated pipeline multiplies each sample by `env.Next()` and returns `(n, false)` once `env` reaches `gateDone`.
 
-`Synth.Streamer(note Note, d time.Duration)` is **unchanged**.
+`Synth.Streamer(...)` is **unchanged**.
 
 ### 5. Caller workflow
 
 ```go
+sr := beep.SampleRate(44100)
 env := audio.NewGatedEnvelope(sr, 10*time.Millisecond, 20*time.Millisecond, 30*time.Millisecond, 0.7)
 env.NoteOn()
-streamer := synth.GatedStreamer(note, env)
+streamer := synth.GatedStreamer(sr, 440.0, env)
 speaker.Play(streamer)
 // ... later, on note-off event:
 env.NoteOff()
