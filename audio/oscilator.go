@@ -58,13 +58,27 @@ type oscillatorGenerator struct {
 	sampleRate       beep.SampleRate
 	phase            float64
 	pulseWidth       float64 // resolved duty cycle [0.01..0.99]
+
+	// portamento / pitch glide
+	startFrequency    float64 // initial frequency for glide (post-detune)
+	targetFrequency   float64 // target frequency for glide (post-detune)
+	portamentoSamples int     // total samples over which to slide; 0 = no glide
+	portamentoIdx     int     // samples elapsed in current glide
 }
 
 // Stream fills the samples buffer with oscillator waveform data
 func (g *oscillatorGenerator) Stream(samples [][2]float64) (n int, ok bool) {
-	phaseIncrement := g.frequency / float64(g.sampleRate)
-
 	for i := range samples {
+		if g.portamentoSamples > 0 {
+			if g.portamentoIdx < g.portamentoSamples {
+				t := float64(g.portamentoIdx) / float64(g.portamentoSamples)
+				g.frequency = g.startFrequency * math.Pow(g.targetFrequency/g.startFrequency, t)
+				g.portamentoIdx++
+			} else {
+				g.frequency = g.targetFrequency
+			}
+		}
+		phaseIncrement := g.frequency / float64(g.sampleRate)
 		var sample float64
 
 		switch g.oscillatorType {

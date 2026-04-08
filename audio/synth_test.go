@@ -179,3 +179,97 @@ func TestSynthDetuneArpPreservesDetune(t *testing.T) {
 	// Should not panic; detune must be maintained across tick boundaries.
 	_ = streamN(synth.Streamer(sr, []float64{440, 880}, 2, true, dur), sr.N(dur))
 }
+
+func TestPortamentoGlidesFromStartToTarget(t *testing.T) {
+	sr := beep.SampleRate(44100)
+	dur := 200 * time.Millisecond
+
+	osc := Oscillator{Type: Sine}
+	env := Envelope{Sustain: 1.0}
+	mixer := Mixer{Volume1: 1.0, Volume2: 0}
+
+	startFreq := 220.0  // A3
+	targetFreq := 440.0 // A4
+
+	synth := NewSynth(osc, env, osc, env, mixer, NewFilter(), LFO{}, LFO{})
+	synth.Portamento = 0.1 // 100ms glide
+
+	// With portamento: pass [startFreq, targetFreq], tickCount=1.
+	samples := streamN(synth.Streamer(sr, []float64{startFreq, targetFreq}, 1, true, dur), sr.N(dur))
+
+	// Without portamento (snap): same target, no start freq.
+	synthSnap := NewSynth(osc, env, osc, env, mixer, NewFilter(), LFO{}, LFO{})
+	samplesSnap := streamN(synthSnap.Streamer(sr, []float64{targetFreq}, 1, true, dur), sr.N(dur))
+
+	// The glide version starts at a different phase rate, so the waveforms must differ
+	// in the early portion of the buffer.
+	earlyLen := sr.N(20 * time.Millisecond) // first 20ms
+	diff := 0.0
+	for i := 0; i < earlyLen; i++ {
+		d := samples[i][0] - samplesSnap[i][0]
+		diff += d * d
+	}
+	if diff == 0 {
+		t.Error("expected portamento glide to produce different early samples from snap-to-pitch")
+	}
+}
+
+func TestPortamentoZeroDisablesGlide(t *testing.T) {
+	sr := beep.SampleRate(44100)
+	dur := 50 * time.Millisecond
+
+	osc := Oscillator{Type: Sine}
+	env := Envelope{Sustain: 1.0}
+	mixer := Mixer{Volume1: 1.0, Volume2: 0}
+
+	synth := NewSynth(osc, env, osc, env, mixer, NewFilter(), LFO{}, LFO{})
+	synth.Portamento = 0 // disabled
+
+	// Two frequencies supplied but Portamento=0 — only frequencies[0] should be used.
+	samplesTwo := streamN(synth.Streamer(sr, []float64{220.0, 440.0}, 1, true, dur), sr.N(dur))
+	samplesOne := streamN(synth.Streamer(sr, []float64{220.0}, 1, true, dur), sr.N(dur))
+
+	// Must be identical — no glide, frequencies[1] ignored.
+	for i := range samplesOne {
+		if samplesOne[i][0] != samplesTwo[i][0] {
+			t.Errorf("sample %d differs: %v vs %v — Portamento=0 should ignore second frequency", i, samplesOne[i][0], samplesTwo[i][0])
+		}
+	}
+}
+
+func TestPortamentoConvergesToTarget(t *testing.T) {
+	sr := beep.SampleRate(44100)
+	// Use a duration long enough that the portamento (50ms) has fully completed.
+	dur := 200 * time.Millisecond
+	portamento := 50 * time.Millisecond
+
+	osc := Oscillator{Type: Sine}
+	env := Envelope{Sustain: 1.0}
+	mixer := Mixer{Volume1: 0, Volume2: 0} // silent output — we inspect the oscillator directly
+
+	synth := &Synth{
+		Oscillator1: osc,
+		Envelope1:   env,
+		Oscillator2: Oscillator{Type: Silent},
+		Envelope2:   env,
+		Mixer:       mixer,
+		Portamento:  portamento.Seconds(),
+	}
+
+	osc1Ref := NewOscillator(osc.Type, 440.0, sr, 0, 0.5, 0)
+	osc1Ref.startFrequency = 220.0
+	osc1Ref.targetFrequency = 440.0
+	osc1Ref.portamentoSamples = sr.N(portamento)
+	osc1Ref.frequency = 220.0
+
+	// Stream past the portamento window.
+	buf := make([][2]float64, sr.N(dur))
+	osc1Ref.Stream(buf)
+
+	// After portamento has elapsed, frequency must equal targetFrequency.
+	if osc1Ref.frequency != osc1Ref.targetFrequency {
+		t.Errorf("after portamento, frequency=%v want %v", osc1Ref.frequency, osc1Ref.targetFrequency)
+	}
+	// Suppress unused synth warning.
+	_ = synth
+}

@@ -23,6 +23,7 @@ type Synth struct {
 	Filter      Filter
 	LFO1        LFO
 	LFO2        LFO
+	Portamento  float64 // glide duration in seconds; 0 = snap to pitch immediately
 }
 
 // NewSynth creates a new synthesis engine
@@ -102,7 +103,7 @@ func (s *Synth) Streamer(sampleRate beep.SampleRate, frequencies []float64, tick
 
 	if continuous && tickCount > 1 {
 		// One synthesis chain; oscillators retune at tick boundaries.
-		chain, osc1, osc2 := s.buildChain(sampleRate, frequencies[0], totalSamples)
+		chain, osc1, osc2 := s.buildChain(sampleRate, 0, frequencies[0], totalSamples)
 		samplesPerTick := totalSamples / tickCount
 		ticking := &tickingStreamer{
 			inner:          chain,
@@ -115,7 +116,13 @@ func (s *Synth) Streamer(sampleRate beep.SampleRate, frequencies []float64, tick
 	}
 
 	if tickCount == 1 {
-		chain, _, _ := s.buildChain(sampleRate, frequencies[0], totalSamples)
+		startFreq := 0.0
+		targetFreq := frequencies[0]
+		if s.Portamento > 0 && len(frequencies) >= 2 {
+			startFreq = frequencies[0]
+			targetFreq = frequencies[1]
+		}
+		chain, _, _ := s.buildChain(sampleRate, startFreq, targetFreq, totalSamples)
 		return beep.Take(totalSamples, chain)
 	}
 
@@ -124,7 +131,7 @@ func (s *Synth) Streamer(sampleRate beep.SampleRate, frequencies []float64, tick
 	seqStreamers := make([]beep.Streamer, tickCount)
 	for i := 0; i < tickCount; i++ {
 		freq := frequencies[i%len(frequencies)]
-		chain, _, _ := s.buildChain(sampleRate, freq, tickSamples)
+		chain, _, _ := s.buildChain(sampleRate, 0, freq, tickSamples)
 		seqStreamers[i] = beep.Take(tickSamples, chain)
 	}
 	return beep.Seq(seqStreamers...)
@@ -132,11 +139,24 @@ func (s *Synth) Streamer(sampleRate beep.SampleRate, frequencies []float64, tick
 
 // buildChain constructs a full synthesis pipeline for a single frequency and
 // sample duration. Returns the terminal streamer and both oscillator handles.
-func (s *Synth) buildChain(sampleRate beep.SampleRate, frequency float64, sampleDuration int) (beep.Streamer, *oscillatorGenerator, *oscillatorGenerator) {
+// startFreq > 0 and s.Portamento > 0 enables a pitch glide from startFreq to frequency.
+func (s *Synth) buildChain(sampleRate beep.SampleRate, startFreq, frequency float64, sampleDuration int) (beep.Streamer, *oscillatorGenerator, *oscillatorGenerator) {
 	sr := float64(sampleRate)
 
 	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth, s.Oscillator1.Detune)
 	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth, s.Oscillator2.Detune)
+
+	if s.Portamento > 0 && startFreq > 0 {
+		portamentoSamples := int(s.Portamento * sr)
+		osc1.startFrequency = startFreq * osc1.detuneMultiplier
+		osc1.targetFrequency = osc1.frequency
+		osc1.portamentoSamples = portamentoSamples
+		osc1.frequency = osc1.startFrequency
+		osc2.startFrequency = startFreq * osc2.detuneMultiplier
+		osc2.targetFrequency = osc2.frequency
+		osc2.portamentoSamples = portamentoSamples
+		osc2.frequency = osc2.startFrequency
+	}
 
 	makeLFO := func(dest ModDest) *lfoGenerator {
 		if s.LFO1.Depth > 0 && s.LFO1.Dest == dest {
