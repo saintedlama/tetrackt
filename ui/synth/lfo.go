@@ -20,7 +20,7 @@ const (
 	lfoFieldCount
 )
 
-var lfoDestNames = []string{"Pitch", "Volume", "Cutoff", "PulseWidth"}
+var lfoDestNames = []string{"Pitch", "Volume", "Cutoff", "PulseWidth", "Detune"}
 
 // LFOModel is the UI component for editing a single LFO and its modulation destination.
 type LFOModel struct {

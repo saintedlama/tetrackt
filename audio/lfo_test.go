@@ -121,7 +121,7 @@ func TestLFOPhaseWraps(t *testing.T) {
 
 func TestModulatedOscillatorNilLFOsReturnOscDirect(t *testing.T) {
 	osc := NewOscillator(Square, 440, srLFO, 0, 0.5, 0)
-	got := newModulatedOscillatorStreamer(osc, 440, 0.5, nil, nil)
+	got := newModulatedOscillatorStreamer(osc, 440, 0.5, nil, nil, nil)
 	if got != osc {
 		t.Fatal("expected the bare oscillator to be returned unchanged when both LFOs are nil")
 	}
@@ -130,7 +130,7 @@ func TestModulatedOscillatorNilLFOsReturnOscDirect(t *testing.T) {
 func TestModulatedOscillatorPitchLFOChangesFrequency(t *testing.T) {
 	osc := NewOscillator(Sine, 440, srLFO, 0, 0, 0)
 	pitchLFO := newLFOGenerator(LFO{Waveform: LFOSquare, Rate: 1, Depth: 0.5, Delay: 0}, float64(srLFO))
-	mod := newModulatedOscillatorStreamer(osc, 440, 0.5, pitchLFO, nil)
+	mod := newModulatedOscillatorStreamer(osc, 440, 0.5, pitchLFO, nil, nil)
 
 	// After streaming one block the frequency should be ≠ 440 (LFO square at
 	// phase 0 outputs +1, so freq = 440 * 1.5 = 660).
@@ -145,12 +145,44 @@ func TestModulatedOscillatorPWMLFOClampsDuty(t *testing.T) {
 	osc := NewOscillator(Square, 440, srLFO, 0, 0.5, 0)
 	// Depth=1 → mod can reach ±1; duty = 0.5 + 1*0.5 = 1.0 → clamped to 0.95
 	pwmLFO := newLFOGenerator(LFO{Waveform: LFOSquare, Rate: 1, Depth: 1.0, Delay: 0}, float64(srLFO))
-	mod := newModulatedOscillatorStreamer(osc, 440, 0.5, nil, pwmLFO)
+	mod := newModulatedOscillatorStreamer(osc, 440, 0.5, nil, pwmLFO, nil)
 
 	buf := make([][2]float64, 512)
 	mod.Stream(buf)
 	if osc.pulseWidth > 0.95 || osc.pulseWidth < 0.05 {
 		t.Fatalf("pulse width %v out of clamped range [0.05, 0.95]", osc.pulseWidth)
+	}
+}
+
+func TestModulatedOscillatorDetuneLFOShiftsFrequency(t *testing.T) {
+	// Osc with 50 cents static detune → detuneMultiplier ≈ 1.029
+	osc := NewOscillator(Square, 440, srLFO, 0, 0.5, 50)
+	baseMult := osc.detuneMultiplier
+
+	detuneLFO := newLFOGenerator(LFO{Waveform: LFOSquare, Rate: 1, Depth: 0.5, Delay: 0}, float64(srLFO))
+	mod := newModulatedOscillatorStreamer(osc, 440, 0.5, nil, nil, detuneLFO)
+
+	buf := make([][2]float64, 512)
+	mod.Stream(buf)
+
+	// After streaming, effective frequency should differ from 440 * baseMult
+	staticFreq := 440 * baseMult
+	if osc.frequency == staticFreq {
+		t.Fatal("expected detune LFO to shift osc2 frequency away from static detune value")
+	}
+}
+
+func TestModulatedOscillatorDetuneLFODoesNotAffectOsc1(t *testing.T) {
+	// Osc1 has no detune LFO wired (nil) — its frequency must remain at baseFreq * detuneMultiplier.
+	osc1 := NewOscillator(Square, 440, srLFO, 0, 0.5, 50)
+	staticFreq := osc1.frequency // set at construction
+
+	mod1 := newModulatedOscillatorStreamer(osc1, 440, 0.5, nil, nil, nil)
+
+	buf := make([][2]float64, 512)
+	mod1.Stream(buf)
+	if osc1.frequency != staticFreq {
+		t.Fatalf("osc1 frequency changed from %v to %v without detune LFO", staticFreq, osc1.frequency)
 	}
 }
 

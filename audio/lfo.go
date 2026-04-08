@@ -24,6 +24,7 @@ const (
 	ModVolume                    // modulates envelope output gain (tremolo)
 	ModCutoff                    // modulates filter cutoff (auto-wah)
 	ModPulseWidth                // modulates square-wave duty cycle (PWM sweep)
+	ModDetune                    // modulates detune offset (chorus/beating)
 )
 
 // LFO describes a low-frequency oscillator modulation source.
@@ -82,25 +83,27 @@ func lfoWaveformSample(w LFOWaveform, phase float64) float64 {
 }
 
 type modulatedOscillatorStreamer struct {
-	osc      *oscillatorGenerator
-	pitchLFO *lfoGenerator
-	pwmLFO   *lfoGenerator
-	baseFreq float64
-	baseDuty float64
+	osc       *oscillatorGenerator
+	pitchLFO  *lfoGenerator
+	pwmLFO    *lfoGenerator
+	detuneLFO *lfoGenerator // modulates osc2 only; nil = no detune mod
+	baseFreq  float64
+	baseDuty  float64
 }
 
-// newModulatedOscillatorStreamer wraps osc with optional LFO-driven pitch and/or
-// pulse-width modulation. Returns osc unchanged when both LFOs are nil.
-func newModulatedOscillatorStreamer(osc *oscillatorGenerator, baseFreq, baseDuty float64, pitchLFO, pwmLFO *lfoGenerator) beep.Streamer {
-	if pitchLFO == nil && pwmLFO == nil {
+// newModulatedOscillatorStreamer wraps osc with optional LFO-driven pitch,
+// pulse-width, and/or detune modulation. Returns osc unchanged when all LFOs are nil.
+func newModulatedOscillatorStreamer(osc *oscillatorGenerator, baseFreq, baseDuty float64, pitchLFO, pwmLFO, detuneLFO *lfoGenerator) beep.Streamer {
+	if pitchLFO == nil && pwmLFO == nil && detuneLFO == nil {
 		return osc
 	}
 	return &modulatedOscillatorStreamer{
-		osc:      osc,
-		pitchLFO: pitchLFO,
-		pwmLFO:   pwmLFO,
-		baseFreq: baseFreq,
-		baseDuty: baseDuty,
+		osc:       osc,
+		pitchLFO:  pitchLFO,
+		pwmLFO:    pwmLFO,
+		detuneLFO: detuneLFO,
+		baseFreq:  baseFreq,
+		baseDuty:  baseDuty,
 	}
 }
 
@@ -119,6 +122,13 @@ func (m *modulatedOscillatorStreamer) Stream(samples [][2]float64) (int, bool) {
 			duty = 0.95
 		}
 		m.osc.pulseWidth = duty
+	}
+	if m.detuneLFO != nil {
+		mod := m.detuneLFO.nextBlock(n)
+		// mod ∈ [-depth, +depth]; treat as a fractional cent offset relative to the
+		// base detune. A full-depth modulation sweeps ±1 octave (1200 cents).
+		effectiveMult := m.osc.detuneMultiplier * math.Pow(2, mod*1200.0/1200.0)
+		m.osc.frequency = m.baseFreq * effectiveMult
 	}
 	return m.osc.Stream(samples)
 }
