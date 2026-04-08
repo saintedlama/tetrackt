@@ -1,17 +1,10 @@
 package audio
 
 import (
-	"math"
 	"time"
 
 	"github.com/gopxl/beep/v2"
-	"github.com/gopxl/beep/v2/effects"
 )
-
-type Mixer struct {
-	Volume1 float64 // 0.0 to 1.0, independent volume for oscillator 1
-	Volume2 float64 // 0.0 to 1.0, independent volume for oscillator 2
-}
 
 // Synth represents the audio synthesis engine
 type Synth struct {
@@ -38,6 +31,23 @@ func NewSynth(oscillator1 Oscillator, envelope1 Envelope, oscillator2 Oscillator
 		LFO1:        lfo1,
 		LFO2:        lfo2,
 	}
+}
+
+// PlayParams holds per-trigger playback context passed to Synth.Streamer.
+// It is separate from Synth (the instrument patch) so callers supply per-note
+// information without mutating the patch.
+type PlayParams struct {
+	// Frequencies lists pitches to cycle across ticks.
+	// A single-element slice plays one note; multiple elements enable arpeggio.
+	Frequencies []float64
+	// StartFreq enables a portamento glide from StartFreq to Frequencies[0].
+	// Only active when Synth.Portamento > 0 and StartFreq > 0.
+	StartFreq float64
+	// Duration is the total note length.
+	Duration time.Duration
+	// Continuous keeps the ADSR envelope and LFOs running uninterrupted across
+	// arpeggio ticks. When false, each tick gets a fresh synthesis chain.
+	Continuous bool
 }
 
 // tickingStreamer wraps a synthesis pipeline and retunes oscillators at tick
@@ -83,25 +93,26 @@ func (t *tickingStreamer) Stream(samples [][2]float64) (int, bool) {
 
 func (t *tickingStreamer) Err() error { return t.inner.Err() }
 
-// Streamer builds a playback pipeline for the given frequencies over duration d.
+// Streamer builds a playback pipeline from the given PlayParams.
 //
-// frequencies is cycled across tickCount equal-length ticks. Passing a single
-// frequency with tickCount=1 is equivalent to the previous single-note API.
+// p.Frequencies is cycled across equal-length ticks; a single-element slice
+// plays one note, multiple elements enable arpeggio.
 //
-// When continuous=true the ADSR envelope and LFOs run uninterrupted across all
-// ticks (authentic chiptune behaviour); oscillators are simply retuned at each
-// tick boundary. When continuous=false each tick gets a fresh synthesis chain
-// (envelope + LFOs reset), producing a gate/stutter effect.
-func (s *Synth) Streamer(sampleRate beep.SampleRate, frequencies []float64, tickCount int, continuous bool, d time.Duration) beep.Streamer {
+// When p.Continuous is true the ADSR envelope and LFOs run uninterrupted across
+// all arpeggio ticks (authentic chiptune behaviour). When false, each tick gets
+// a fresh synthesis chain (envelope + LFOs reset), producing a gate/stutter effect.
+//
+// When Synth.Portamento > 0 and p.StartFreq > 0, a pitch glide is applied from
+// p.StartFreq to p.Frequencies[0].
+func (s *Synth) Streamer(sampleRate beep.SampleRate, p PlayParams) beep.Streamer {
+	frequencies := p.Frequencies
 	if len(frequencies) == 0 {
 		frequencies = []float64{0}
 	}
-	if tickCount <= 0 {
-		tickCount = 1
-	}
-	totalSamples := sampleRate.N(d)
+	tickCount := len(frequencies)
+	totalSamples := sampleRate.N(p.Duration)
 
-	if continuous && tickCount > 1 {
+	if p.Continuous && tickCount > 1 {
 		// One synthesis chain; oscillators retune at tick boundaries.
 		chain, osc1, osc2 := s.buildChain(sampleRate, 0, frequencies[0], totalSamples)
 		samplesPerTick := totalSamples / tickCount
@@ -117,16 +128,14 @@ func (s *Synth) Streamer(sampleRate beep.SampleRate, frequencies []float64, tick
 
 	if tickCount == 1 {
 		startFreq := 0.0
-		targetFreq := frequencies[0]
-		if s.Portamento > 0 && len(frequencies) >= 2 {
-			startFreq = frequencies[0]
-			targetFreq = frequencies[1]
+		if s.Portamento > 0 {
+			startFreq = p.StartFreq
 		}
-		chain, _, _ := s.buildChain(sampleRate, startFreq, targetFreq, totalSamples)
+		chain, _, _ := s.buildChain(sampleRate, startFreq, frequencies[0], totalSamples)
 		return beep.Take(totalSamples, chain)
 	}
 
-	// continuous=false with multiple ticks: fresh ADSR/LFO per tick.
+	// p.Continuous=false with multiple ticks: fresh ADSR/LFO per tick.
 	tickSamples := totalSamples / tickCount
 	seqStreamers := make([]beep.Streamer, tickCount)
 	for i := 0; i < tickCount; i++ {
@@ -177,10 +186,7 @@ func (s *Synth) buildChain(sampleRate beep.SampleRate, startFreq, frequency floa
 	mod1 := newModulatedVolumeStreamer(streamer1, makeLFO(ModVolume))
 	mod2 := newModulatedVolumeStreamer(streamer2, makeLFO(ModVolume))
 
-	mix1 := &effects.Volume{Streamer: mod1, Base: 2, Volume: math.Log2(s.Mixer.Volume1), Silent: s.Mixer.Volume1 == 0}
-	mix2 := &effects.Volume{Streamer: mod2, Base: 2, Volume: math.Log2(s.Mixer.Volume2), Silent: s.Mixer.Volume2 == 0}
-
-	mixed := beep.Mix(mix1, mix2)
+	mixed := s.Mixer.Mix(mod1, mod2)
 	filtered := NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
 
 	return filtered, osc1, osc2

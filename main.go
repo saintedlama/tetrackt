@@ -294,10 +294,13 @@ func (m *model) tick() tea.Cmd {
 func (m *model) playNoteWithSynthPreset(note audio.Note, preset synth.SynthPreset) {
 	duration := m.trackerModel().BPMDuration()
 	volumeAdjusted := &effects.Volume{
-		Streamer: preset.Synth.Streamer(m.sampleRate, []float64{note.Frequency()}, 1, false, duration),
-		Base:     2,
-		Volume:   volumeToDecibels(m.globalVolume),
-		Silent:   m.globalVolume == 0,
+		Streamer: preset.Synth.Streamer(m.sampleRate, audio.PlayParams{
+			Frequencies: []float64{note.Frequency()},
+			Duration:    duration,
+		}),
+		Base:   2,
+		Volume: volumeToDecibels(m.globalVolume),
+		Silent: m.globalVolume == 0,
 	}
 	speaker.Play(volumeAdjusted)
 }
@@ -308,7 +311,10 @@ func (m *model) playNote(note audio.Note) {
 
 	synth := m.synth().GetSynth()
 
-	synthStreamer := synth.Streamer(m.sampleRate, []float64{note.Frequency()}, 1, false, duration)
+	synthStreamer := synth.Streamer(m.sampleRate, audio.PlayParams{
+		Frequencies: []float64{note.Frequency()},
+		Duration:    duration,
+	})
 	volumeAdjusted := &effects.Volume{
 		Streamer: synthStreamer,
 		Base:     2,

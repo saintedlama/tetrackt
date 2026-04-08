@@ -15,7 +15,7 @@ func TestSynthStreamerLength(t *testing.T) {
 	osc := Oscillator{Type: Silent}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc, env, osc, env, Mixer{Volume1: 1.0, Volume2: 1.0}, NewFilter(), LFO{}, LFO{})
-	streamer := synth.Streamer(sr, []float64{NewNote(BaseA, Octave4).Frequency()}, 1, false, dur)
+	streamer := synth.Streamer(sr, PlayParams{Frequencies: []float64{NewNote(BaseA, Octave4).Frequency()}, Duration: dur})
 
 	buf := make([][2]float64, 512)
 	total := 0
@@ -39,7 +39,7 @@ func TestSynthSilentOscillators(t *testing.T) {
 	osc := Oscillator{Type: Silent}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc, env, osc, env, Mixer{Volume1: 1.0, Volume2: 1.0}, NewFilter(), LFO{}, LFO{})
-	samples := streamN(synth.Streamer(sr, []float64{NewNote(BaseA, Octave4).Frequency()}, 1, false, dur), sr.N(dur))
+	samples := streamN(synth.Streamer(sr, PlayParams{Frequencies: []float64{NewNote(BaseA, Octave4).Frequency()}, Duration: dur}), sr.N(dur))
 
 	for i, s := range samples {
 		if s[0] != 0 || s[1] != 0 {
@@ -55,7 +55,7 @@ func TestSynthMixerZeroVolume(t *testing.T) {
 	osc := Oscillator{Type: Square}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc, env, osc, env, Mixer{Volume1: 0, Volume2: 0}, NewFilter(), LFO{}, LFO{})
-	samples := streamN(synth.Streamer(sr, []float64{NewNote(BaseA, Octave4).Frequency()}, 1, false, dur), sr.N(dur))
+	samples := streamN(synth.Streamer(sr, PlayParams{Frequencies: []float64{NewNote(BaseA, Octave4).Frequency()}, Duration: dur}), sr.N(dur))
 
 	for i, s := range samples {
 		if s[0] != 0 || s[1] != 0 {
@@ -72,7 +72,7 @@ func TestSynthMixerBalance(t *testing.T) {
 	osc2 := Oscillator{Type: Silent}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc1, env, osc2, env, Mixer{Volume1: 1.0, Volume2: 0}, NewFilter(), LFO{}, LFO{})
-	samples := streamN(synth.Streamer(sr, []float64{NewNote(BaseA, Octave4).Frequency()}, 1, false, dur), sr.N(dur))
+	samples := streamN(synth.Streamer(sr, PlayParams{Frequencies: []float64{NewNote(BaseA, Octave4).Frequency()}, Duration: dur}), sr.N(dur))
 
 	hasNonZero := false
 	for _, s := range samples {
@@ -98,11 +98,11 @@ func TestSynthFilterOff(t *testing.T) {
 
 	// FilterOff passes through unmodified
 	synthOff := NewSynth(osc, env, osc, env, mixer, Filter{Type: FilterOff, Cutoff: 0.5}, LFO{}, LFO{})
-	samplesOff := streamN(synthOff.Streamer(sr, []float64{note.Frequency()}, 1, false, dur), n)
+	samplesOff := streamN(synthOff.Streamer(sr, PlayParams{Frequencies: []float64{note.Frequency()}, Duration: dur}), n)
 
 	// Aggressive LP filter (~21 Hz cutoff) should heavily attenuate 440 Hz content
 	synthLP := NewSynth(osc, env, osc, env, mixer, Filter{Type: FilterLowPass, Cutoff: 0.01}, LFO{}, LFO{})
-	samplesLP := streamN(synthLP.Streamer(sr, []float64{note.Frequency()}, 1, false, dur), n)
+	samplesLP := streamN(synthLP.Streamer(sr, PlayParams{Frequencies: []float64{note.Frequency()}, Duration: dur}), n)
 
 	rmsOff := rms(samplesOff)
 	rmsLP := rms(samplesLP)
@@ -128,8 +128,8 @@ func TestSynthDetuneShiftsFrequency(t *testing.T) {
 	oscUp := Oscillator{Type: Sine, Detune: 1200}
 	synthUp := NewSynth(oscUp, env, oscUp, env, mixer, NewFilter(), LFO{}, LFO{})
 
-	samplesNone := streamN(synthNone.Streamer(sr, []float64{baseFreq}, 1, false, dur), sr.N(dur))
-	samplesUp := streamN(synthUp.Streamer(sr, []float64{baseFreq}, 1, false, dur), sr.N(dur))
+	samplesNone := streamN(synthNone.Streamer(sr, PlayParams{Frequencies: []float64{baseFreq}, Duration: dur}), sr.N(dur))
+	samplesUp := streamN(synthUp.Streamer(sr, PlayParams{Frequencies: []float64{baseFreq}, Duration: dur}), sr.N(dur))
 
 	// Count zero crossings (positive-going) as a proxy for frequency.
 	countCrossings := func(s [][2]float64) int {
@@ -159,7 +159,7 @@ func TestSynthDetuneZeroNoEffect(t *testing.T) {
 
 	osc := Oscillator{Type: Sine, Detune: 0}
 	synth := NewSynth(osc, env, osc, env, mixer, NewFilter(), LFO{}, LFO{})
-	s := streamN(synth.Streamer(sr, []float64{baseFreq}, 1, false, dur), sr.N(dur))
+	s := streamN(synth.Streamer(sr, PlayParams{Frequencies: []float64{baseFreq}, Duration: dur}), sr.N(dur))
 	if len(s) == 0 {
 		t.Fatal("no samples")
 	}
@@ -177,7 +177,7 @@ func TestSynthDetuneArpPreservesDetune(t *testing.T) {
 	synth := NewSynth(oscDetuned, env, oscSilent, env, mixer, NewFilter(), LFO{}, LFO{})
 
 	// Should not panic; detune must be maintained across tick boundaries.
-	_ = streamN(synth.Streamer(sr, []float64{440, 880}, 2, true, dur), sr.N(dur))
+	_ = streamN(synth.Streamer(sr, PlayParams{Frequencies: []float64{440, 880}, Continuous: true, Duration: dur}), sr.N(dur))
 }
 
 func TestPortamentoGlidesFromStartToTarget(t *testing.T) {
@@ -194,12 +194,12 @@ func TestPortamentoGlidesFromStartToTarget(t *testing.T) {
 	synth := NewSynth(osc, env, osc, env, mixer, NewFilter(), LFO{}, LFO{})
 	synth.Portamento = 0.1 // 100ms glide
 
-	// With portamento: pass [startFreq, targetFreq], tickCount=1.
-	samples := streamN(synth.Streamer(sr, []float64{startFreq, targetFreq}, 1, true, dur), sr.N(dur))
+	// With portamento: StartFreq triggers the glide, Frequencies[0] is the target.
+	samples := streamN(synth.Streamer(sr, PlayParams{Frequencies: []float64{targetFreq}, StartFreq: startFreq, Duration: dur}), sr.N(dur))
 
-	// Without portamento (snap): same target, no start freq.
+	// Without portamento (snap): same target, no StartFreq.
 	synthSnap := NewSynth(osc, env, osc, env, mixer, NewFilter(), LFO{}, LFO{})
-	samplesSnap := streamN(synthSnap.Streamer(sr, []float64{targetFreq}, 1, true, dur), sr.N(dur))
+	samplesSnap := streamN(synthSnap.Streamer(sr, PlayParams{Frequencies: []float64{targetFreq}, Duration: dur}), sr.N(dur))
 
 	// The glide version starts at a different phase rate, so the waveforms must differ
 	// in the early portion of the buffer.
@@ -225,14 +225,14 @@ func TestPortamentoZeroDisablesGlide(t *testing.T) {
 	synth := NewSynth(osc, env, osc, env, mixer, NewFilter(), LFO{}, LFO{})
 	synth.Portamento = 0 // disabled
 
-	// Two frequencies supplied but Portamento=0 — only frequencies[0] should be used.
-	samplesTwo := streamN(synth.Streamer(sr, []float64{220.0, 440.0}, 1, true, dur), sr.N(dur))
-	samplesOne := streamN(synth.Streamer(sr, []float64{220.0}, 1, true, dur), sr.N(dur))
+	// StartFreq supplied but Portamento=0 — output must be identical to snap-to-pitch.
+	samplesGlide := streamN(synth.Streamer(sr, PlayParams{Frequencies: []float64{440.0}, StartFreq: 220.0, Duration: dur}), sr.N(dur))
+	samplesSnap := streamN(synth.Streamer(sr, PlayParams{Frequencies: []float64{440.0}, Duration: dur}), sr.N(dur))
 
-	// Must be identical — no glide, frequencies[1] ignored.
-	for i := range samplesOne {
-		if samplesOne[i][0] != samplesTwo[i][0] {
-			t.Errorf("sample %d differs: %v vs %v — Portamento=0 should ignore second frequency", i, samplesOne[i][0], samplesTwo[i][0])
+	// Must be identical — StartFreq is ignored when Portamento=0.
+	for i := range samplesSnap {
+		if samplesSnap[i][0] != samplesGlide[i][0] {
+			t.Errorf("sample %d differs: %v vs %v — Portamento=0 should ignore StartFreq", i, samplesSnap[i][0], samplesGlide[i][0])
 		}
 	}
 }

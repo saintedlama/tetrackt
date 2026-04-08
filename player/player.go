@@ -31,24 +31,28 @@ func (p *Player) Reset() {
 // arpFrequencies converts an ArpeggioEffect into a frequency slice suitable for
 // Synth.Streamer. Each offset is applied as a frequency multiplier 2^(offset/12),
 // making the computation strictly frequency-based with no note-type involvement.
-// Returns ([]float64{baseFreq}, 1) when the arp is inactive.
-func arpFrequencies(baseFreq float64, arp audio.ArpeggioEffect) ([]float64, int) {
+// Returns []float64{baseFreq} when the arp is inactive.
+func arpFrequencies(baseFreq float64, arp audio.ArpeggioEffect) []float64 {
 	if !arp.IsActive() {
-		return []float64{baseFreq}, 1
+		return []float64{baseFreq}
 	}
 	freqs := make([]float64, len(arp.Offsets))
 	for i, offset := range arp.Offsets {
 		freqs[i] = baseFreq * math.Pow(2.0, float64(offset)/12.0)
 	}
-	return freqs, len(arp.Offsets)
+	return freqs
 }
 
 // StartPreview plays a single note preview using the given synth and arpeggio.
 // Arp cycling is handled internally by the streamer; always returns false.
 func (p *Player) StartPreview(note audio.Note, arp audio.ArpeggioEffect, s *audio.Synth, duration time.Duration, sampleRate beep.SampleRate, globalVolume float64, speed int) bool {
-	frequencies, tickCount := arpFrequencies(note.Frequency(), arp)
+	frequencies := arpFrequencies(note.Frequency(), arp)
 	continuous := arp.IsActive()
-	voice := s.Streamer(sampleRate, frequencies, tickCount, continuous, duration)
+	voice := s.Streamer(sampleRate, audio.PlayParams{
+		Frequencies: frequencies,
+		Continuous:  continuous,
+		Duration:    duration,
+	})
 	p.previewVoice = voice
 
 	volumeAdjusted := &effects.Volume{
@@ -117,9 +121,13 @@ func (p *Player) playRowNotes(trackerModel *tracker.TrackerModel, row int, sampl
 			continue
 		}
 
-		frequencies, tickCount := arpFrequencies(trackRow.Note.Frequency(), trackRow.Arpeggio)
+		frequencies := arpFrequencies(trackRow.Note.Frequency(), trackRow.Arpeggio)
 		continuous := trackRow.Continuous || trackRow.Arpeggio.IsActive()
-		voice := track.Synth.Streamer(sampleRate, frequencies, tickCount, continuous, duration)
+		voice := track.Synth.Streamer(sampleRate, audio.PlayParams{
+			Frequencies: frequencies,
+			Continuous:  continuous,
+			Duration:    duration,
+		})
 		voices[trackIdx] = voice
 		streamers = append(streamers, voice)
 	}
