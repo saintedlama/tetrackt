@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"strings"
 	"time"
@@ -17,9 +16,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/gopxl/beep/v2"
-	"github.com/gopxl/beep/v2/effects"
-	"github.com/gopxl/beep/v2/speaker"
 )
 
 const (
@@ -36,7 +32,7 @@ const (
 type model struct {
 	width        int
 	height       int
-	sampleRate   beep.SampleRate
+	sampleRate   audio.SampleRate
 	screens      []ui.Screen
 	activeScreen int
 
@@ -71,9 +67,7 @@ var noteKeyToName = ui.NoteKeys
 
 func (m model) Init() tea.Cmd {
 	// Initialize speaker with sample rate
-	sampleRate := m.sampleRate
-	buffersize := sampleRate.N(time.Millisecond * 100)
-	speaker.Init(sampleRate, buffersize)
+	player.Init(m.sampleRate)
 
 	return nil
 }
@@ -152,7 +146,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				//speaker.Clear()
 			}
 		case "q", "ctrl+c":
-			speaker.Clear()
+			m.player.Clear()
 			return m, tea.Quit
 		}
 
@@ -293,44 +287,26 @@ func (m *model) tick() tea.Cmd {
 // playNoteWithSynthPreset plays a note using the given synth preset's parameters.
 func (m *model) playNoteWithSynthPreset(note audio.Note, preset synth.SynthPreset) {
 	duration := m.trackerModel().BPMDuration()
-	volumeAdjusted := &effects.Volume{
-		Streamer: preset.Synth.Streamer(m.sampleRate, audio.PlayParams{
+	m.player.Play(
+		preset.Synth.Streamer(m.sampleRate, audio.PlayParams{
 			Frequencies: []float64{note.Frequency()},
 			Duration:    duration,
 		}),
-		Base:   2,
-		Volume: volumeToDecibels(m.globalVolume),
-		Silent: m.globalVolume == 0,
-	}
-	speaker.Play(volumeAdjusted)
+		m.globalVolume,
+	)
 }
 
 // playNote plays a note at the given frequency using the current oscillator
 func (m *model) playNote(note audio.Note) {
 	duration := m.trackerModel().BPMDuration()
-
 	synth := m.synth().GetSynth()
-
-	synthStreamer := synth.Streamer(m.sampleRate, audio.PlayParams{
-		Frequencies: []float64{note.Frequency()},
-		Duration:    duration,
-	})
-	volumeAdjusted := &effects.Volume{
-		Streamer: synthStreamer,
-		Base:     2,
-		Volume:   volumeToDecibels(m.globalVolume),
-		Silent:   m.globalVolume == 0,
-	}
-
-	// Clear previous sound and play the new note
-	speaker.Play(volumeAdjusted)
-}
-
-func volumeToDecibels(volume float64) float64 {
-	if volume <= 0 {
-		return -999
-	}
-	return math.Log2(volume) * 6
+	m.player.Play(
+		synth.Streamer(m.sampleRate, audio.PlayParams{
+			Frequencies: []float64{note.Frequency()},
+			Duration:    duration,
+		}),
+		m.globalVolume,
+	)
 }
 
 // View renders the UI
@@ -363,7 +339,7 @@ func (m model) View() tea.View {
 
 func main() {
 	// Initialize synthesizer
-	sampleRate := beep.SampleRate(44100)
+	sampleRate := audio.SampleRate(44100)
 
 	// Create pattern with 8 tracks and 64 rows
 	trackerModel := tracker.NewTracker(8, 64, 0, 0)

@@ -6,6 +6,16 @@ import (
 	"github.com/gopxl/beep/v2"
 )
 
+// SampleRate is the number of audio samples per second.
+// It is an alias for beep.SampleRate, exposed so callers outside of audio
+// don't need to import beep directly.
+type SampleRate = beep.SampleRate
+
+// Streamer is the interface for pulling audio samples.
+// It is an alias for beep.Streamer, exposed so callers outside of audio
+// don't need to import beep directly.
+type Streamer = beep.Streamer
+
 // Synth represents the audio synthesis engine
 type Synth struct {
 	Oscillator1 Oscillator

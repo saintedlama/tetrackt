@@ -7,8 +7,6 @@ import (
 	"github.com/tetrackt/tetrackt/audio"
 	"github.com/tetrackt/tetrackt/ui/tracker"
 
-	"github.com/gopxl/beep/v2"
-	"github.com/gopxl/beep/v2/effects"
 	"github.com/gopxl/beep/v2/speaker"
 )
 
@@ -17,8 +15,25 @@ import (
 // Player owns sequencer playback state: sub-tick clock and active voices.
 type Player struct {
 	subTickCount int
-	activeVoices []beep.Streamer
-	previewVoice beep.Streamer
+	activeVoices []audio.Streamer
+	previewVoice audio.Streamer
+}
+
+// Init initialises the speaker hardware with the given sample rate.
+// Call once at startup before any playback.
+func Init(sampleRate audio.SampleRate) {
+	bufferSize := sampleRate.N(time.Millisecond * 100)
+	speaker.Init(sampleRate, bufferSize)
+}
+
+// Clear stops all currently playing audio.
+func (p *Player) Clear() {
+	speaker.Clear()
+}
+
+// Play wraps streamer with volume and submits it to the speaker.
+func (p *Player) Play(streamer audio.Streamer, globalVolume float64) {
+	speaker.Play(audio.NewVolume(globalVolume).Streamer(streamer))
 }
 
 // Reset clears playback state. Call when playback starts or restarts.
@@ -45,7 +60,7 @@ func arpFrequencies(baseFreq float64, arp audio.ArpeggioEffect) []float64 {
 
 // StartPreview plays a single note preview using the given synth and arpeggio.
 // Arp cycling is handled internally by the streamer; always returns false.
-func (p *Player) StartPreview(note audio.Note, arp audio.ArpeggioEffect, s *audio.Synth, duration time.Duration, sampleRate beep.SampleRate, globalVolume float64, speed int) bool {
+func (p *Player) StartPreview(note audio.Note, arp audio.ArpeggioEffect, s *audio.Synth, duration time.Duration, sampleRate audio.SampleRate, globalVolume float64, speed int) bool {
 	frequencies := arpFrequencies(note.Frequency(), arp)
 	continuous := arp.IsActive()
 	voice := s.Streamer(sampleRate, audio.PlayParams{
@@ -54,14 +69,7 @@ func (p *Player) StartPreview(note audio.Note, arp audio.ArpeggioEffect, s *audi
 		Duration:    duration,
 	})
 	p.previewVoice = voice
-
-	volumeAdjusted := &effects.Volume{
-		Streamer: voice,
-		Base:     2,
-		Volume:   volumeToDecibels(globalVolume),
-		Silent:   globalVolume == 0,
-	}
-	speaker.Play(volumeAdjusted)
+	speaker.Play(audio.NewVolume(globalVolume).Streamer(voice))
 	return false
 }
 
@@ -73,7 +81,7 @@ func (p *Player) TickPreview() bool {
 // Tick processes one sub-tick of playback:
 //   - On the first sub-tick of a row, starts audio for all notes in that row.
 //   - Advances the row counter once all sub-ticks for the row are consumed.
-func (p *Player) Tick(trackerModel *tracker.TrackerModel, sampleRate beep.SampleRate, globalVolume float64) {
+func (p *Player) Tick(trackerModel *tracker.TrackerModel, sampleRate audio.SampleRate, globalVolume float64) {
 	speed := trackerModel.Speed
 	if speed <= 0 {
 		speed = tracker.DefaultSpeed
@@ -104,14 +112,14 @@ func (p *Player) Tick(trackerModel *tracker.TrackerModel, sampleRate beep.Sample
 
 // playRowNotes starts audio for all non-empty notes in the given row and returns
 // a slice of active voices indexed by track (nil for empty/off rows).
-func (p *Player) playRowNotes(trackerModel *tracker.TrackerModel, row int, sampleRate beep.SampleRate, globalVolume float64) []beep.Streamer {
+func (p *Player) playRowNotes(trackerModel *tracker.TrackerModel, row int, sampleRate audio.SampleRate, globalVolume float64) []audio.Streamer {
 	if row < 0 || row >= trackerModel.NumRows {
 		return nil
 	}
 
 	duration := trackerModel.BPMDuration()
-	voices := make([]beep.Streamer, trackerModel.NumTracks)
-	var streamers []beep.Streamer
+	voices := make([]audio.Streamer, trackerModel.NumTracks)
+	var streamers []audio.Streamer
 
 	for trackIdx := 0; trackIdx < trackerModel.NumTracks; trackIdx++ {
 		track := trackerModel.Tracks[trackIdx]
@@ -132,22 +140,6 @@ func (p *Player) playRowNotes(trackerModel *tracker.TrackerModel, row int, sampl
 		streamers = append(streamers, voice)
 	}
 
-	if len(streamers) > 0 {
-		mixed := beep.Mix(streamers...)
-		volumeAdjusted := &effects.Volume{
-			Streamer: mixed,
-			Base:     2,
-			Volume:   volumeToDecibels(globalVolume),
-			Silent:   globalVolume == 0,
-		}
-		speaker.Play(volumeAdjusted)
-	}
+	speaker.Play(audio.NewVolume(globalVolume).Streamer(streamers...))
 	return voices
-}
-
-func volumeToDecibels(volume float64) float64 {
-	if volume <= 0 {
-		return -999
-	}
-	return math.Log2(volume) * 6
 }
