@@ -89,12 +89,13 @@ func lfoWaveformSample(w LFOWaveform, phase float64) float64 {
 }
 
 type modulatedOscillatorStreamer struct {
-	osc       *oscillatorGenerator
-	pitchLFO  *lfoGenerator
-	pwmLFO    *lfoGenerator
-	detuneLFO *lfoGenerator // modulates osc2 only; nil = no detune mod
-	baseFreq  float64
-	baseDuty  float64
+	osc                  *oscillatorGenerator
+	pitchLFO             *lfoGenerator
+	pwmLFO               *lfoGenerator
+	detuneLFO            *lfoGenerator // modulates detune offset; nil = no detune mod
+	baseFreq             float64
+	baseDuty             float64
+	baseDetuneMultiplier float64 // osc.detuneMultiplier at construction; LFO modulates from this
 }
 
 // newModulatedOscillatorStreamer wraps osc with optional LFO-driven pitch,
@@ -104,12 +105,13 @@ func newModulatedOscillatorStreamer(osc *oscillatorGenerator, baseFreq, baseDuty
 		return osc
 	}
 	return &modulatedOscillatorStreamer{
-		osc:       osc,
-		pitchLFO:  pitchLFO,
-		pwmLFO:    pwmLFO,
-		detuneLFO: detuneLFO,
-		baseFreq:  baseFreq,
-		baseDuty:  baseDuty,
+		osc:                  osc,
+		pitchLFO:             pitchLFO,
+		pwmLFO:               pwmLFO,
+		detuneLFO:            detuneLFO,
+		baseFreq:             baseFreq,
+		baseDuty:             baseDuty,
+		baseDetuneMultiplier: osc.detuneMultiplier,
 	}
 }
 
@@ -131,10 +133,10 @@ func (m *modulatedOscillatorStreamer) Stream(samples [][2]float64) (int, bool) {
 	}
 	if m.detuneLFO != nil {
 		mod := m.detuneLFO.nextBlock(n)
-		// mod ∈ [-depth, +depth]; treat as a fractional cent offset relative to the
-		// base detune. A full-depth modulation sweeps ±1 octave (1200 cents).
-		effectiveMult := m.osc.detuneMultiplier * math.Pow(2, mod*1200.0/1200.0)
-		m.osc.frequency = m.baseFreq * effectiveMult
+		// Combine the static detune multiplier with the LFO offset.
+		// osc.frequency stays as a transparent Hz value; detuneMultiplier
+		// is applied at stream time in oscillatorGenerator.Stream().
+		m.osc.detuneMultiplier = m.baseDetuneMultiplier * math.Pow(2, mod)
 	}
 	return m.osc.Stream(samples)
 }

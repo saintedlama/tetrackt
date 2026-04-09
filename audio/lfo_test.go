@@ -165,15 +165,18 @@ func TestModulatedOscillatorDetuneLFOShiftsFrequency(t *testing.T) {
 	buf := make([][2]float64, 512)
 	mod.Stream(buf)
 
-	// After streaming, effective frequency should differ from 440 * baseMult
-	staticFreq := 440 * baseMult
-	if osc.frequency == staticFreq {
-		t.Fatal("expected detune LFO to shift osc2 frequency away from static detune value")
+	// After streaming, detuneMultiplier should differ from the static value.
+	// osc.frequency remains the transparent raw Hz value and must be unchanged.
+	if osc.detuneMultiplier == baseMult {
+		t.Fatal("expected detune LFO to shift detuneMultiplier away from static value")
+	}
+	if osc.frequency != 440 {
+		t.Fatalf("expected osc.frequency to remain raw 440 Hz, got %v", osc.frequency)
 	}
 }
 
 func TestModulatedOscillatorDetuneLFODoesNotAffectOsc1(t *testing.T) {
-	// Osc1 has no detune LFO wired (nil) — its frequency must remain at baseFreq * detuneMultiplier.
+	// Osc1 has no detune LFO wired (nil) — its raw frequency must remain unchanged.
 	osc1 := NewOscillator(Square, 440, srLFO, 0, 0.5, 50)
 	staticFreq := osc1.frequency // set at construction
 

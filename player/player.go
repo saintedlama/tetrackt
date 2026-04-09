@@ -1,6 +1,7 @@
 package player
 
 import (
+	"math"
 	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
@@ -13,9 +14,10 @@ import (
 
 // Player owns sequencer playback state: sub-tick clock and active patches.
 type Player struct {
-	subTickCount  int
-	activePatches []audio.Streamer
-	previewPatch  audio.Streamer
+	subTickCount    int
+	activePatches   []*audio.Patch
+	previewPatch    audio.Streamer
+	prevFrequencies []float64 // last triggered frequency per track; 0 = no prior note
 }
 
 // Init initialises the speaker hardware with the given sample rate.
@@ -40,6 +42,7 @@ func (p *Player) Reset() {
 	p.subTickCount = 0
 	p.activePatches = nil
 	p.previewPatch = nil
+	p.prevFrequencies = nil
 }
 
 // StartPreview plays a single note preview using the given synth.
@@ -71,6 +74,12 @@ func (p *Player) Tick(trackerModel *tracker.TrackerModel, sampleRate audio.Sampl
 		p.activePatches = p.playRowNotes(trackerModel, row, sampleRate, globalVolume)
 	}
 
+	for _, patch := range p.activePatches {
+		if patch != nil {
+			patch.TickPortamento()
+		}
+	}
+
 	// Advance sub-tick counter; advance row when all sub-ticks are consumed
 	p.subTickCount++
 	if p.subTickCount >= speed {
@@ -90,25 +99,41 @@ func (p *Player) Tick(trackerModel *tracker.TrackerModel, sampleRate audio.Sampl
 
 // playRowNotes starts audio for all non-empty notes in the given row and returns
 // a slice of active patches indexed by track (nil for empty/off rows).
-func (p *Player) playRowNotes(trackerModel *tracker.TrackerModel, row int, sampleRate audio.SampleRate, globalVolume float64) []audio.Streamer {
+func (p *Player) playRowNotes(trackerModel *tracker.TrackerModel, row int, sampleRate audio.SampleRate, globalVolume float64) []*audio.Patch {
 	if row < 0 || row >= trackerModel.NumRows {
 		return nil
 	}
 
 	duration := trackerModel.BPMDuration()
-	patches := make([]audio.Streamer, trackerModel.NumTracks)
+	patches := make([]*audio.Patch, trackerModel.NumTracks)
 	var streamers []audio.Streamer
+
+	// Grow prevFrequencies if the track count increased
+	if len(p.prevFrequencies) < trackerModel.NumTracks {
+		grown := make([]float64, trackerModel.NumTracks)
+		copy(grown, p.prevFrequencies)
+		p.prevFrequencies = grown
+	}
 
 	for trackIdx := 0; trackIdx < trackerModel.NumTracks; trackIdx++ {
 		track := trackerModel.Tracks[trackIdx]
 		trackRow := track.Rows[row]
 
 		if audio.IsOff(trackRow.Note) {
+			p.prevFrequencies[trackIdx] = 0
 			continue
 		}
 
+		targetFrequency := trackRow.Note.Frequency()
 		noteSamples := sampleRate.N(duration)
-		patch := track.Synth.NewPatch(sampleRate, trackRow.Note.Frequency(), noteSamples)
+		patch := track.Synth.NewPatch(sampleRate, targetFrequency, noteSamples)
+
+		if track.Synth.Portamento > 0 && p.prevFrequencies[trackIdx] > 0 {
+			ticks := int(math.Round(track.Synth.Portamento * float64(sampleRate) / float64(noteSamples)))
+			patch.StartPortamento(p.prevFrequencies[trackIdx], targetFrequency, ticks)
+		}
+		p.prevFrequencies[trackIdx] = targetFrequency
+
 		patches[trackIdx] = patch
 		streamers = append(streamers, patch)
 	}

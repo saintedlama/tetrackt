@@ -42,7 +42,7 @@ func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate 
 	}
 	return &oscillatorGenerator{
 		oscillatorType:   oscillatorType,
-		frequency:        frequency * mult,
+		frequency:        frequency,
 		detuneMultiplier: mult,
 		sampleRate:       sampleRate,
 		phase:            math.Mod(initialPhase, 1.0),
@@ -63,7 +63,7 @@ type oscillatorGenerator struct {
 // Stream fills the samples buffer with oscillator waveform data
 func (g *oscillatorGenerator) Stream(samples [][2]float64) (n int, ok bool) {
 	for i := range samples {
-		phaseIncrement := g.frequency / float64(g.sampleRate)
+		phaseIncrement := g.frequency * g.detuneMultiplier / float64(g.sampleRate)
 		var sample float64
 
 		switch g.oscillatorType {
@@ -114,13 +114,9 @@ func (g *oscillatorGenerator) Err() error {
 	return nil
 }
 
-// SetFrequency retunes the oscillator to the given base frequency in Hz.
-// The stored detune multiplier is applied so that arpeggio retunes preserve detune.
+// SetFrequency retunes the oscillator to the given frequency in Hz.
+// The detune multiplier is applied at stream time, so frequency stores the raw value.
 // Safe to call between audio blocks via speaker.Lock/Unlock.
-func (g *oscillatorGenerator) SetFrequency(hz float64) {
-	m := g.detuneMultiplier
-	if m == 0 {
-		m = 1.0
-	}
-	g.frequency = hz * m
+func (g *oscillatorGenerator) SetFrequency(frequency float64) {
+	g.frequency = frequency
 }

@@ -73,6 +73,7 @@ type SavedTrack struct {
 	LFO2Depth             float64         `yaml:"lfo2_depth"`
 	LFO2Delay             float64         `yaml:"lfo2_delay"`
 	LFO2Dest              int             `yaml:"lfo2_dest"`
+	Portamento            float64         `yaml:"portamento,omitempty"`
 	Rows                  []SavedTrackRow `yaml:"rows"`
 }
 
@@ -134,6 +135,7 @@ func TracksToSong(tracker *utracker.TrackerModel) *SavedSong {
 			LFO2Depth:             s.LFO2.Depth,
 			LFO2Delay:             s.LFO2.Delay,
 			LFO2Dest:              int(s.LFO2.Dest),
+			Portamento:            s.Portamento,
 			Rows:                  rows,
 		}
 	}
@@ -205,6 +207,8 @@ func SongToTracks(saved *SavedSong, tracker *utracker.TrackerModel) {
 				Dest:     audio.ModDest(savedTrack.LFO2Dest),
 			},
 		)
+		track.Synth.Portamento = savedTrack.Portamento
+
 		// Resize rows slice if needed
 		if len(track.Rows) != saved.NumRows {
 			track.Rows = make([]utracker.TrackRow, saved.NumRows)
