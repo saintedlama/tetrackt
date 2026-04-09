@@ -3,6 +3,7 @@ package audio
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/gopxl/beep/v2"
 )
@@ -25,9 +26,10 @@ func constStreamer(v float64) beep.Streamer {
 }
 
 func TestEnvelopeAttackRises(t *testing.T) {
+	const sr = beep.SampleRate(1000)
 	const n = 1000
-	// Attack=1.0 means all n samples are in the attack stage
-	env := NewEnvelope(constStreamer(1.0), n, Envelope{Attack: 1.0})
+	// At 1000 Hz, Attack=1s means all 1000 samples are in the attack stage
+	env := NewEnvelope(constStreamer(1.0), sr, n, Envelope{Attack: 1 * time.Second})
 	samples := streamN(env, n)
 
 	first := samples[0][0]
@@ -42,9 +44,10 @@ func TestEnvelopeAttackRises(t *testing.T) {
 }
 
 func TestEnvelopeSustainFlat(t *testing.T) {
+	const sr = beep.SampleRate(1000)
 	const n = 100
 	// Attack=0, Decay=0, Release=0 → all samples at sustain level
-	env := NewEnvelope(constStreamer(1.0), n, Envelope{Sustain: 0.5})
+	env := NewEnvelope(constStreamer(1.0), sr, n, Envelope{Sustain: 0.5})
 	samples := streamN(env, n)
 
 	for i, s := range samples {
@@ -55,9 +58,10 @@ func TestEnvelopeSustainFlat(t *testing.T) {
 }
 
 func TestEnvelopeReleaseFallsToZero(t *testing.T) {
+	const sr = beep.SampleRate(1000)
 	const n = 1000
-	// Release=1.0, others=0 → all n samples are release, level falls from 0.5 to ~0.0001
-	env := NewEnvelope(constStreamer(1.0), n, Envelope{Sustain: 0.5, Release: 1.0})
+	// At 1000 Hz, Release=1s means all 1000 samples are release, level falls from 0.5 to ~0.0001
+	env := NewEnvelope(constStreamer(1.0), sr, n, Envelope{Sustain: 0.5, Release: 1 * time.Second})
 	samples := streamN(env, n)
 
 	last := samples[n-1][0]
@@ -67,10 +71,11 @@ func TestEnvelopeReleaseFallsToZero(t *testing.T) {
 }
 
 func TestEnvelopeStagesProgression(t *testing.T) {
+	const sr = beep.SampleRate(1000)
 	const n = 100
-	// Equal ADSR fractions: attack=25, decay=25, sustain=25, release=25
-	env := NewEnvelope(constStreamer(1.0), n, Envelope{
-		Attack: 0.25, Decay: 0.25, Sustain: 0.5, Release: 0.25,
+	// At 1000 Hz: 25ms = 25 samples per stage
+	env := NewEnvelope(constStreamer(1.0), sr, n, Envelope{
+		Attack: 25 * time.Millisecond, Decay: 25 * time.Millisecond, Sustain: 0.5, Release: 25 * time.Millisecond,
 	})
 	eg := env.(*envelopeGenerator)
 

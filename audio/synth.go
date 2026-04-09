@@ -148,7 +148,7 @@ func (s *Synth) Streamer(sampleRate beep.SampleRate, p PlayParams) beep.Streamer
 	// p.Continuous=false with multiple ticks: fresh ADSR/LFO per tick.
 	tickSamples := totalSamples / tickCount
 	seqStreamers := make([]beep.Streamer, tickCount)
-	for i := 0; i < tickCount; i++ {
+	for i := range tickCount {
 		freq := frequencies[i%len(frequencies)]
 		chain, _, _ := s.buildChain(sampleRate, 0, freq, tickSamples)
 		seqStreamers[i] = beep.Take(tickSamples, chain)
@@ -190,8 +190,8 @@ func (s *Synth) buildChain(sampleRate beep.SampleRate, startFreq, frequency floa
 	src1 := newModulatedOscillatorStreamer(osc1, osc1.frequency, osc1.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
 	src2 := newModulatedOscillatorStreamer(osc2, osc2.frequency, osc2.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
 
-	streamer1 := NewEnvelope(src1, sampleDuration, s.Envelope1)
-	streamer2 := NewEnvelope(src2, sampleDuration, s.Envelope2)
+	streamer1 := NewEnvelope(src1, sampleRate, sampleDuration, s.Envelope1)
+	streamer2 := NewEnvelope(src2, sampleRate, sampleDuration, s.Envelope2)
 
 	mod1 := newModulatedVolumeStreamer(streamer1, makeLFO(ModVolume))
 	mod2 := newModulatedVolumeStreamer(streamer2, makeLFO(ModVolume))

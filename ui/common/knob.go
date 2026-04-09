@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"time"
 )
 
 // RenderKnob renders a knob display showing the label, a character indicating
@@ -31,4 +32,24 @@ func percentageToKnob(percentage float64) string {
 	default:
 		return "●"
 	}
+}
+
+// RenderKnobDuration renders a knob display for a time.Duration, showing
+// the label, a fill indicator (scaled to a 2000 ms maximum), and the value in ms.
+func RenderKnobDuration(label string, d time.Duration) string {
+	ms := d.Milliseconds()
+	normalised := float64(ms) / 2000.0
+	if normalised > 1.0 {
+		normalised = 1.0
+	}
+	return fmt.Sprintf("%s: %s %4dms", label, percentageToKnob(normalised), ms)
+}
+
+// RenderKnobDurationSelected renders a duration knob, applying StyleSelected when selected is true.
+func RenderKnobDurationSelected(label string, d time.Duration, selected bool) string {
+	knob := RenderKnobDuration(label, d)
+	if selected {
+		return StyleSelected.Render(knob)
+	}
+	return knob
 }

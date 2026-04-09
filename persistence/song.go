@@ -2,11 +2,39 @@ package persistence
 
 import (
 	"os"
+	"time"
 
 	"github.com/goccy/go-yaml"
 	"github.com/tetrackt/tetrackt/audio"
 	utracker "github.com/tetrackt/tetrackt/ui/tracker"
 )
+
+// SavedEnvelope is the YAML-serializable form of audio.Envelope.
+// Attack, Decay, and Release are stored in seconds as float64.
+type SavedEnvelope struct {
+	Attack  float64 `yaml:"attack"`
+	Decay   float64 `yaml:"decay"`
+	Sustain float64 `yaml:"sustain"`
+	Release float64 `yaml:"release"`
+}
+
+func toSavedEnvelope(e audio.Envelope) SavedEnvelope {
+	return SavedEnvelope{
+		Attack:  e.Attack.Seconds(),
+		Decay:   e.Decay.Seconds(),
+		Sustain: e.Sustain,
+		Release: e.Release.Seconds(),
+	}
+}
+
+func fromSavedEnvelope(s SavedEnvelope) audio.Envelope {
+	return audio.Envelope{
+		Attack:  time.Duration(s.Attack * float64(time.Second)),
+		Decay:   time.Duration(s.Decay * float64(time.Second)),
+		Sustain: s.Sustain,
+		Release: time.Duration(s.Release * float64(time.Second)),
+	}
+}
 
 // SavedTrackRow is the YAML-serializable form of TrackRow
 type SavedTrackRow struct {
@@ -24,12 +52,12 @@ type SavedTrack struct {
 	Oscillator1Phase      float64         `yaml:"oscillator1_phase"`
 	Oscillator1PulseWidth float64         `yaml:"oscillator1_pulse_width"`
 	Oscillator1Detune     float64         `yaml:"oscillator1_detune,omitempty"`
-	Envelope1             audio.Envelope  `yaml:"envelope1"`
+	Envelope1             SavedEnvelope   `yaml:"envelope1"`
 	Oscillator2           string          `yaml:"oscillator2"`
 	Oscillator2Phase      float64         `yaml:"oscillator2_phase"`
 	Oscillator2PulseWidth float64         `yaml:"oscillator2_pulse_width"`
 	Oscillator2Detune     float64         `yaml:"oscillator2_detune,omitempty"`
-	Envelope2             audio.Envelope  `yaml:"envelope2"`
+	Envelope2             SavedEnvelope   `yaml:"envelope2"`
 	MixerVolume1          float64         `yaml:"mixer_volume1"`
 	MixerVolume2          float64         `yaml:"mixer_volume2"`
 	FilterType            string          `yaml:"filter_type"`
@@ -86,12 +114,12 @@ func TracksToSong(tracker *utracker.TrackerModel) *SavedSong {
 			Oscillator1Phase:      s.Oscillator1.Phase,
 			Oscillator1PulseWidth: s.Oscillator1.PulseWidth,
 			Oscillator1Detune:     s.Oscillator1.Detune,
-			Envelope1:             s.Envelope1,
+			Envelope1:             toSavedEnvelope(s.Envelope1),
 			Oscillator2:           string(s.Oscillator2.Type),
 			Oscillator2Phase:      s.Oscillator2.Phase,
 			Oscillator2PulseWidth: s.Oscillator2.PulseWidth,
 			Oscillator2Detune:     s.Oscillator2.Detune,
-			Envelope2:             s.Envelope2,
+			Envelope2:             toSavedEnvelope(s.Envelope2),
 			MixerVolume1:          s.Mixer.Volume1,
 			MixerVolume2:          s.Mixer.Volume2,
 			FilterType:            string(s.Filter.Type),
@@ -150,14 +178,14 @@ func SongToTracks(saved *SavedSong, tracker *utracker.TrackerModel) {
 				PulseWidth: savedTrack.Oscillator1PulseWidth,
 				Detune:     savedTrack.Oscillator1Detune,
 			},
-			savedTrack.Envelope1,
+			fromSavedEnvelope(savedTrack.Envelope1),
 			audio.Oscillator{
 				Type:       audio.OscillatorType(savedTrack.Oscillator2),
 				Phase:      savedTrack.Oscillator2Phase,
 				PulseWidth: savedTrack.Oscillator2PulseWidth,
 				Detune:     savedTrack.Oscillator2Detune,
 			},
-			savedTrack.Envelope2,
+			fromSavedEnvelope(savedTrack.Envelope2),
 			audio.Mixer{Volume1: savedTrack.MixerVolume1, Volume2: savedTrack.MixerVolume2},
 			audio.Filter{
 				Type:      audio.FilterType(savedTrack.FilterType),

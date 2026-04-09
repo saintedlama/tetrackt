@@ -3,6 +3,7 @@ package persistence
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
 	"github.com/tetrackt/tetrackt/ui/tracker"
@@ -17,10 +18,10 @@ func TestSaveAndLoad(t *testing.T) {
 	trackerModel.Tracks[0].Synth.Oscillator2 = audio.Oscillator{Type: audio.Square}
 	trackerModel.Tracks[0].Synth.Mixer = audio.Mixer{Volume1: 0.75, Volume2: 0.5}
 	trackerModel.Tracks[0].Synth.Envelope1 = audio.Envelope{
-		Attack:  0.1,
-		Decay:   0.2,
+		Attack:  100 * time.Millisecond,
+		Decay:   200 * time.Millisecond,
 		Sustain: 0.5,
-		Release: 0.3,
+		Release: 300 * time.Millisecond,
 	}
 	trackerModel.Tracks[0].Rows[0] = tracker.TrackRow{
 		Note:   audio.NewNote("C", 4),
@@ -85,7 +86,7 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 
 	// Verify envelope data
-	if newTracker.Tracks[0].Synth.Envelope1.Attack != 0.1 {
-		t.Errorf("Expected Attack=0.1, got %f", newTracker.Tracks[0].Synth.Envelope1.Attack)
+	if newTracker.Tracks[0].Synth.Envelope1.Attack != 100*time.Millisecond {
+		t.Errorf("Expected Attack=100ms, got %v", newTracker.Tracks[0].Synth.Envelope1.Attack)
 	}
 }

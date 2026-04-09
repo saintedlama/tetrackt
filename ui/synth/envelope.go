@@ -2,6 +2,7 @@ package synth
 
 import (
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/tetrackt/tetrackt/audio"
@@ -70,50 +71,47 @@ func (m *EnvelopeModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 	return m, cmd
 }
 
-// adjustEnvelopeValue adjusts the current envelope field by a delta value
+// adjustEnvelopeValue adjusts the current envelope field by a delta value.
+// For Attack, Decay, Release: delta is interpreted as seconds (0.01 = 10ms, 0.10 = 100ms).
+// For Sustain: delta is a fraction of the 0–1 level range.
 func (m *EnvelopeModel) adjustEnvelopeValue(delta float64) {
-	var currentValue *float64
-
 	switch m.envelopeField {
 	case EnvelopeAttack:
-		currentValue = &m.Envelope.Attack
-	case EnvelopeDecay:
-		currentValue = &m.Envelope.Decay
-	case EnvelopeSustain:
-		currentValue = &m.Envelope.Sustain
-	case EnvelopeRelease:
-		currentValue = &m.Envelope.Release
-	}
-
-	if currentValue != nil {
-		newValue := *currentValue + delta
-
-		// For A, D, R: prevent increases that would make A+D+R exceed 100
-		if m.envelopeField != EnvelopeSustain && delta > 0 {
-			otherSum := m.Envelope.Attack + m.Envelope.Decay + m.Envelope.Release - *currentValue
-			if newValue+otherSum > 1.0 {
-				return // block the increase
-			}
+		d := m.Envelope.Attack + time.Duration(delta*float64(time.Second))
+		if d < 0 {
+			d = 0
 		}
-
-		// Clamp value between 0 and 1.0
+		m.Envelope.Attack = d
+	case EnvelopeDecay:
+		d := m.Envelope.Decay + time.Duration(delta*float64(time.Second))
+		if d < 0 {
+			d = 0
+		}
+		m.Envelope.Decay = d
+	case EnvelopeSustain:
+		newValue := m.Envelope.Sustain + delta
 		if newValue < 0 {
 			newValue = 0
 		} else if newValue > 1.0 {
 			newValue = 1.0
 		}
-
-		*currentValue = newValue
+		m.Envelope.Sustain = newValue
+	case EnvelopeRelease:
+		d := m.Envelope.Release + time.Duration(delta*float64(time.Second))
+		if d < 0 {
+			d = 0
+		}
+		m.Envelope.Release = d
 	}
 }
 
 func (m *EnvelopeModel) View() string {
 	envView := strings.Builder{}
 
-	envView.WriteString(common.RenderKnobSelected("Attack", m.Envelope.Attack, m.envelopeField == EnvelopeAttack) + "\n")
-	envView.WriteString(common.RenderKnobSelected("Decay", m.Envelope.Decay, m.envelopeField == EnvelopeDecay) + "\n")
+	envView.WriteString(common.RenderKnobDurationSelected("Attack", m.Envelope.Attack, m.envelopeField == EnvelopeAttack) + "\n")
+	envView.WriteString(common.RenderKnobDurationSelected("Decay", m.Envelope.Decay, m.envelopeField == EnvelopeDecay) + "\n")
 	envView.WriteString(common.RenderKnobSelected("Sustain", m.Envelope.Sustain, m.envelopeField == EnvelopeSustain) + "\n")
-	envView.WriteString(common.RenderKnobSelected("Release", m.Envelope.Release, m.envelopeField == EnvelopeRelease))
+	envView.WriteString(common.RenderKnobDurationSelected("Release", m.Envelope.Release, m.envelopeField == EnvelopeRelease))
 
 	return envView.String()
 }

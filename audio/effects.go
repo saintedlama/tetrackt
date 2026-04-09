@@ -2,6 +2,7 @@ package audio
 
 import (
 	"math"
+	"time"
 
 	"github.com/gopxl/beep/v2"
 )
@@ -33,7 +34,10 @@ type envelopeGenerator struct {
 }
 
 type Envelope struct {
-	Attack, Decay, Sustain, Release float64
+	Attack  time.Duration
+	Decay   time.Duration
+	Sustain float64
+	Release time.Duration
 }
 
 // ArpeggioEffect cycles through frequency offsets, one per tick.
@@ -50,14 +54,15 @@ func (a ArpeggioEffect) IsActive() bool {
 }
 
 // Creates a beep.Streamer that applies ADSR envelope to the provided streamer
-func NewEnvelope(streamer beep.Streamer, samples int, envelope Envelope) beep.Streamer {
-	attackSamples := int(envelope.Attack * float64(samples))
-	decaySamples := int(envelope.Decay * float64(samples))
-	releaseSamples := int(envelope.Release * float64(samples))
-	sustainSamples := samples - (attackSamples + decaySamples + releaseSamples)
+func NewEnvelope(streamer beep.Streamer, sampleRate beep.SampleRate, noteSamples int, envelope Envelope) beep.Streamer {
+	sr := float64(sampleRate)
+	attackSamples := int(envelope.Attack.Seconds() * sr)
+	decaySamples := int(envelope.Decay.Seconds() * sr)
+	releaseSamples := int(envelope.Release.Seconds() * sr)
+	sustainSamples := max(0, noteSamples-(attackSamples+decaySamples+releaseSamples))
 
 	return &envelopeGenerator{
-		samples:  samples,
+		samples:  noteSamples,
 		idx:      -1,
 		Streamer: streamer,
 
