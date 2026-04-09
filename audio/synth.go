@@ -83,8 +83,8 @@ type portamento struct {
 func (s *Synth) NewPatch(sampleRate beep.SampleRate, frequency float64, noteSamples int) *Patch {
 	sr := float64(sampleRate)
 
-	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth, s.Oscillator1.Detune)
-	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth, s.Oscillator2.Detune)
+	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth, s.Oscillator1.Detune, s.Oscillator1.Wavetable)
+	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth, s.Oscillator2.Detune, s.Oscillator2.Wavetable)
 
 	var lfos []*lfoGenerator
 	makeLFO := func(dest ModDest) *lfoGenerator {

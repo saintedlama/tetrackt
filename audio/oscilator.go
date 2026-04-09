@@ -9,9 +9,10 @@ import (
 
 type Oscillator struct {
 	Type       OscillatorType
-	Phase      float64 // normalized initial phase [0..1)
-	PulseWidth float64 // duty cycle [0.01..0.99]; only used by Square; 0 defaults to 0.5
-	Detune     float64 // fine tuning in cents (±1200 = ±1 octave); 0 = no detune
+	Phase      float64   // normalized initial phase [0..1)
+	PulseWidth float64   // duty cycle [0.01..0.99]; only used by Square; 0 defaults to 0.5
+	Detune     float64   // fine tuning in cents (±1200 = ±1 octave); 0 = no detune
+	Wavetable  []float64 // one cycle of samples; only used by Wavetable type; nil = silent
 }
 
 // OscillatorType represents the type of oscillator waveform to generate
@@ -25,13 +26,14 @@ const (
 	SawtoothReverse OscillatorType = "sawtooth_reverse"
 	Noise           OscillatorType = "noise"
 	Silent          OscillatorType = "silent"
+	Wavetable       OscillatorType = "wavetable"
 )
 
 // NewOscillator creates an oscillatorGenerator for the specified waveform.
 // pulseWidth is used only by Square; a zero value defaults to 0.5 (50% duty).
 // detuneCents shifts the oscillator frequency by the given number of cents
 // (100 cents = 1 semitone, 1200 cents = 1 octave); 0 disables detune.
-func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate, initialPhase float64, pulseWidth float64, detuneCents float64) *oscillatorGenerator {
+func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate, initialPhase float64, pulseWidth float64, detuneCents float64, wavetable []float64) *oscillatorGenerator {
 	pw := pulseWidth
 	if pw == 0 {
 		pw = 0.5
@@ -47,6 +49,7 @@ func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate 
 		sampleRate:       sampleRate,
 		phase:            math.Mod(initialPhase, 1.0),
 		pulseWidth:       pw,
+		wavetable:        wavetable,
 	}
 }
 
@@ -57,7 +60,8 @@ type oscillatorGenerator struct {
 	detuneMultiplier float64 // pre-computed 2^(cents/1200); applied by SetFrequency during arp retune
 	sampleRate       beep.SampleRate
 	phase            float64
-	pulseWidth       float64 // resolved duty cycle [0.01..0.99]
+	pulseWidth       float64   // resolved duty cycle [0.01..0.99]
+	wavetable        []float64 // single-cycle samples for Wavetable type
 }
 
 // Stream fills the samples buffer with oscillator waveform data
@@ -95,6 +99,16 @@ func (g *oscillatorGenerator) Stream(samples [][2]float64) (n int, ok bool) {
 
 		case Silent:
 			sample = 0
+
+		case Wavetable:
+			if len(g.wavetable) > 0 {
+				n := float64(len(g.wavetable))
+				pos := g.phase * n
+				i0 := int(pos) % len(g.wavetable)
+				i1 := (i0 + 1) % len(g.wavetable)
+				frac := pos - math.Floor(pos)
+				sample = g.wavetable[i0]*(1-frac) + g.wavetable[i1]*frac
+			}
 		}
 
 		samples[i][0] = sample

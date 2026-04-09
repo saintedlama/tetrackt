@@ -19,14 +19,34 @@ const (
 	oscillatorPhase
 	oscillatorPulseWidth
 	oscillatorDetune
+	oscillatorWavetable
 	oscillatorFieldCount
 )
+
+type wavetablePreset struct {
+	name string
+	data []float64
+}
+
+var builtinWavetables = []wavetablePreset{
+	{"SoftSaw", audio.WavetableSoftSaw},
+	{"SoftSquare", audio.WavetableSoftSquare},
+	{"Organ", audio.WavetableOrgan},
+	{"Glass", audio.WavetableGlass},
+	{"Bass", audio.WavetableBass},
+	{"Strings", audio.WavetableStrings},
+	{"Flute", audio.WavetableFlute},
+	{"Brass", audio.WavetableBrass},
+	{"Chime", audio.WavetableChime},
+	{"Voice", audio.WavetableVoice},
+}
 
 type OscillatorModel struct {
 	Oscillator          audio.Oscillator
 	oscillatorList      []audio.OscillatorType
 	oscillatorTypeStyle lipgloss.Style
-	editField           editField // 0 = type, 1 = phase
+	editField           editField
+	wavetableIdx        int // index into builtinWavetables
 }
 
 type OscillatorUpdated struct {
@@ -34,14 +54,24 @@ type OscillatorUpdated struct {
 }
 
 func NewOscillatorModel(oscillator audio.Oscillator) *OscillatorModel {
-	oscillatorList := []audio.OscillatorType{audio.Sine, audio.Square, audio.Triangle, audio.Sawtooth, audio.SawtoothReverse, audio.Noise, audio.Silent}
+	oscillatorList := []audio.OscillatorType{audio.Sine, audio.Square, audio.Triangle, audio.Sawtooth, audio.SawtoothReverse, audio.Noise, audio.Wavetable, audio.Silent}
 
 	oscillatorTypeStyle := lipgloss.NewStyle().Width(calcOscWidth(oscillatorList))
+
+	// match wavetableIdx to current Oscillator.Wavetable if possible
+	wtIdx := 0
+	for i, p := range builtinWavetables {
+		if len(oscillator.Wavetable) == len(p.data) {
+			wtIdx = i
+			break
+		}
+	}
 
 	return &OscillatorModel{
 		Oscillator:          oscillator,
 		oscillatorList:      oscillatorList,
 		oscillatorTypeStyle: oscillatorTypeStyle,
+		wavetableIdx:        wtIdx,
 	}
 }
 
@@ -67,6 +97,12 @@ func (m *OscillatorModel) View() string {
 	oscillatorView.WriteString("\n")
 	oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("Dtune:%+5.0fc", m.Oscillator.Detune), m.editField == oscillatorDetune))
 
+	if m.Oscillator.Type == audio.Wavetable {
+		wt := builtinWavetables[m.wavetableIdx]
+		oscillatorView.WriteString("\n")
+		oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("Wave: %-10s", wt.name), m.editField == oscillatorWavetable))
+	}
+
 	return oscillatorView.String()
 }
 
@@ -76,15 +112,20 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "up":
-			// Move to previous oscillator field
-			m.editField = (m.editField - 1 + oscillatorFieldCount) % oscillatorFieldCount
+			// Move to previous oscillator field; skip oscillatorWavetable unless type is Wavetable
+			m.editField = m.prevField()
 		case "down":
-			// Move to next oscillator field
-			m.editField = (m.editField + 1) % oscillatorFieldCount
+			// Move to next oscillator field; skip oscillatorWavetable unless type is Wavetable
+			m.editField = m.nextField()
 		case "left":
 			switch m.editField {
 			case oscillatorType:
 				m.Oscillator.Type = cycle(m.oscillatorList, m.Oscillator.Type, -1)
+				if m.Oscillator.Type == audio.Wavetable {
+					m.Oscillator.Wavetable = builtinWavetables[m.wavetableIdx].data
+				} else {
+					m.Oscillator.Wavetable = nil
+				}
 			case oscillatorPhase:
 				// decrease phase
 				m.Oscillator.Phase -= 0.05
@@ -99,6 +140,9 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 				m.Oscillator.PulseWidth = max(0.01, pw-0.05)
 			case oscillatorDetune:
 				m.Oscillator.Detune = clampDetune(m.Oscillator.Detune - 1)
+			case oscillatorWavetable:
+				m.wavetableIdx = (m.wavetableIdx - 1 + len(builtinWavetables)) % len(builtinWavetables)
+				m.Oscillator.Wavetable = builtinWavetables[m.wavetableIdx].data
 			}
 			cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
 		case "shift+left":
@@ -110,6 +154,11 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			switch m.editField {
 			case oscillatorType:
 				m.Oscillator.Type = cycle(m.oscillatorList, m.Oscillator.Type, 1)
+				if m.Oscillator.Type == audio.Wavetable {
+					m.Oscillator.Wavetable = builtinWavetables[m.wavetableIdx].data
+				} else {
+					m.Oscillator.Wavetable = nil
+				}
 			case oscillatorPhase:
 				// decrease phase
 				m.Oscillator.Phase += 0.05
@@ -124,6 +173,9 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 				m.Oscillator.PulseWidth = min(0.99, pw+0.05)
 			case oscillatorDetune:
 				m.Oscillator.Detune = clampDetune(m.Oscillator.Detune + 1)
+			case oscillatorWavetable:
+				m.wavetableIdx = (m.wavetableIdx + 1) % len(builtinWavetables)
+				m.Oscillator.Wavetable = builtinWavetables[m.wavetableIdx].data
 			}
 			cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
 		case "shift+right":
@@ -171,4 +223,20 @@ func clampDetune(v float64) float64 {
 		return 1200
 	}
 	return v
+}
+
+func (m *OscillatorModel) nextField() editField {
+	f := (m.editField + 1) % oscillatorFieldCount
+	if f == oscillatorWavetable && m.Oscillator.Type != audio.Wavetable {
+		f = (f + 1) % oscillatorFieldCount
+	}
+	return f
+}
+
+func (m *OscillatorModel) prevField() editField {
+	f := (m.editField - 1 + oscillatorFieldCount) % oscillatorFieldCount
+	if f == oscillatorWavetable && m.Oscillator.Type != audio.Wavetable {
+		f = (f - 1 + oscillatorFieldCount) % oscillatorFieldCount
+	}
+	return f
 }

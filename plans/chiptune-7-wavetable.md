@@ -1,6 +1,6 @@
 # Chiptune-7: Wavetable / Custom Waveform Oscillator
 
-**Status:** Planned
+**Status:** Done
 
 **Priority:** Medium
 

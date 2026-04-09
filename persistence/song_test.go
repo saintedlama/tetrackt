@@ -61,10 +61,10 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 
 	// Verify track data
-	if newTracker.Tracks[0].Synth.Oscillator1 != (audio.Oscillator{Type: audio.Sine}) {
+	if newTracker.Tracks[0].Synth.Oscillator1.Type != audio.Sine {
 		t.Errorf("Expected Oscillator1=Sine, got %v", newTracker.Tracks[0].Synth.Oscillator1)
 	}
-	if newTracker.Tracks[0].Synth.Oscillator2 != (audio.Oscillator{Type: audio.Square}) {
+	if newTracker.Tracks[0].Synth.Oscillator2.Type != audio.Square {
 		t.Errorf("Expected Oscillator2=Square, got %v", newTracker.Tracks[0].Synth.Oscillator2)
 	}
 	if newTracker.Tracks[0].Synth.Mixer != (audio.Mixer{Volume1: 0.75, Volume2: 0.5}) {
