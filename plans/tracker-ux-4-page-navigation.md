@@ -43,10 +43,10 @@ Append `PgUp/PgDn: Page` (or similar) to the returned string so users can discov
 
 ## Affected Files
 
-| File | Symbol | Change |
-|---|---|---|
-| `ui/tracker/tracker.go` | `TrackerModel.Update()` | Add `"pgdown"` and `"pgup"` cases to the `tea.KeyPressMsg` switch |
-| `ui/tracker/screen.go` | `TrackerScreen.Footer()` | Append PgUp/PgDn hint to the help string |
+| File                    | Symbol                   | Change                                                            |
+| ----------------------- | ------------------------ | ----------------------------------------------------------------- |
+| `ui/tracker/tracker.go` | `TrackerModel.Update()`  | Add `"pgdown"` and `"pgup"` cases to the `tea.KeyPressMsg` switch |
+| `ui/tracker/screen.go`  | `TrackerScreen.Footer()` | Append PgUp/PgDn hint to the help string                          |
 
 No new types, messages, or helper functions are needed. Both changes are self-contained.
 
@@ -55,18 +55,23 @@ No new types, messages, or helper functions are needed. Both changes are self-co
 ## Edge Cases
 
 ### Cursor near the top, Page Up pressed
+
 `CursorRow < visibleRows` — `max(CursorRow - visibleRows, 0)` clamps to `0`. The viewport guard `if m.CursorRow < m.viewportRow` then also sets `viewportRow = 0`. Result is identical to `Home`, which is correct.
 
 ### Cursor near the bottom, Page Down pressed
+
 `CursorRow + visibleRows >= NumRows` — `min(CursorRow + visibleRows, NumRows-1)` clamps to `NumRows-1`. The viewport guard brings the last row into view. Result is identical to `End`, which is correct.
 
 ### Pattern shorter than viewport (`NumRows <= visibleRows`)
+
 `visibleRows()` returns `Viewport.Height - 4`. If the entire pattern fits on screen, page up/down will simply clamp `CursorRow` to `0` or `NumRows-1` and will not move the viewport (it is already fully visible). This is sensible: PgUp becomes Home, PgDn becomes End.
 
 ### Very small terminal (`Viewport.Height < 4`)
+
 `visibleRows()` returns a negative or zero number. `min`/`max` clamping on `CursorRow` keeps it in `[0, NumRows-1]`, so no out-of-bounds access occurs. The viewport may not update meaningfully, but the cursor will still land at a valid row. This degenerate case already affects `up`/`down` navigation equally, so no special handling is needed here either.
 
 ### Repeated key presses at boundary
+
 Holding PgDn at the last row is a no-op after the first press: `CursorRow` is already `NumRows-1`, `min` returns the same value, and the viewport guard does not fire. No infinite loop or off-by-one risk.
 
 ---
@@ -74,13 +79,17 @@ Holding PgDn at the last row is a no-op after the first press: `CursorRow` is al
 ## Refactoring Risks and Considerations
 
 ### Inline logic vs. helper extraction
+
 The existing `home`/`end`/`up`/`down` viewport logic is all inline. Introducing a `clampViewport()` helper would be a nice-to-have but would be scope creep here. Keep the new cases inline to match the convention.
 
 ### No propagation to `TrackerScreen`
+
 `TrackerScreen.Update()` already forwards all unhandled key events to `t.Tracker.Update(msg)` when the tracker panel is active (the `_, cmd := t.Tracker.Update(msg)` fallthrough). `pgup`/`pgdown` will be handled by that existing dispatch without any changes to `screen.go`'s `Update()`.
 
 ### Bubbletea key name verification
+
 This is the only non-trivial risk. If the key string used in the `case` does not match what Bubbletea v2 produces, the keys will silently do nothing. Verify before shipping by either: (a) adding a temporary `default` log case, or (b) grepping `charm.land/bubbletea/v2` source for `pgdown`/`page_down`.
 
 ### No test coverage gap
+
 `tracker.go` has a corresponding `*_test.go` (pattern is consistent across the package). A small table-driven test for `pgup`/`pgdown` — covering mid-pattern, near-top, and near-bottom start positions — should be added to `ui/tracker/tracker_test.go` (or created if absent) to prevent regressions.

@@ -52,7 +52,7 @@ volFirstDigit    int  // 0–6, the tens digit typed so far
 
 Extend the `tea.KeyPressMsg` switch in `Update()`:
 
-1. **`"v"` key** — toggle `CursorCol`.  Cancel any pending digit (`volDigitPending = false`).
+1. **`"v"` key** — toggle `CursorCol`. Cancel any pending digit (`volDigitPending = false`).
 
 2. **`"0"`–`"9"` keys, only when `CursorCol == ColVolume`** — implement two-digit entry:
    - If `!volDigitPending`: store the digit as `volFirstDigit`, set `volDigitPending = true`.
@@ -67,7 +67,7 @@ Extend the `tea.KeyPressMsg` switch in `Update()`:
 3. **`"delete"` key, when `CursorCol == ColVolume`** — call `SetVolume(0)`, cancel pending digit.
    (The existing `"delete"` handler in `screen.go` calls `Tracker.SetNote(audio.Off())` — guard it so it only fires when `CursorCol == ColNote`.)
 
-4. **Navigation keys (`"up"`, `"down"`, `"left"`, `"right"`, `"home"`, `"end"`)** — always cancel any pending digit (`volDigitPending = false, volFirstDigit = 0`) before performing the existing navigation logic.  `CursorCol` is **preserved** across navigation so the user stays in volume-entry mode while stepping through rows.
+4. **Navigation keys (`"up"`, `"down"`, `"left"`, `"right"`, `"home"`, `"end"`)** — always cancel any pending digit (`volDigitPending = false, volFirstDigit = 0`) before performing the existing navigation logic. `CursorCol` is **preserved** across navigation so the user stays in volume-entry mode while stepping through rows.
 
 Add a helper method:
 
@@ -172,29 +172,29 @@ The feature description focuses on inline editing, but for completeness the effe
 
 ## Affected Files
 
-| File | What changes |
-|---|---|
-| `ui/tracker/tracker.go` | Add `ColNote`/`ColVolume` constants; add `CursorCol`, `volDigitPending`, `volFirstDigit` to `TrackerModel`; extend `Update()` for `V`, digit keys, navigation cancellation; add `SetVolume()`; refactor cell rendering in `View()` to per-part highlight; add `volCursorStyle` |
-| `main.go` | Guard note-key block with `tr.CursorCol == tracker.ColNote` |
-| `ui/tracker/screen.go` | Update `Footer()` string; guard `delete` → `SetNote` with `ColNote` check |
-| `ui/tracker/roweffectsdialog.go` | (optional) add volume field and wire through `RowEffectsApplied` |
+| File                             | What changes                                                                                                                                                                                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ui/tracker/tracker.go`          | Add `ColNote`/`ColVolume` constants; add `CursorCol`, `volDigitPending`, `volFirstDigit` to `TrackerModel`; extend `Update()` for `V`, digit keys, navigation cancellation; add `SetVolume()`; refactor cell rendering in `View()` to per-part highlight; add `volCursorStyle` |
+| `main.go`                        | Guard note-key block with `tr.CursorCol == tracker.ColNote`                                                                                                                                                                                                                    |
+| `ui/tracker/screen.go`           | Update `Footer()` string; guard `delete` → `SetNote` with `ColNote` check                                                                                                                                                                                                      |
+| `ui/tracker/roweffectsdialog.go` | (optional) add volume field and wire through `RowEffectsApplied`                                                                                                                                                                                                               |
 
 ---
 
 ## Sub-cursor vs. Note-entry Cursor Interaction
 
-| Situation | Behaviour |
-|---|---|
-| User presses `V` | `CursorCol` toggles (`ColNote` ↔ `ColVolume`); pending digit buffer cleared |
-| User navigates up/down | Row moves; `CursorCol` preserved (stay in whichever column); pending digit cleared |
-| User navigates left/right (track) | Track moves; `CursorCol` preserved; pending digit cleared |
-| User presses note key while `CursorCol == ColVolume` | `main.go` guard prevents note entry and audio preview; `TrackerModel.Update` sees the digit and treats it as the tens digit of a volume value (if it is 0–6 mod 10) |
-| User presses `8` or `9` while `CursorCol == ColVolume` | Not a note key; falls through to tracker Update; treated as a tens digit (clamped on second digit if resulting value > 64) |
-| User presses `delete` while `CursorCol == ColVolume` | Calls `SetVolume(0)`; note is NOT cleared |
-| User presses `delete` while `CursorCol == ColNote` | Existing behaviour: `SetNote(audio.Off())`; volume NOT cleared |
-| Mid-first-digit and user presses `V` | Pending digit discarded, cursor moves back to note column |
-| Mid-first-digit and user navigates | Pending digit discarded, row/track moves |
-| Playback active | `CursorCol` / `volDigitPending` state is display-only; playback row highlight still obeys `PlaybackRow`; no interaction |
+| Situation                                              | Behaviour                                                                                                                                                           |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| User presses `V`                                       | `CursorCol` toggles (`ColNote` ↔ `ColVolume`); pending digit buffer cleared                                                                                         |
+| User navigates up/down                                 | Row moves; `CursorCol` preserved (stay in whichever column); pending digit cleared                                                                                  |
+| User navigates left/right (track)                      | Track moves; `CursorCol` preserved; pending digit cleared                                                                                                           |
+| User presses note key while `CursorCol == ColVolume`   | `main.go` guard prevents note entry and audio preview; `TrackerModel.Update` sees the digit and treats it as the tens digit of a volume value (if it is 0–6 mod 10) |
+| User presses `8` or `9` while `CursorCol == ColVolume` | Not a note key; falls through to tracker Update; treated as a tens digit (clamped on second digit if resulting value > 64)                                          |
+| User presses `delete` while `CursorCol == ColVolume`   | Calls `SetVolume(0)`; note is NOT cleared                                                                                                                           |
+| User presses `delete` while `CursorCol == ColNote`     | Existing behaviour: `SetNote(audio.Off())`; volume NOT cleared                                                                                                      |
+| Mid-first-digit and user presses `V`                   | Pending digit discarded, cursor moves back to note column                                                                                                           |
+| Mid-first-digit and user navigates                     | Pending digit discarded, row/track moves                                                                                                                            |
+| Playback active                                        | `CursorCol` / `volDigitPending` state is display-only; playback row highlight still obeys `PlaybackRow`; no interaction                                             |
 
 ---
 

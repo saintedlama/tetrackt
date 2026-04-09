@@ -1,6 +1,6 @@
 # Chiptune-4: Portamento / Pitch Glide
 
-**Status:** Done
+**Status:** Planned
 
 **Priority:** Medium
 
@@ -12,17 +12,32 @@ No pitch glide between consecutive notes.
 
 Essential for bass slides, lead smoothness and SID-style glides.
 
+## Current Architecture (as of Patch refactor)
+
+- `Synth` is a pure data struct (instrument definition). No `Portamento` field.
+- `Patch` is the live synthesis instance created by `synth.NewPatch(sampleRate, frequency, noteSamples)`.
+- `oscillatorGenerator` has `SetFrequency(hz)`, which applies the stored `detuneMultiplier`.
+- `Patch.SetFrequency(hz)` delegates to both oscillators and updates `modOsc.baseFreq` for active pitch LFOs.
+- `Player` owns `activePatches []audio.Streamer` — one per track, replaced each row.
+
+## Approach: Tick-stepped glide via `Patch.StartPortamento` / `Patch.TickPortamento`
+
+Portamento is implemented as one frequency step per player sub-tick — the classic tracker
+style (e.g. ProTracker effect `3xx`). The interpolation math lives in the `audio` package;
+`Player` only calls `TickPortamento()` each sub-tick without knowing anything about the
+interpolation formula.
+
+`NewPatch` signature is **unchanged**. No oscillator-internal changes needed.
+
 ## Required
 
-- `Portamento float64` on `Synth` – seconds to slide from previous note to current
-- Per-sample frequency interpolation in the oscillator
-- No new `Synth` methods; portamento is driven through the existing `Streamer` interface
+- `Portamento float64` on `Synth` — glide duration in seconds; 0 = snap
+- `StartPortamento` / `TickPortamento` methods on `Patch`
+- Previous-note frequency tracking per track in `Player`
 
 ## Implementation Plan
 
 ### 1. Add `Portamento float64` to `Synth` (`audio/synth.go`)
-
-Add the field alongside `Filter`, `LFO1`, `LFO2`:
 
 ```go
 type Synth struct {
@@ -32,85 +47,114 @@ type Synth struct {
 }
 ```
 
-`NewSynth` gains a `portamento float64` parameter (or the caller sets it directly — `Synth` fields are exported). Existing callers that leave it zero are unaffected.
+`Synth` fields are exported — no constructor change needed.
 
-### 2. Extend `oscillatorGenerator` (`audio/oscillator.go`)
-
-Add four fields:
+### 2. Add portamento state to `Patch` and expose two methods (`audio/synth.go`)
 
 ```go
-startFrequency    float64
-targetFrequency   float64
-portamentoSamples int   // total samples over which to slide
-portamentoIdx     int   // samples elapsed so far
-```
-
-Keep `frequency float64` as the live, per-sample value. When `portamentoSamples == 0` the existing behaviour is preserved exactly.
-
-### 3. Per-sample interpolation in `Stream()` (`audio/oscillator.go`)
-
-Inside the sample loop, before computing `phaseIncrement`, advance the glide:
-
-```go
-if g.portamentoIdx < g.portamentoSamples {
-    t := float64(g.portamentoIdx) / float64(g.portamentoSamples)
-    // exponential (perceptually linear in pitch — equal semitones per sample):
-    g.frequency = g.startFrequency * math.Pow(g.targetFrequency/g.startFrequency, t)
-    g.portamentoIdx++
-} else {
-    g.frequency = g.targetFrequency
+type Patch struct {
+    // ...existing fields...
+    glideFrom  float64
+    glideTo    float64
+    glideStep  int // current tick
+    glideSteps int // total ticks (0 = no glide)
 }
-phaseIncrement := g.frequency / sampleRate
 ```
-
-Guard: if `startFrequency <= 0`, skip the exponential and snap to `targetFrequency` immediately.
-
-### 4. `buildChain` reads glide params from `Synth` (`audio/synth.go`)
-
-`buildChain` already receives `frequency float64` (the target). When `s.Portamento > 0` and two frequencies are present (i.e. caller passed `[prevFreq, targetFreq]`), the oscillators are constructed with a glide:
 
 ```go
-// In buildChain, after computing portamentoSamples from s.Portamento:
-osc1 := NewOscillator(...)
-osc1.startFrequency    = startFreq   // 0 if no glide
-osc1.targetFrequency   = frequency
-osc1.portamentoSamples = int(s.Portamento * sr)
+// StartPortamento begins a stepped frequency glide from `from` to `to` Hz
+// over `ticks` player sub-ticks. Calling it with ticks <= 0 or from <= 0
+// is a no-op and leaves the patch at its current frequency.
+func (p *Patch) StartPortamento(from, to float64, ticks int) {
+    if ticks <= 0 || from <= 0 {
+        return
+    }
+    p.glideFrom  = from
+    p.glideTo    = to
+    p.glideStep  = 0
+    p.glideSteps = ticks
+    p.SetFrequency(from)
+}
+
+// TickPortamento advances the glide by one step and resets the oscillator
+// frequency. Call once per player sub-tick for as long as the patch is active.
+// Does nothing when no glide is in progress.
+func (p *Patch) TickPortamento() {
+    if p.glideSteps == 0 || p.glideStep >= p.glideSteps {
+        return
+    }
+    p.glideStep++
+    t := float64(p.glideStep) / float64(p.glideSteps)
+    // Exponential interpolation = perceptually linear (equal semitones per tick)
+    freq := p.glideFrom * math.Pow(p.glideTo/p.glideFrom, t)
+    p.SetFrequency(freq)
+}
 ```
 
-`NewOscillator` sets `frequency = startFreq` (or `targetFreq` when no glide) so the first sample is already correct.
+`Reset()` also zeroes `glideStep` and `glideSteps` so a gate restart cancels any in-progress glide.
 
-**Caller convention:** pass `frequencies = [prevFreq, targetFreq]` when portamento is desired. `buildChain` uses `frequencies[0]` as `startFreq` and `frequencies[1]` (or `[0]` if only one) as `targetFreq`. No new method needed — `Streamer` already accepts `[]float64`.
+### 3. Previous-note tracking in `Player` (`player/player.go`)
 
-`tickCount=1, continuous=true` with two frequencies is the glide case. The `tickingStreamer` path is only entered when `tickCount > 1 && continuous`, so a two-element slice with `tickCount=1` routes through the normal single-chain path.
-
-### 5. Previous-note tracking (tracker/playback layer, not `audio/`)
-
-The audio engine is stateless by design; it must not own playback history. The playback engine should maintain:
+`Player` already owns `activePatches []audio.Streamer` per track. Add a parallel slice:
 
 ```go
-var prevFreq [maxChannels]float64 // last triggered frequency per channel
+type Player struct {
+    // ...
+    prevFreqs []float64 // last triggered frequency per track; 0 if no prior note
+}
 ```
 
-When a note-on event is emitted for channel `ch`:
+In `playRowNotes`, after creating the patch:
 
-1. Read `prevFreq[ch]` as `startFreq`.
-2. Call `synth.Streamer(sr, []float64{startFreq, targetFreq}, 1, true, dur)`.
-3. Update `prevFreq[ch] = targetFreq`.
+```go
+targetFreq := trackRow.Note.Frequency()
+patch := track.Synth.NewPatch(sampleRate, targetFreq, noteSamples)
+if track.Synth.Portamento > 0 && p.prevFreqs[trackIdx] > 0 {
+    ticks := int(math.Round(track.Synth.Portamento * float64(sampleRate) / float64(noteSamples)))
+    patch.StartPortamento(p.prevFreqs[trackIdx], targetFreq, ticks)
+}
+p.prevFreqs[trackIdx] = targetFreq
+```
 
-If `synth.Portamento == 0`, the glide code is a no-op regardless of `startFreq`.
+In `Tick`, after `playRowNotes`, call `TickPortamento` on every active patch each sub-tick:
 
-### 6. Persistence (`persistence/song.go`)
+```go
+for _, patch := range p.activePatches {
+    if pp, ok := patch.(*audio.Patch); ok {
+        pp.TickPortamento()
+    }
+}
+```
 
-Add `Portamento float64 \`yaml:"portamento,omitempty"\`` to the saved track struct, alongside the existing synth fields.
+In `Player.Reset()`, clear `prevFreqs` alongside `activePatches`.
+
+`StartPreview` does not call `StartPortamento` — no glide for one-shot previews.
+
+### 4. Expose `*Patch` from `activePatches`
+
+`activePatches` is currently `[]audio.Streamer`. Switch it to `[]*audio.Patch` so the type
+assertion in `Tick` is unnecessary:
+
+```go
+type Player struct {
+    activePatches []*audio.Patch
+    prevFreqs     []float64
+    previewPatch  audio.Streamer
+}
+```
+
+### 5. Persistence (`persistence/song.go`)
+
+Add `Portamento float64 \`yaml:"portamento,omitempty"\``back to`SavedTrack`, and wire it in
+`TracksToSong`/`SongToTracks`. Old saves without the field default to 0 (snap), which is correct.
 
 ---
 
 ## Impact
 
-| Dimension                  | Assessment                                                                                                                                                                                   |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Invasiveness**           | Low. Oscillator change is self-contained; glide is a no-op when `portamentoSamples == 0`.                                                                                                    |
-| **Files touched**          | `audio/oscillator.go` (fields + loop body), `audio/synth.go` (`Synth.Portamento` field + `buildChain` glide wiring), `persistence/song.go` (new field), playback layer (prev-freq tracking). |
-| **Backward compatibility** | Fully additive. `Synth.Streamer` signature is unchanged; `Portamento` defaults to zero. No existing call sites break.                                                                        |
-| **No new methods**         | `StreamerWithGlide` is dropped — glide is driven via `frequencies[0]` + `Synth.Portamento`, keeping the API surface minimal.                                                                 |
-| **Risk**                   | Exponential interpolation requires non-zero `startFrequency`; guard (`startFreq <= 0 → snap`) prevents `math.Pow` with zero base.                                                            |
+| Dimension                  | Assessment                                                                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Invasiveness**           | Low. `oscillatorGenerator` is untouched. Glide state lives entirely in `Patch`; it is a no-op when `glideSteps == 0`.                                                                 |
+| **Files touched**          | `audio/synth.go` (`Synth.Portamento` field + `Patch` glide fields + two methods), `persistence/song.go` (new field), `player/player.go` (prev-freq tracking + `TickPortamento` call). |
+| **Backward compatibility** | Fully additive. `NewPatch` signature is unchanged; `Portamento` defaults to zero. No existing call sites break.                                                                       |
+| **Risk**                   | Exponential interpolation requires non-zero `glideFrom`; `StartPortamento` guards against this and is a no-op when `from <= 0`.                                                       |

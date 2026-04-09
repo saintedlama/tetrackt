@@ -10,7 +10,7 @@ Rows that have custom Ticks, ARP, or Continuous set look identical to plain rows
 
 In `TrackerModel.View()` the row-number string is styled by a three-way branch:
 
-```
+```text
 playback (green bold) > cursor (orange bold) > plain (muted gray)
 ```
 
@@ -18,11 +18,11 @@ There is no fourth case for "row has custom effects data".
 
 The `TrackRow` struct fields relevant to this feature are:
 
-| Field        | Default         | Non-default condition          |
-|--------------|-----------------|-------------------------------|
-| `Ticks`      | `0` (use global)| `Ticks != 0`                  |
-| `Continuous` | `false`         | `Continuous == true`           |
-| `Arpeggio`   | empty slice     | `Arpeggio.IsActive()` is true  |
+| Field        | Default          | Non-default condition         |
+| ------------ | ---------------- | ----------------------------- |
+| `Ticks`      | `0` (use global) | `Ticks != 0`                  |
+| `Continuous` | `false`          | `Continuous == true`          |
+| `Arpeggio`   | empty slice      | `Arpeggio.IsActive()` is true |
 
 `Note` and `Volume` are intentionally excluded — the feature targets playback-behaviour modifiers, not pitch/amplitude data.
 
@@ -36,7 +36,7 @@ A row index `r` is considered "marked" when **any** track satisfies at least one
 2. `row.Continuous == true` — continuous streaming mode is set
 3. `row.Arpeggio.IsActive()` — arpeggio has one or more offsets
 
-The check spans all tracks: a row is marked if *any* track at that index has non-default effects. This matches how a musician scans the grid — the row number acts as a summary indicator for the whole horizontal slice.
+The check spans all tracks: a row is marked if _any_ track at that index has non-default effects. This matches how a musician scans the grid — the row number acts as a summary indicator for the whole horizontal slice.
 
 ---
 
@@ -53,12 +53,12 @@ effectRowStyle = lipgloss.NewStyle().
 
 `ColorAccentWarning` is `#ffb300` (yellow) — already defined in `ui/common/styles.go`. It is distinct from every existing row-number colour:
 
-| Colour  | Token                 | Current use                 |
-|---------|-----------------------|-----------------------------|
-| Green   | `ColorAccentPlay`     | Playback row                |
-| Orange  | `ColorAccentEnvelope` | Cursor row                  |
+| Colour     | Token                    | Current use              |
+| ---------- | ------------------------ | ------------------------ |
+| Green      | `ColorAccentPlay`        | Playback row             |
+| Orange     | `ColorAccentEnvelope`    | Cursor row               |
 | **Yellow** | **`ColorAccentWarning`** | **Effects marker (new)** |
-| Gray    | `ColorTextMuted`      | Plain rows                  |
+| Gray       | `ColorTextMuted`         | Plain rows               |
 
 The style is **not** bold, keeping it visually quieter than the cursor and playback highlights, consistent with the "subtle accent" wording in the spec.
 
@@ -116,11 +116,11 @@ Priority is preserved: playback > cursor > effects > plain. When the cursor land
 
 ## Affected Files
 
-| File | Change |
-|------|--------|
+| File                    | Change                                                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `ui/tracker/tracker.go` | Add `effectRowStyle` to the var block; add `rowHasEffects` helper; extend the row-number branch in `View()` |
-| `ui/common/styles.go` | **No change** — `ColorAccentWarning` is already defined |
-| `audio/effects.go` | **No change** — `ArpeggioEffect.IsActive()` is already defined |
+| `ui/common/styles.go`   | **No change** — `ColorAccentWarning` is already defined                                                     |
+| `audio/effects.go`      | **No change** — `ArpeggioEffect.IsActive()` is already defined                                              |
 
 No other files, message types, or persistence formats are affected.
 
@@ -128,7 +128,7 @@ No other files, message types, or persistence formats are affected.
 
 ## Color / Style Co-existence
 
-```
+```text
 Row 03 (plain)       → gray   (#8a8a8a), normal weight
 Row 07 (has ARP)     → yellow (#ffb300), normal weight   ← new
 Row 12 (cursor)      → orange (#ff7700), bold

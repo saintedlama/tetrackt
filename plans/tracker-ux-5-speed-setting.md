@@ -2,20 +2,16 @@
 
 ## Feature Description
 
-The Settings panel exposes **Volume** and **BPM** but the global `Speed` (sub-ticks per row) is
-neither visible nor editable there. It pairs naturally with BPM and should be added as a third
-settings row.
+The Settings panel exposes **Volume** and **BPM** but the global `Speed` (sub-ticks per row) is neither visible nor editable there. It pairs naturally with BPM and should be added as a third settings row.
 
-`Speed` controls how many sub-ticks fire per row. `main.go` divides `BPMDuration()` by `Speed` to
-get the per-tick interval, so it directly governs arpeggio granularity and the temporal feel of a
-row without changing the BPM label. Exposing it in the Settings panel makes live tempo shaping
-possible without editing YAML by hand.
+`Speed` controls how many sub-ticks fire per row. `main.go` divides `BPMDuration()` by `Speed` to get the per-tick interval, so it directly governs arpeggio granularity and the temporal feel of a row without changing the BPM label. Exposing it in the Settings panel makes live tempo shaping possible without editing YAML by hand.
 
 ---
 
 ## Step-by-Step Implementation
 
 ### Step 1 — Add `MinSpeed` / `MaxSpeed` constants
+
 **File:** `ui/tracker/tracker.go`
 
 Add two new constants directly below the existing `DefaultSpeed`:
@@ -32,6 +28,7 @@ const MaxSpeed     = 16
 ---
 
 ### Step 2 — Add `SpeedChanged` message type
+
 **File:** `ui/tracker/screen.go`
 
 Add alongside the existing `VolumeChanged` and `BPMChanged` structs:
@@ -46,12 +43,13 @@ type SpeedChanged struct {
 ---
 
 ### Step 3 — Expand `settingsFocus` cycling from 2 to 3 items
+
 **File:** `ui/tracker/screen.go`, inside `Update()` — the `activePanel == 1` branch
 
 Two arithmetic expressions must change:
 
-| Before | After |
-|--------|-------|
+| Before                          | After                           |
+| ------------------------------- | ------------------------------- |
 | `(t.settingsFocus - 1 + 2) % 2` | `(t.settingsFocus - 1 + 3) % 3` |
 | `(t.settingsFocus + 1) % 2`     | `(t.settingsFocus + 1) % 3`     |
 
@@ -60,6 +58,7 @@ Both must be updated together; missing either causes broken wrap-around or a stu
 ---
 
 ### Step 4 — Add Speed key handler
+
 **File:** `ui/tracker/screen.go`, inside `Update()` — after the existing BPM block
 
 The BPM block currently ends after clamping and returning `BPMChanged`. Immediately after it, add:
@@ -95,6 +94,7 @@ The zero-value guard mirrors the pattern already used in `main.go`'s `tick()` an
 ---
 
 ### Step 5 — Add Speed row to `View()`
+
 **File:** `ui/tracker/screen.go`, inside `View()`
 
 Add a `speedRow` variable and append it to `settingsContent`:
@@ -116,6 +116,7 @@ the padding constant may need a small nudge.
 ---
 
 ### Step 6 — Handle `SpeedChanged` in `main.go`
+
 **File:** `main.go`, inside `Update()` — alongside `tracker.BPMChanged`
 
 ```go
@@ -130,11 +131,11 @@ the new value takes effect on the very next scheduled tick.
 
 ## Affected Files
 
-| File | What changes |
-|------|-------------|
-| `ui/tracker/tracker.go` | Add `MinSpeed = 1` and `MaxSpeed = 16` constants next to `DefaultSpeed` |
-| `ui/tracker/screen.go` | Add `SpeedChanged` message type; change focus-cycling modulus from 2 → 3; add speed key-handler block; add `speedRow` to `View()` and append to `settingsContent` |
-| `main.go` | Add `case tracker.SpeedChanged:` no-op handler in `Update()` |
+| File                    | What changes                                                                                                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ui/tracker/tracker.go` | Add `MinSpeed = 1` and `MaxSpeed = 16` constants next to `DefaultSpeed`                                                                                           |
+| `ui/tracker/screen.go`  | Add `SpeedChanged` message type; change focus-cycling modulus from 2 → 3; add speed key-handler block; add `speedRow` to `View()` and append to `settingsContent` |
+| `main.go`               | Add `case tracker.SpeedChanged:` no-op handler in `Update()`                                                                                                      |
 
 **No persistence changes needed.** `persistence/song.go` already declares `SavedSong.Speed int`
 with `yaml:"speed,omitempty"`, and `SongToTracks` already falls back to `DefaultSpeed` when the
@@ -144,14 +145,14 @@ field is absent in older saves.
 
 ## Min/Max Range and Display Format
 
-| Property | Value |
-|----------|-------|
-| `MinSpeed` | `1` — one sub-tick per row; arpeggio fires only once |
-| `MaxSpeed` | `16` — sixteen sub-ticks; maximum arpeggio resolution |
-| `DefaultSpeed` | `6` (already defined in `tracker.go`) |
-| Display | Right-justified integer, width 3: `fmt.Sprintf("    %3d", speed)` |
-| Step (left/right) | ±1 |
-| Large step (shift+left/right) | ±2 |
+| Property                      | Value                                                             |
+| ----------------------------- | ----------------------------------------------------------------- |
+| `MinSpeed`                    | `1` — one sub-tick per row; arpeggio fires only once              |
+| `MaxSpeed`                    | `16` — sixteen sub-ticks; maximum arpeggio resolution             |
+| `DefaultSpeed`                | `6` (already defined in `tracker.go`)                             |
+| Display                       | Right-justified integer, width 3: `fmt.Sprintf("    %3d", speed)` |
+| Step (left/right)             | ±1                                                                |
+| Large step (shift+left/right) | ±2                                                                |
 
 ---
 
@@ -163,7 +164,7 @@ field is absent in older saves.
 
 2. **Zero-value `Speed`**: `TrackerModel.Speed` is an `int` and initialises to `0` in Go. The
    display and key handler must both normalise `0 → DefaultSpeed`. Forgetting this in the display
-   shows `  0` until the user edits it; forgetting it in the handler lets the first `left` press
+   shows `0` until the user edits it; forgetting it in the handler lets the first `left` press
    decrement to `-1` and immediately clamp back to `MinSpeed`, which is confusing.
 
 3. **Settings panel width**: The panel is sized by its content. Adding a third row does not widen

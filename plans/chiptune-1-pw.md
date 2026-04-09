@@ -86,9 +86,9 @@ When a subsequent plan introduces an LFO, the `oscillatorGenerator.pulseWidth` f
 
 ## Impact
 
-| Dimension | Assessment |
-|---|---|
-| **Files touched** | `audio/oscilator.go` (struct + generator + `NewOscillator` signature + `Stream` body), `audio/synth.go` (two call sites) |
-| **Invasiveness** | Minimal. One new field on two structs, one new parameter on one function, one comparison changed. |
+| Dimension                  | Assessment                                                                                                                                                                                                                                                                                                                              |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Files touched**          | `audio/oscilator.go` (struct + generator + `NewOscillator` signature + `Stream` body), `audio/synth.go` (two call sites)                                                                                                                                                                                                                |
+| **Invasiveness**           | Minimal. One new field on two structs, one new parameter on one function, one comparison changed.                                                                                                                                                                                                                                       |
 | **Backward compatibility** | `NewOscillator` gains a parameter — a **breaking signature change** for any direct caller outside `synth.go`. Within the package the only caller is `Synth.Streamer()`, which is updated in the same PR. UI or persistence layers that construct `Oscillator` literals need to add `PulseWidth: 0` (or omit it for zero-value default). |
-| **Risk** | Near-zero. Non-square waveforms are untouched. The zero-value default preserves all existing timbres exactly. |
+| **Risk**                   | Near-zero. Non-square waveforms are untouched. The zero-value default preserves all existing timbres exactly.                                                                                                                                                                                                                           |

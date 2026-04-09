@@ -70,12 +70,12 @@ func (g *lfoGenerator) sample() float64 {
 
 ### 3. Modulation per destination
 
-| Destination   | Formula (per sample)                                         |
-|---------------|--------------------------------------------------------------|
-| Pitch         | `effectiveFreq = baseFreq * (1 + mod)`                      |
-| Volume        | `effectiveLevel = envelopeLevel * (1 + mod)`                |
+| Destination   | Formula (per sample)                                            |
+| ------------- | --------------------------------------------------------------- |
+| Pitch         | `effectiveFreq = baseFreq * (1 + mod)`                          |
+| Volume        | `effectiveLevel = envelopeLevel * (1 + mod)`                    |
 | Filter cutoff | `effectiveCutoff = clamp(baseCutoff + mod * cutoffRange, 0, 1)` |
-| Pulse width   | `effectiveDuty = clamp(baseDuty + mod * 0.5, 0.05, 0.95)`   |
+| Pulse width   | `effectiveDuty = clamp(baseDuty + mod * 0.5, 0.05, 0.95)`       |
 
 `mod` is the scalar returned by `lfoGenerator.sample()` for that tick.
 
@@ -125,6 +125,7 @@ Inside `Streamer(note, duration)`, after constructing the base pipeline, iterate
 **Invasiveness:** Low to moderate. The core pipeline topology in `synth.go` is unchanged; LFO wrappers slot in as optional decorators.
 
 **Files touched:**
+
 - `audio/lfo.go` — new file (struct, generator, waveform math)
 - `audio/oscillator.go` — add mutable `freq`/`duty` fields and per-sample setter; minimal change (~5 lines)
 - `audio/filter.go` — add `setNormalisedCutoff` helper to recompute coefficients on demand
