@@ -136,3 +136,11 @@ func calculateMultiplier(startLevel float64, endLevel float64, lengthInSamples i
 func (e *envelopeGenerator) Err() error {
 	return nil
 }
+
+// reset restarts the envelope from the beginning (stage Off, level 0).
+func (e *envelopeGenerator) reset() {
+	e.idx = -1
+	e.currentStage = StageOff
+	e.currentLevel = 0
+	e.currentMultiplier = 1.0
+}

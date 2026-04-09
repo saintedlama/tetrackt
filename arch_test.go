@@ -108,7 +108,7 @@ func TestArch_OnlyAudioDependsOnBeepCore(t *testing.T) {
 func TestArch_AudioExportsPublicAPITypes(t *testing.T) {
 	ws := loadWorkspace(t)
 
-	for _, typeName := range []string{"Synth", "PlayParams", "Volume"} {
+	for _, typeName := range []string{"Synth", "Volume"} {
 		archscout.Rule("audio must export type "+typeName).
 			Types().
 			InPackage(module.Pkg("audio")).

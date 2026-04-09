@@ -61,6 +61,12 @@ func (g *lfoGenerator) nextBlock(n int) float64 {
 	return lfoWaveformSample(g.lfo.Waveform, g.phase) * g.lfo.Depth
 }
 
+// reset restarts the LFO phase and delay timer from zero.
+func (g *lfoGenerator) reset() {
+	g.phase = 0
+	g.elapsed = 0
+}
+
 func lfoWaveformSample(w LFOWaveform, phase float64) float64 {
 	switch w {
 	case LFOSine:

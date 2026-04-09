@@ -287,11 +287,10 @@ func (m *model) tick() tea.Cmd {
 // playNoteWithSynthPreset plays a note using the given synth preset's parameters.
 func (m *model) playNoteWithSynthPreset(note audio.Note, preset synth.SynthPreset) {
 	duration := m.trackerModel().BPMDuration()
+	noteSamples := m.sampleRate.N(duration)
+	patch := preset.Synth.NewPatch(m.sampleRate, note.Frequency(), noteSamples)
 	m.player.Play(
-		preset.Synth.Streamer(m.sampleRate, audio.PlayParams{
-			Frequencies: []float64{note.Frequency()},
-			Duration:    duration,
-		}),
+		patch,
 		m.globalVolume,
 	)
 }
@@ -300,11 +299,10 @@ func (m *model) playNoteWithSynthPreset(note audio.Note, preset synth.SynthPrese
 func (m *model) playNote(note audio.Note) {
 	duration := m.trackerModel().BPMDuration()
 	synth := m.synth().GetSynth()
+	noteSamples := m.sampleRate.N(duration)
+	patch := synth.NewPatch(m.sampleRate, note.Frequency(), noteSamples)
 	m.player.Play(
-		synth.Streamer(m.sampleRate, audio.PlayParams{
-			Frequencies: []float64{note.Frequency()},
-			Duration:    duration,
-		}),
+		patch,
 		m.globalVolume,
 	)
 }

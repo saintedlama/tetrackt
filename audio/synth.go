@@ -1,8 +1,6 @@
 package audio
 
 import (
-	"time"
-
 	"github.com/gopxl/beep/v2"
 )
 
@@ -16,7 +14,7 @@ type SampleRate = beep.SampleRate
 // don't need to import beep directly.
 type Streamer = beep.Streamer
 
-// Synth represents the audio synthesis engine
+// Synth represents the audio synthesis engine (instrument patch definition).
 type Synth struct {
 	Oscillator1 Oscillator
 	Envelope1   Envelope
@@ -26,7 +24,6 @@ type Synth struct {
 	Filter      Filter
 	LFO1        LFO
 	LFO2        LFO
-	Portamento  float64 // glide duration in seconds; 0 = snap to pitch immediately
 }
 
 // NewSynth creates a new synthesis engine
@@ -43,161 +40,133 @@ func NewSynth(oscillator1 Oscillator, envelope1 Envelope, oscillator2 Oscillator
 	}
 }
 
-// PlayParams holds per-trigger playback context passed to Synth.Streamer.
-// It is separate from Synth (the instrument patch) so callers supply per-note
-// information without mutating the patch.
-type PlayParams struct {
-	// Frequencies lists pitches to cycle across ticks.
-	// A single-element slice plays one note; multiple elements enable arpeggio.
-	Frequencies []float64
-	// StartFreq enables a portamento glide from StartFreq to Frequencies[0].
-	// Only active when Synth.Portamento > 0 and StartFreq > 0.
-	StartFreq float64
-	// Duration is the total note length.
-	Duration time.Duration
-	// Continuous keeps the ADSR envelope and LFOs running uninterrupted across
-	// arpeggio ticks. When false, each tick gets a fresh synthesis chain.
-	Continuous bool
-}
-
-// tickingStreamer wraps a synthesis pipeline and retunes oscillators at tick
-// boundaries, enabling continuous arpeggio cycling within a single ADSR envelope.
-type tickingStreamer struct {
-	inner          beep.Streamer
-	osc1           *oscillatorGenerator
-	osc2           *oscillatorGenerator
-	frequencies    []float64
-	samplesPerTick int
-	sampleCount    int
-	tickIdx        int
-}
-
-func (t *tickingStreamer) Stream(samples [][2]float64) (int, bool) {
-	total := 0
-	for len(samples) > 0 {
-		toNext := t.samplesPerTick - t.sampleCount
-		if toNext <= 0 {
-			toNext = 1
-		}
-		chunk := samples
-		if len(chunk) > toNext {
-			chunk = chunk[:toNext]
-		}
-		n, ok := t.inner.Stream(chunk)
-		total += n
-		t.sampleCount += n
-		samples = samples[n:]
-		if t.sampleCount >= t.samplesPerTick {
-			t.sampleCount = 0
-			t.tickIdx++
-			freq := t.frequencies[t.tickIdx%len(t.frequencies)]
-			t.osc1.SetFrequency(freq)
-			t.osc2.SetFrequency(freq)
-		}
-		if !ok || n == 0 {
-			break
-		}
-	}
-	return total, total > 0
-}
-
-func (t *tickingStreamer) Err() error { return t.inner.Err() }
-
-// Streamer builds a playback pipeline from the given PlayParams.
+// Patch is a live synthesis instance created from a Synth by calling NewPatch.
+// It holds the complete signal pipeline and exposes controls for the caller.
 //
-// p.Frequencies is cycled across equal-length ticks; a single-element slice
-// plays one note, multiple elements enable arpeggio.
+// Typical usage:
 //
-// When p.Continuous is true the ADSR envelope and LFOs run uninterrupted across
-// all arpeggio ticks (authentic chiptune behaviour). When false, each tick gets
-// a fresh synthesis chain (envelope + LFOs reset), producing a gate/stutter effect.
+//	patch := synth.NewPatch(sampleRate, 440.0, noteSamples)
+//	patch.Stream(buf)          // pull samples; returns false after noteSamples
+//	patch.SetFrequency(880.0)  // retune without restarting the envelope
+//	patch.Reset()              // restart ADSR and LFOs (envelope gate)
+//	patch.Stream(buf)
 //
-// When Synth.Portamento > 0 and p.StartFreq > 0, a pitch glide is applied from
-// p.StartFreq to p.Frequencies[0].
-func (s *Synth) Streamer(sampleRate beep.SampleRate, p PlayParams) beep.Streamer {
-	frequencies := p.Frequencies
-	if len(frequencies) == 0 {
-		frequencies = []float64{0}
-	}
-	tickCount := len(frequencies)
-	totalSamples := sampleRate.N(p.Duration)
-
-	if p.Continuous && tickCount > 1 {
-		// One synthesis chain; oscillators retune at tick boundaries.
-		chain, osc1, osc2 := s.buildChain(sampleRate, 0, frequencies[0], totalSamples)
-		samplesPerTick := totalSamples / tickCount
-		ticking := &tickingStreamer{
-			inner:          chain,
-			osc1:           osc1,
-			osc2:           osc2,
-			frequencies:    frequencies,
-			samplesPerTick: samplesPerTick,
-		}
-		return beep.Take(totalSamples, ticking)
-	}
-
-	if tickCount == 1 {
-		startFreq := 0.0
-		if s.Portamento > 0 {
-			startFreq = p.StartFreq
-		}
-		chain, _, _ := s.buildChain(sampleRate, startFreq, frequencies[0], totalSamples)
-		return beep.Take(totalSamples, chain)
-	}
-
-	// p.Continuous=false with multiple ticks: fresh ADSR/LFO per tick.
-	tickSamples := totalSamples / tickCount
-	seqStreamers := make([]beep.Streamer, tickCount)
-	for i := range tickCount {
-		freq := frequencies[i%len(frequencies)]
-		chain, _, _ := s.buildChain(sampleRate, 0, freq, tickSamples)
-		seqStreamers[i] = beep.Take(tickSamples, chain)
-	}
-	return beep.Seq(seqStreamers...)
+// Patch implements beep.Streamer. It automatically stops after noteSamples
+// samples, so no external beep.Take wrapping is needed.
+type Patch struct {
+	osc1        *oscillatorGenerator
+	osc2        *oscillatorGenerator
+	modOsc1     *modulatedOscillatorStreamer // nil when no oscillator LFOs are active
+	modOsc2     *modulatedOscillatorStreamer
+	env1        *envelopeGenerator
+	env2        *envelopeGenerator
+	lfos        []*lfoGenerator
+	pipeline    beep.Streamer
+	noteSamples int
+	remaining   int
 }
 
-// buildChain constructs a full synthesis pipeline for a single frequency and
-// sample duration. Returns the terminal streamer and both oscillator handles.
-// startFreq > 0 and s.Portamento > 0 enables a pitch glide from startFreq to frequency.
-func (s *Synth) buildChain(sampleRate beep.SampleRate, startFreq, frequency float64, sampleDuration int) (beep.Streamer, *oscillatorGenerator, *oscillatorGenerator) {
+// NewPatch instantiates a synthesis pipeline at the given frequency.
+// noteSamples defines the total ADSR timeline length; the envelope silences
+// naturally after that many samples, but the caller may keep streaming beyond it.
+func (s *Synth) NewPatch(sampleRate beep.SampleRate, frequency float64, noteSamples int) *Patch {
 	sr := float64(sampleRate)
 
 	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth, s.Oscillator1.Detune)
 	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth, s.Oscillator2.Detune)
 
-	if s.Portamento > 0 && startFreq > 0 {
-		portamentoSamples := int(s.Portamento * sr)
-		osc1.startFrequency = startFreq * osc1.detuneMultiplier
-		osc1.targetFrequency = osc1.frequency
-		osc1.portamentoSamples = portamentoSamples
-		osc1.frequency = osc1.startFrequency
-		osc2.startFrequency = startFreq * osc2.detuneMultiplier
-		osc2.targetFrequency = osc2.frequency
-		osc2.portamentoSamples = portamentoSamples
-		osc2.frequency = osc2.startFrequency
-	}
-
+	var lfos []*lfoGenerator
 	makeLFO := func(dest ModDest) *lfoGenerator {
 		if s.LFO1.Depth > 0 && s.LFO1.Dest == dest {
-			return newLFOGenerator(s.LFO1, sr)
+			g := newLFOGenerator(s.LFO1, sr)
+			lfos = append(lfos, g)
+			return g
 		}
 		if s.LFO2.Depth > 0 && s.LFO2.Dest == dest {
-			return newLFOGenerator(s.LFO2, sr)
+			g := newLFOGenerator(s.LFO2, sr)
+			lfos = append(lfos, g)
+			return g
 		}
 		return nil
 	}
 
-	src1 := newModulatedOscillatorStreamer(osc1, osc1.frequency, osc1.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
-	src2 := newModulatedOscillatorStreamer(osc2, osc2.frequency, osc2.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
+	raw1 := newModulatedOscillatorStreamer(osc1, osc1.frequency, osc1.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
+	raw2 := newModulatedOscillatorStreamer(osc2, osc2.frequency, osc2.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
 
-	streamer1 := NewEnvelope(src1, sampleRate, sampleDuration, s.Envelope1)
-	streamer2 := NewEnvelope(src2, sampleRate, sampleDuration, s.Envelope2)
+	env1 := NewEnvelope(raw1, sampleRate, noteSamples, s.Envelope1).(*envelopeGenerator)
+	env2 := NewEnvelope(raw2, sampleRate, noteSamples, s.Envelope2).(*envelopeGenerator)
 
-	mod1 := newModulatedVolumeStreamer(streamer1, makeLFO(ModVolume))
-	mod2 := newModulatedVolumeStreamer(streamer2, makeLFO(ModVolume))
+	mod1 := newModulatedVolumeStreamer(env1, makeLFO(ModVolume))
+	mod2 := newModulatedVolumeStreamer(env2, makeLFO(ModVolume))
 
 	mixed := s.Mixer.Mix(mod1, mod2)
-	filtered := NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
+	pipeline := NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
 
-	return filtered, osc1, osc2
+	var modOsc1, modOsc2 *modulatedOscillatorStreamer
+	if mos, ok := raw1.(*modulatedOscillatorStreamer); ok {
+		modOsc1 = mos
+	}
+	if mos, ok := raw2.(*modulatedOscillatorStreamer); ok {
+		modOsc2 = mos
+	}
+
+	return &Patch{
+		osc1:        osc1,
+		osc2:        osc2,
+		modOsc1:     modOsc1,
+		modOsc2:     modOsc2,
+		env1:        env1,
+		env2:        env2,
+		lfos:        lfos,
+		pipeline:    pipeline,
+		noteSamples: noteSamples,
+		remaining:   noteSamples,
+	}
+}
+
+// SetFrequency retunes both oscillators to hz. The detune offset configured in
+// the Synth is preserved. When a pitch LFO is active, its base frequency is also
+// updated so modulation remains relative to the new pitch.
+func (p *Patch) SetFrequency(hz float64) {
+	p.osc1.SetFrequency(hz)
+	p.osc2.SetFrequency(hz)
+	if p.modOsc1 != nil {
+		p.modOsc1.baseFreq = p.osc1.frequency
+	}
+	if p.modOsc2 != nil {
+		p.modOsc2.baseFreq = p.osc2.frequency
+	}
+}
+
+// Reset restarts the ADSR envelopes and all LFOs from the beginning.
+// Oscillator phases are preserved to avoid audible clicks.
+func (p *Patch) Reset() {
+	p.env1.reset()
+	p.env2.reset()
+	for _, lfo := range p.lfos {
+		lfo.reset()
+	}
+	p.remaining = p.noteSamples
+}
+
+// Stream implements beep.Streamer — pulls the next samples from the pipeline.
+// It returns false (drained) once noteSamples have been emitted.
+func (p *Patch) Stream(samples [][2]float64) (int, bool) {
+	if p.remaining <= 0 {
+		return 0, false
+	}
+	if len(samples) > p.remaining {
+		samples = samples[:p.remaining]
+	}
+	n, ok := p.pipeline.Stream(samples)
+	p.remaining -= n
+	if p.remaining <= 0 {
+		return n, false
+	}
+	return n, ok
+}
+
+// Err implements beep.Streamer.
+func (p *Patch) Err() error {
+	return p.pipeline.Err()
 }
