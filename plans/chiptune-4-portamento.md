@@ -1,6 +1,6 @@
 # Chiptune-4: Portamento / Pitch Glide
 
-**Status:** Planned
+**Status:** Done
 
 **Priority:** Medium
 

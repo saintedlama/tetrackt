@@ -1,5 +1,7 @@
 # Chiptune Mixer Enhancements
 
+**Status:** Planned
+
 ## Current state
 
 `audio.Mixer` performs additive mixing of two oscillator channels with independent per-channel volume (`Volume1`, `Volume2`). The `Mix(s1, s2)` method applies `effects.Volume` to each streamer then sums them with `beep.Mix`.

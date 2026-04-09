@@ -1,115 +1,149 @@
 # Chiptune-10: Tracker Effect Commands
 
-**Status:** Planned
+**Status:** Partially Implemented (Portamento complete; Arpeggio structure present but not wired to playback; Vibrato, VolumeSlide, NoteCut, NoteDelay remain unimplemented)
 
-**Priority:** Low
+**Priority:** Medium
 
 ## Problem
 
-No tracker-side effect column processing beyond what the synth natively produces.
+Only portamento is fully wired into tick-rate playback. Arpeggio data is stored and editable but ignored during playback. Vibrato, VolumeSlide, NoteCut, and NoteDelay do not exist yet.
 
 ## Why It Matters
 
 Classic trackers express vibrato, portamento, volume slide, note cut, note delay and arpeggio via effect codes evaluated per tick. These bridge the gap between the static synth and live, expressive playback.
 
-## Required
+## Current Implementation Context
 
-- Effect type enum + value: `Vibrato(speed, depth)`, `VolumeSlide`, `NoteCut(tick)`, `NoteDelay(tick)`, `Arpeggio(semi1, semi2)`
-- Tick-rate processor in the playback engine that applies effects each tick
+### Already Implemented
+
+**Portamento** (`Synth.Portamento float64`, `Patch.StartPortamento`, `Patch.TickPortamento`):
+- `Synth.Portamento float64` — glide duration in seconds; 0 = snap
+- `Patch.StartPortamento(fromFrequency, toFrequency float64, ticks int)` — begins stepped glide
+- `Patch.TickPortamento()` — advances glide one step; called every sub-tick
+- `Player.Tick()` calls `patch.TickPortamento()` for all active patches each sub-tick
+- `Player.prevFrequencies []float64` tracks last triggered Hz per track
+
+**Tick-rate infrastructure** (`player/player.go`):
+- `Player.Tick()` subdivides rows into `speed` sub-ticks (`TrackerModel.Speed`, default `tracker.DefaultSpeed`)
+- On sub-tick 0 of each row, `playRowNotes()` creates new `Patch` instances and submits them to the speaker
+- `activePatches []*audio.Patch` is kept across sub-ticks so per-tick hooks can be called
+
+**Arpeggio data structure** (`audio/effects.go`):
+```go
+type ArpeggioEffect struct {
+    Offsets []int // semitone offsets per arp step, e.g. [0, 4, 7]
+}
+func (a ArpeggioEffect) IsActive() bool { return len(a.Offsets) > 0 }
+```
+- `TrackRow.Arpeggio ArpeggioEffect` holds per-row arpeggio data
+- Editable via `RowEffectsDialog`; persisted to YAML
+- **Not applied during playback** — `playRowNotes()` ignores `trackRow.Arpeggio`
+
+### Not Yet Implemented
+
+- Arpeggio tick-rate cycling (frequency step per sub-tick)
+- Vibrato, VolumeSlide, NoteCut, NoteDelay
+- General effect column on `TrackRow`
 
 ## Implementation Plan
 
-### 1. Define effect types (new `tracker` or `playback` package)
+### Phase 1: Wire Arpeggio Playback
+
+**1a. Add arpeggio tick index to `Player`** (`player/player.go`):
 
 ```go
+type Player struct {
+    subTickCount    int
+    activePatches   []*audio.Patch
+    previewPatch    audio.Streamer
+    prevFrequencies []float64
+    arpTickIdx      []int // current arpeggio step per track; -1 when inactive
+}
+```
+
+**1b. Initialize in `playRowNotes()`**: when `trackRow.Arpeggio.IsActive()`, set `p.arpTickIdx[trackIdx] = 0` and apply the first offset immediately via `patch.SetFrequency(targetFrequency * math.Pow(2, float64(offsets[0])/12))`. Otherwise set to `-1`.
+
+**1c. Advance in `Tick()`** — before `patch.TickPortamento()`:
+
+```go
+for trackIdx, patch := range p.activePatches {
+    if patch == nil || p.arpTickIdx[trackIdx] < 0 {
+        continue
+    }
+    arp := trackerModel.Tracks[trackIdx].Rows[trackerModel.PlaybackRow].Arpeggio
+    if arp.IsActive() {
+        p.arpTickIdx[trackIdx]++
+        idx := p.arpTickIdx[trackIdx] % len(arp.Offsets)
+        mult := math.Pow(2, float64(arp.Offsets[idx])/12)
+        patch.SetFrequency(p.prevFrequencies[trackIdx] * mult)
+    }
+}
+```
+
+### Phase 2: General Effects Column
+
+**2a. Extend `TrackRow`** in `ui/tracker/tracker.go`:
+
+```go
+type TrackRow struct {
+    Note       audio.Note
+    Volume     int
+    Ticks      int
+    Continuous bool
+    Arpeggio   audio.ArpeggioEffect
+    Effect     TrackerEffect // NEW
+}
+
+type TrackerEffect struct {
+    Type   EffectType
+    Param  int // effect-specific value
+}
+
 type EffectType int
 
 const (
-    EffectNone EffectType = iota
-    EffectArpeggio
-    EffectVibrato
-    EffectVolumeSlide
-    EffectNoteCut
-    EffectNoteDelay
+    EffectNone      EffectType = iota
+    EffectVibrato           // Param: packed (speed<<4 | depth)
+    EffectVolumeSlide       // Param: positive = slide up, negative = down (per tick)
+    EffectNoteCut           // Param: sub-tick number to cut at
+    EffectNoteDelay         // Param: sub-tick number to delay note-on until
 )
-
-type Effect struct {
-    Type           EffectType
-    Param1, Param2 int
-}
 ```
 
-Location: `tracker/effect.go` or `playback/effect.go`. The `audio` package is not touched.
-
-### 2. Extend the pattern cell
-
-Add an `Effect` field to the existing cell/note struct in the tracker layer:
+**2b. Add per-track effect state to `Player`**:
 
 ```go
-type Cell struct {
-    Note       int
-    Instrument int
-    Effect     Effect
+type channelEffectState struct {
+    vibratoPhase float64
+    volume       float64 // [0,1]; 0 = use patch default
 }
 ```
 
-This is a pure additive change; zero-valued `Effect{Type: EffectNone}` is a no-op.
-
-### 3. `TickProcessor`
-
-A `TickProcessor` is created once per playback session and holds per-channel state:
-
-```go
-type ChannelState struct {
-    BaseFreq   float64
-    Volume     float64
-    LFOPhase   float64
-    ArpStep    int
-    TicksInRow int  // counts up to speed
-}
-
-type TickProcessor struct {
-    BPM    int
-    Speed  int  // ticks per row
-    Channels []ChannelState
-}
-```
-
-`TickProcessor.Tick(ch int, cell Cell)` is called by the playback loop at every tick boundary before audio is rendered.
-
-### 4. Per-effect logic
+**2c. Per-effect tick logic** in `Player.Tick()` for each track:
 
 | Effect | Tick action |
 |---|---|
-| `Arpeggio(semi1, semi2)` | Each tick cycles `BaseFreq` → `BaseFreq*semi(0)` → `BaseFreq*semi(semi1)` → `BaseFreq*semi(semi2)` → repeat; calls `SetFrequency` on the active oscillator (depends on chiptune-3). |
-| `Vibrato(speed, depth)` | Advance `LFOPhase += speed`; modulate frequency by `depth * sin(LFOPhase)`; calls `SetFrequency`. Can be done entirely in the tick processor without touching the `audio` LFO (avoids dependency on chiptune-2). |
-| `VolumeSlide(delta)` | `ChannelState.Volume += Param1 - Param2` per tick; clamp to `[0, 1]`; calls `SetVolume` on the mixer/channel. |
-| `NoteCut(tick)` | When `TicksInRow == Param1`, calls `Silence()` on the channel. |
-| `NoteDelay(tick)` | Suppresses note-on until `TicksInRow == Param1`, then triggers the note normally. |
+| `EffectVibrato` | Advance `vibratoPhase`; call `patch.SetFrequency(baseFreq * math.Pow(2, depth*math.Sin(phase)/12))` |
+| `EffectVolumeSlide` | `volume += delta`; clamp to `[0,1]`; call `patch.SetVolume(volume)` (new `Patch` method) |
+| `EffectNoteCut` | When `subTickCount == param`, call `patch.SetVolume(0)` |
+| `EffectNoteDelay` | Suppress note-on at sub-tick 0; trigger `patch.NoteOn()` at sub-tick `param` |
 
-### 5. Interface boundary
+**2d. Add `Patch.SetVolume(v float64)`** in `audio/synth.go` — stores volume scalar applied to output samples in `Stream()`.
 
-The tick processor communicates with the audio engine through a narrow interface, keeping `audio` tracker-agnostic:
+### Phase 3: Effect Column UI
 
-```go
-type ChannelControl interface {
-    SetFrequency(hz float64)
-    SetVolume(v float64)
-    Silence()
-}
-```
-
-The concrete implementation lives in the audio/playback bridge. `TickProcessor` depends only on this interface.
+Extend `RowEffectsDialog` in `ui/tracker/roweffectsdialog.go` to expose `TrackerEffect` type and parameter editing alongside the existing arpeggio controls.
 
 ## Impact
 
-**Invasiveness:** Moderate. No existing `audio` package code changes. The playback loop gains a tick subdivision (currently row-rate → tick-rate), which is the most structural change.
+### Phase 1 (Arpeggio playback)
+- **Files touched:** `player/player.go` only — add `arpTickIdx` field, update `playRowNotes()` and `Tick()`.
+- **Invasiveness:** Low. Purely additive; existing patterns without arpeggio are unaffected (`IsActive() == false`).
 
-**Files/packages touched:**
-- `tracker/effect.go` (new) — `EffectType`, `Effect`
-- `tracker/cell.go` (or equivalent) — add `Effect` field to `Cell`
-- `playback/tick_processor.go` (new) — `TickProcessor`, `ChannelState`, `ChannelControl` interface
-- `playback/engine.go` (existing) — replace per-row loop with per-tick loop; instantiate `TickProcessor`
-- `audio` package — **not touched** (only accessed via `ChannelControl`)
+### Phase 2 (General effects)
+- **Files touched:** `ui/tracker/tracker.go` (add `Effect` field to `TrackRow`), `player/player.go` (effect state + tick logic), `audio/synth.go` (`Patch.SetVolume`).
+- **Invasiveness:** Moderate. `Effect` field defaults to `EffectNone` — fully backward compatible. Pattern files with no effect round-trip unchanged.
 
-**Compatibility:** Additive for `audio` and `tracker` data structures. The playback engine loop change is internal and not part of any public API, so no callers break. Pattern files with no effect column round-trip identically.
+### Phase 3 (UI)
+- **Files touched:** `ui/tracker/roweffectsdialog.go` only.
+- **Invasiveness:** Low.
