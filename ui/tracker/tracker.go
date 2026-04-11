@@ -48,6 +48,23 @@ const MinBPM = 40
 const MaxBPM = 300
 const DefaultSpeed = 6 // sub-ticks per row
 
+// EffectType identifies the per-row playback effect evaluated each sub-tick.
+type EffectType int
+
+const (
+	EffectNone        EffectType = iota
+	EffectVibrato                // Param hi-nibble: speed (1-15 ticks/cycle); lo-nibble: depth (semitones*4, 0-15)
+	EffectVolumeSlide            // Param: volume delta per tick in 1/64 units; positive = louder
+	EffectNoteCut                // Param: sub-tick at which to silence the note
+	EffectNoteDelay              // Param: sub-tick at which to trigger NoteOn
+)
+
+// TrackerEffect is a per-row effect command evaluated every sub-tick during playback.
+type TrackerEffect struct {
+	Type  EffectType
+	Param int
+}
+
 // TrackerModel represents the state of the tracker pattern editor
 type TrackerModel struct {
 	Tracks      []Track
@@ -88,6 +105,7 @@ type TrackRow struct {
 	Ticks      int  // per-row tick count; 0 = use global Speed
 	Continuous bool // synthesise this row as a continuous stream across ticks
 	Arpeggio   audio.ArpeggioEffect
+	Effect     TrackerEffect
 }
 
 // NewTracker creates a new pattern with the specified number of tracks and rows

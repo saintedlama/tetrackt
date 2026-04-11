@@ -8,11 +8,12 @@ import (
 )
 
 type Oscillator struct {
-	Type       OscillatorType
-	Phase      float64   // normalized initial phase [0..1)
-	PulseWidth float64   // duty cycle [0.01..0.99]; only used by Square; 0 defaults to 0.5
-	Detune     float64   // fine tuning in cents (±1200 = ±1 octave); 0 = no detune
-	Wavetable  []float64 // one cycle of samples; only used by Wavetable type; nil = silent
+	Type        OscillatorType
+	Phase       float64   // normalized initial phase [0..1)
+	PulseWidth  float64   // duty cycle [0.01..0.99]; only used by Square; 0 defaults to 0.5
+	Detune      float64   // fine tuning in cents (±1200 = ±1 octave); 0 = no detune
+	Wavetable   []float64 // one cycle of samples; only used by Wavetable type; nil = silent
+	NoisePeriod int       // LFSR clock period in samples; 0 = derive from frequency; only used by NoisePeriodic
 }
 
 // OscillatorType represents the type of oscillator waveform to generate
@@ -25,6 +26,7 @@ const (
 	Sawtooth        OscillatorType = "sawtooth"
 	SawtoothReverse OscillatorType = "sawtooth_reverse"
 	Noise           OscillatorType = "noise"
+	NoisePeriodic   OscillatorType = "noise_periodic"
 	Silent          OscillatorType = "silent"
 	Wavetable       OscillatorType = "wavetable"
 )
@@ -33,7 +35,7 @@ const (
 // pulseWidth is used only by Square; a zero value defaults to 0.5 (50% duty).
 // detuneCents shifts the oscillator frequency by the given number of cents
 // (100 cents = 1 semitone, 1200 cents = 1 octave); 0 disables detune.
-func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate, initialPhase float64, pulseWidth float64, detuneCents float64, wavetable []float64) *oscillatorGenerator {
+func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate, initialPhase float64, pulseWidth float64, detuneCents float64, wavetable []float64, noisePeriod int) *oscillatorGenerator {
 	pw := pulseWidth
 	if pw == 0 {
 		pw = 0.5
@@ -50,6 +52,8 @@ func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate 
 		phase:            math.Mod(initialPhase, 1.0),
 		pulseWidth:       pw,
 		wavetable:        wavetable,
+		noisePeriod:      noisePeriod,
+		lfsrState:        0x7FFF,
 	}
 }
 
@@ -62,6 +66,9 @@ type oscillatorGenerator struct {
 	phase            float64
 	pulseWidth       float64   // resolved duty cycle [0.01..0.99]
 	wavetable        []float64 // single-cycle samples for Wavetable type
+	noisePeriod      int       // LFSR clock period in samples; 0 = derive from frequency
+	lfsrState        uint16    // 15-bit shift register; non-zero seed guarantees non-trivial sequence
+	lfsrCounter      int       // samples remaining until next LFSR clock
 }
 
 // Stream fills the samples buffer with oscillator waveform data
@@ -96,6 +103,26 @@ func (g *oscillatorGenerator) Stream(samples [][2]float64) (n int, ok bool) {
 
 		case Noise:
 			sample = rand.Float64()*2 - 1
+
+		case NoisePeriodic:
+			if g.lfsrCounter <= 0 {
+				feedback := (g.lfsrState & 1) ^ ((g.lfsrState >> 1) & 1)
+				g.lfsrState = (g.lfsrState >> 1) | (feedback << 14)
+				period := g.noisePeriod
+				if period <= 0 {
+					period = int(float64(g.sampleRate) / (g.frequency * g.detuneMultiplier))
+					if period < 1 {
+						period = 1
+					}
+				}
+				g.lfsrCounter = period
+			}
+			g.lfsrCounter--
+			if (g.lfsrState & 1) == 0 {
+				sample = 1.0
+			} else {
+				sample = -1.0
+			}
 
 		case Silent:
 			sample = 0

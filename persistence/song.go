@@ -44,6 +44,8 @@ type SavedTrackRow struct {
 	RowTicks        int    `yaml:"row_ticks,omitempty"`
 	Continuous      bool   `yaml:"continuous,omitempty"`
 	ArpeggioOffsets []int  `yaml:"arpeggio_offsets,omitempty"`
+	EffectType      int    `yaml:"effect_type,omitempty"`
+	EffectParam     int    `yaml:"effect_param,omitempty"`
 }
 
 // SavedTrack is the YAML-serializable form of Track
@@ -106,6 +108,8 @@ func TracksToSong(tracker *utracker.TrackerModel) *SavedSong {
 				RowTicks:        row.Ticks,
 				Continuous:      row.Continuous,
 				ArpeggioOffsets: row.Arpeggio.Offsets,
+				EffectType:      int(row.Effect.Type),
+				EffectParam:     row.Effect.Param,
 			}
 		}
 		s := track.Synth
@@ -224,6 +228,10 @@ func SongToTracks(saved *SavedSong, tracker *utracker.TrackerModel) {
 					Continuous: row.Continuous,
 					Arpeggio: audio.ArpeggioEffect{
 						Offsets: row.ArpeggioOffsets,
+					},
+					Effect: utracker.TrackerEffect{
+						Type:  utracker.EffectType(row.EffectType),
+						Param: row.EffectParam,
 					},
 				}
 			}

@@ -1,6 +1,6 @@
 # Chiptune-8: Periodic / LFSR Noise
 
-**Status:** Planned
+**Status:** Done
 
 **Priority:** Low
 

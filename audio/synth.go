@@ -63,10 +63,13 @@ type Patch struct {
 	modOsc2     *modulatedOscillatorStreamer
 	env1        *envelopeGenerator
 	env2        *envelopeGenerator
+	gatedEnv1   *gatedEnvelopeGenerator // nil for fixed-duration patches
+	gatedEnv2   *gatedEnvelopeGenerator
 	lfos        []*lfoGenerator
 	pipeline    beep.Streamer
 	noteSamples int
 	remaining   int
+	volume      float64 // output scalar; 1.0 = unity, 0 = silent
 	portamento  portamento
 }
 
@@ -83,8 +86,8 @@ type portamento struct {
 func (s *Synth) NewPatch(sampleRate beep.SampleRate, frequency float64, noteSamples int) *Patch {
 	sr := float64(sampleRate)
 
-	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth, s.Oscillator1.Detune, s.Oscillator1.Wavetable)
-	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth, s.Oscillator2.Detune, s.Oscillator2.Wavetable)
+	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth, s.Oscillator1.Detune, s.Oscillator1.Wavetable, s.Oscillator1.NoisePeriod)
+	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth, s.Oscillator2.Detune, s.Oscillator2.Wavetable, s.Oscillator2.NoisePeriod)
 
 	var lfos []*lfoGenerator
 	makeLFO := func(dest ModDest) *lfoGenerator {
@@ -132,7 +135,93 @@ func (s *Synth) NewPatch(sampleRate beep.SampleRate, frequency float64, noteSamp
 		pipeline:    pipeline,
 		noteSamples: noteSamples,
 		remaining:   noteSamples,
+		volume:      1.0,
 	}
+}
+
+// NewGatedPatch builds a synthesis pipeline that sustains until NoteOff is called.
+// Call patch.NoteOn() once to start the envelope; call patch.NoteOff() to
+// begin the release phase. The patch streams until the release completes.
+func (s *Synth) NewGatedPatch(sampleRate beep.SampleRate, frequency float64) *Patch {
+	sr := float64(sampleRate)
+
+	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth, s.Oscillator1.Detune, s.Oscillator1.Wavetable, s.Oscillator1.NoisePeriod)
+	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth, s.Oscillator2.Detune, s.Oscillator2.Wavetable, s.Oscillator2.NoisePeriod)
+
+	var lfos []*lfoGenerator
+	makeLFO := func(dest ModDest) *lfoGenerator {
+		if s.LFO1.Depth > 0 && s.LFO1.Dest == dest {
+			g := newLFOGenerator(s.LFO1, sr)
+			lfos = append(lfos, g)
+			return g
+		}
+		if s.LFO2.Depth > 0 && s.LFO2.Dest == dest {
+			g := newLFOGenerator(s.LFO2, sr)
+			lfos = append(lfos, g)
+			return g
+		}
+		return nil
+	}
+
+	raw1 := newModulatedOscillatorStreamer(osc1, osc1.frequency, osc1.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
+	raw2 := newModulatedOscillatorStreamer(osc2, osc2.frequency, osc2.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
+
+	gatedEnv1 := newGatedEnvelopeGenerator(raw1, sampleRate, s.Envelope1)
+	gatedEnv2 := newGatedEnvelopeGenerator(raw2, sampleRate, s.Envelope2)
+
+	mod1 := newModulatedVolumeStreamer(gatedEnv1, makeLFO(ModVolume))
+	mod2 := newModulatedVolumeStreamer(gatedEnv2, makeLFO(ModVolume))
+
+	mixed := s.Mixer.Mix(mod1, mod2)
+	pipeline := NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
+
+	var modOsc1, modOsc2 *modulatedOscillatorStreamer
+	if mos, ok := raw1.(*modulatedOscillatorStreamer); ok {
+		modOsc1 = mos
+	}
+	if mos, ok := raw2.(*modulatedOscillatorStreamer); ok {
+		modOsc2 = mos
+	}
+
+	return &Patch{
+		osc1:        osc1,
+		osc2:        osc2,
+		modOsc1:     modOsc1,
+		modOsc2:     modOsc2,
+		gatedEnv1:   gatedEnv1,
+		gatedEnv2:   gatedEnv2,
+		lfos:        lfos,
+		pipeline:    pipeline,
+		noteSamples: math.MaxInt,
+		remaining:   math.MaxInt,
+		volume:      1.0,
+	}
+}
+
+// NoteOn starts the envelope attack. No-op for fixed-duration patches.
+func (p *Patch) NoteOn() {
+	if p.gatedEnv1 != nil {
+		p.gatedEnv1.NoteOn()
+	}
+	if p.gatedEnv2 != nil {
+		p.gatedEnv2.NoteOn()
+	}
+}
+
+// NoteOff triggers the release phase. No-op for fixed-duration patches.
+func (p *Patch) NoteOff() {
+	if p.gatedEnv1 != nil {
+		p.gatedEnv1.NoteOff()
+	}
+	if p.gatedEnv2 != nil {
+		p.gatedEnv2.NoteOff()
+	}
+}
+
+// SetVolume sets the output amplitude scalar applied to all streamed samples.
+// 1.0 = unity gain, 0 = silent. Use for per-tick effects such as VolumeSlide and NoteCut.
+func (p *Patch) SetVolume(v float64) {
+	p.volume = v
 }
 
 // SetFrequency retunes both oscillators to the given frequency in Hz. The detune offset configured in
@@ -199,6 +288,12 @@ func (p *Patch) Stream(samples [][2]float64) (int, bool) {
 		samples = samples[:p.remaining]
 	}
 	n, ok := p.pipeline.Stream(samples)
+	if p.volume != 1.0 {
+		for i := 0; i < n; i++ {
+			samples[i][0] *= p.volume
+			samples[i][1] *= p.volume
+		}
+	}
 	p.remaining -= n
 	if p.remaining <= 0 {
 		return n, false

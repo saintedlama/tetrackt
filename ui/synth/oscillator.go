@@ -20,6 +20,7 @@ const (
 	oscillatorPulseWidth
 	oscillatorDetune
 	oscillatorWavetable
+	oscillatorNoisePeriod
 	oscillatorFieldCount
 )
 
@@ -54,7 +55,7 @@ type OscillatorUpdated struct {
 }
 
 func NewOscillatorModel(oscillator audio.Oscillator) *OscillatorModel {
-	oscillatorList := []audio.OscillatorType{audio.Sine, audio.Square, audio.Triangle, audio.Sawtooth, audio.SawtoothReverse, audio.Noise, audio.Wavetable, audio.Silent}
+	oscillatorList := []audio.OscillatorType{audio.Sine, audio.Square, audio.Triangle, audio.Sawtooth, audio.SawtoothReverse, audio.Noise, audio.NoisePeriodic, audio.Wavetable, audio.Silent}
 
 	oscillatorTypeStyle := lipgloss.NewStyle().Width(calcOscWidth(oscillatorList))
 
@@ -103,6 +104,15 @@ func (m *OscillatorModel) View() string {
 		oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("Wave: %-10s", wt.name), m.editField == oscillatorWavetable))
 	}
 
+	if m.Oscillator.Type == audio.NoisePeriodic {
+		periodStr := "Auto"
+		if m.Oscillator.NoisePeriod > 0 {
+			periodStr = fmt.Sprintf("%4d", m.Oscillator.NoisePeriod)
+		}
+		oscillatorView.WriteString("\n")
+		oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("Period:%-6s", periodStr), m.editField == oscillatorNoisePeriod))
+	}
+
 	return oscillatorView.String()
 }
 
@@ -123,8 +133,12 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 				m.Oscillator.Type = cycle(m.oscillatorList, m.Oscillator.Type, -1)
 				if m.Oscillator.Type == audio.Wavetable {
 					m.Oscillator.Wavetable = builtinWavetables[m.wavetableIdx].data
+					m.Oscillator.NoisePeriod = 0
 				} else {
 					m.Oscillator.Wavetable = nil
+				}
+				if m.Oscillator.Type != audio.NoisePeriodic {
+					m.Oscillator.NoisePeriod = 0
 				}
 			case oscillatorPhase:
 				// decrease phase
@@ -143,11 +157,23 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			case oscillatorWavetable:
 				m.wavetableIdx = (m.wavetableIdx - 1 + len(builtinWavetables)) % len(builtinWavetables)
 				m.Oscillator.Wavetable = builtinWavetables[m.wavetableIdx].data
+			case oscillatorNoisePeriod:
+				if m.Oscillator.NoisePeriod > 0 {
+					m.Oscillator.NoisePeriod--
+				}
 			}
 			cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
 		case "shift+left":
-			if m.editField == oscillatorDetune {
+			switch m.editField {
+			case oscillatorDetune:
 				m.Oscillator.Detune = clampDetune(m.Oscillator.Detune - 10)
+				cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
+			case oscillatorNoisePeriod:
+				if m.Oscillator.NoisePeriod >= 10 {
+					m.Oscillator.NoisePeriod -= 10
+				} else {
+					m.Oscillator.NoisePeriod = 0
+				}
 				cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
 			}
 		case "right":
@@ -156,8 +182,12 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 				m.Oscillator.Type = cycle(m.oscillatorList, m.Oscillator.Type, 1)
 				if m.Oscillator.Type == audio.Wavetable {
 					m.Oscillator.Wavetable = builtinWavetables[m.wavetableIdx].data
+					m.Oscillator.NoisePeriod = 0
 				} else {
 					m.Oscillator.Wavetable = nil
+				}
+				if m.Oscillator.Type != audio.NoisePeriodic {
+					m.Oscillator.NoisePeriod = 0
 				}
 			case oscillatorPhase:
 				// decrease phase
@@ -176,11 +206,19 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			case oscillatorWavetable:
 				m.wavetableIdx = (m.wavetableIdx + 1) % len(builtinWavetables)
 				m.Oscillator.Wavetable = builtinWavetables[m.wavetableIdx].data
+			case oscillatorNoisePeriod:
+				if m.Oscillator.NoisePeriod < 2048 {
+					m.Oscillator.NoisePeriod++
+				}
 			}
 			cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
 		case "shift+right":
-			if m.editField == oscillatorDetune {
+			switch m.editField {
+			case oscillatorDetune:
 				m.Oscillator.Detune = clampDetune(m.Oscillator.Detune + 10)
+				cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
+			case oscillatorNoisePeriod:
+				m.Oscillator.NoisePeriod = min(2048, m.Oscillator.NoisePeriod+10)
 				cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
 			}
 		}
@@ -230,12 +268,18 @@ func (m *OscillatorModel) nextField() editField {
 	if f == oscillatorWavetable && m.Oscillator.Type != audio.Wavetable {
 		f = (f + 1) % oscillatorFieldCount
 	}
+	if f == oscillatorNoisePeriod && m.Oscillator.Type != audio.NoisePeriodic {
+		f = (f + 1) % oscillatorFieldCount
+	}
 	return f
 }
 
 func (m *OscillatorModel) prevField() editField {
 	f := (m.editField - 1 + oscillatorFieldCount) % oscillatorFieldCount
 	if f == oscillatorWavetable && m.Oscillator.Type != audio.Wavetable {
+		f = (f - 1 + oscillatorFieldCount) % oscillatorFieldCount
+	}
+	if f == oscillatorNoisePeriod && m.Oscillator.Type != audio.NoisePeriodic {
 		f = (f - 1 + oscillatorFieldCount) % oscillatorFieldCount
 	}
 	return f

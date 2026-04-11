@@ -120,7 +120,7 @@ func TestLFOPhaseWraps(t *testing.T) {
 }
 
 func TestModulatedOscillatorNilLFOsReturnOscDirect(t *testing.T) {
-	osc := NewOscillator(Square, 440, srLFO, 0, 0.5, 0, nil)
+	osc := NewOscillator(Square, 440, srLFO, 0, 0.5, 0, nil, 0)
 	got := newModulatedOscillatorStreamer(osc, 440, 0.5, nil, nil, nil)
 	if got != osc {
 		t.Fatal("expected the bare oscillator to be returned unchanged when both LFOs are nil")
@@ -128,7 +128,7 @@ func TestModulatedOscillatorNilLFOsReturnOscDirect(t *testing.T) {
 }
 
 func TestModulatedOscillatorPitchLFOChangesFrequency(t *testing.T) {
-	osc := NewOscillator(Sine, 440, srLFO, 0, 0, 0, nil)
+	osc := NewOscillator(Sine, 440, srLFO, 0, 0, 0, nil, 0)
 	pitchLFO := newLFOGenerator(LFO{Waveform: LFOSquare, Rate: 1, Depth: 0.5, Delay: 0}, float64(srLFO))
 	mod := newModulatedOscillatorStreamer(osc, 440, 0.5, pitchLFO, nil, nil)
 
@@ -142,7 +142,7 @@ func TestModulatedOscillatorPitchLFOChangesFrequency(t *testing.T) {
 }
 
 func TestModulatedOscillatorPWMLFOClampsDuty(t *testing.T) {
-	osc := NewOscillator(Square, 440, srLFO, 0, 0.5, 0, nil)
+	osc := NewOscillator(Square, 440, srLFO, 0, 0.5, 0, nil, 0)
 	// Depth=1 → mod can reach ±1; duty = 0.5 + 1*0.5 = 1.0 → clamped to 0.95
 	pwmLFO := newLFOGenerator(LFO{Waveform: LFOSquare, Rate: 1, Depth: 1.0, Delay: 0}, float64(srLFO))
 	mod := newModulatedOscillatorStreamer(osc, 440, 0.5, nil, pwmLFO, nil)
@@ -156,7 +156,7 @@ func TestModulatedOscillatorPWMLFOClampsDuty(t *testing.T) {
 
 func TestModulatedOscillatorDetuneLFOShiftsFrequency(t *testing.T) {
 	// Osc with 50 cents static detune → detuneMultiplier ≈ 1.029
-	osc := NewOscillator(Square, 440, srLFO, 0, 0.5, 50, nil)
+	osc := NewOscillator(Square, 440, srLFO, 0, 0.5, 50, nil, 0)
 	baseMult := osc.detuneMultiplier
 
 	detuneLFO := newLFOGenerator(LFO{Waveform: LFOSquare, Rate: 1, Depth: 0.5, Delay: 0}, float64(srLFO))
@@ -177,7 +177,7 @@ func TestModulatedOscillatorDetuneLFOShiftsFrequency(t *testing.T) {
 
 func TestModulatedOscillatorDetuneLFODoesNotAffectOsc1(t *testing.T) {
 	// Osc1 has no detune LFO wired (nil) — its raw frequency must remain unchanged.
-	osc1 := NewOscillator(Square, 440, srLFO, 0, 0.5, 50, nil)
+	osc1 := NewOscillator(Square, 440, srLFO, 0, 0.5, 50, nil, 0)
 	staticFreq := osc1.frequency // set at construction
 
 	mod1 := newModulatedOscillatorStreamer(osc1, 440, 0.5, nil, nil, nil)
@@ -190,7 +190,7 @@ func TestModulatedOscillatorDetuneLFODoesNotAffectOsc1(t *testing.T) {
 }
 
 func TestModulatedVolumeNilLFOReturnsDirect(t *testing.T) {
-	osc2 := NewOscillator(Silent, 440, srLFO, 0, 0, 0, nil)
+	osc2 := NewOscillator(Silent, 440, srLFO, 0, 0, 0, nil, 0)
 	got := newModulatedVolumeStreamer(osc2, nil)
 	if got != osc2 {
 		t.Fatal("expected inner streamer returned unchanged when LFO is nil")
@@ -201,7 +201,7 @@ func TestModulatedVolumeTremoloScalesSamples(t *testing.T) {
 	// Use a constant-output streamer (sine at DC = 0, so use sawtooth at
 	// a frequency so low the first block is nearly flat).
 	// Simpler: wrap a constant value streamer.
-	osc := NewOscillator(Sawtooth, 100, srLFO, 0, 0, 0, nil)
+	osc := NewOscillator(Sawtooth, 100, srLFO, 0, 0, 0, nil, 0)
 	volumeLFO := newLFOGenerator(LFO{Waveform: LFOSquare, Rate: 1, Depth: 0.5, Delay: 0}, float64(srLFO))
 	mod := newModulatedVolumeStreamer(osc, volumeLFO)
 
@@ -236,7 +236,7 @@ func TestModulatedVolumeGainFloorIsZero(t *testing.T) {
 	// advance to phase 0.5 (square → -1), gain = 1 + (-1*2) = -1 → floor 0
 	volumeLFO.nextBlock(threequarterSamples)
 
-	osc := NewOscillator(Sawtooth, 100, beep.SampleRate(sr), 0, 0, 0, nil)
+	osc := NewOscillator(Sawtooth, 100, beep.SampleRate(sr), 0, 0, 0, nil, 0)
 	mod := &modulatedVolumeStreamer{inner: osc, lfo: volumeLFO}
 
 	buf := make([][2]float64, 64)
@@ -249,7 +249,7 @@ func TestModulatedVolumeGainFloorIsZero(t *testing.T) {
 }
 
 func TestModulatedFilterOffReturnsSource(t *testing.T) {
-	osc := NewOscillator(Sine, 440, srLFO, 0, 0, 0, nil)
+	osc := NewOscillator(Sine, 440, srLFO, 0, 0, 0, nil, 0)
 	lfo := newLFOGenerator(LFO{Waveform: LFOSine, Rate: 1, Depth: 0.5, Delay: 0}, float64(srLFO))
 	f := Filter{Type: FilterOff, Cutoff: 0.5, Resonance: 0}
 	got := NewModulatedFilterStreamer(osc, srLFO, f, lfo)
@@ -259,7 +259,7 @@ func TestModulatedFilterOffReturnsSource(t *testing.T) {
 }
 
 func TestModulatedFilterNilLFOReturnsBiquad(t *testing.T) {
-	osc := NewOscillator(Sine, 440, srLFO, 0, 0, 0, nil)
+	osc := NewOscillator(Sine, 440, srLFO, 0, 0, 0, nil, 0)
 	f := Filter{Type: FilterLowPass, Cutoff: 0.5, Resonance: 0}
 	got := NewModulatedFilterStreamer(osc, srLFO, f, nil)
 	if _, ok := got.(*biquadFilter); !ok {
@@ -268,7 +268,7 @@ func TestModulatedFilterNilLFOReturnsBiquad(t *testing.T) {
 }
 
 func TestModulatedFilterLFOReturnModulatedType(t *testing.T) {
-	osc := NewOscillator(Sine, 440, srLFO, 0, 0, 0, nil)
+	osc := NewOscillator(Sine, 440, srLFO, 0, 0, 0, nil, 0)
 	lfo := newLFOGenerator(LFO{Waveform: LFOSine, Rate: 1, Depth: 0.5, Delay: 0}, float64(srLFO))
 	f := Filter{Type: FilterLowPass, Cutoff: 0.5, Resonance: 0}
 	got := NewModulatedFilterStreamer(osc, srLFO, f, lfo)
@@ -280,7 +280,7 @@ func TestModulatedFilterLFOReturnModulatedType(t *testing.T) {
 func TestModulatedFilterCutoffClamped(t *testing.T) {
 	// depth=1 → mod can be ±1; cutoff = baseFilter.Cutoff + mod*0.5
 	// with Cutoff=1.0 and mod=+1 → 1.5 → clamped to 1.0
-	osc := NewOscillator(Sine, 100, srLFO, 0, 0, 0, nil)
+	osc := NewOscillator(Sine, 100, srLFO, 0, 0, 0, nil, 0)
 	lfo := newLFOGenerator(LFO{Waveform: LFOSquare, Rate: 1, Depth: 1.0, Delay: 0}, float64(srLFO))
 	f := Filter{Type: FilterLowPass, Cutoff: 1.0, Resonance: 0}
 	mf := NewModulatedFilterStreamer(osc, srLFO, f, lfo).(*modulatedFilterStreamer)

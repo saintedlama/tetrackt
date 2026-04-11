@@ -1,6 +1,6 @@
 # Chiptune-6: Note-On / Note-Off Gate Model
 
-**Status:** Planned
+**Status:** Done
 
 **Priority:** Medium
 
