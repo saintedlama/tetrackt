@@ -10,4 +10,5 @@ type Screen interface {
 	View() string
 	Footer() string
 	Title() string
+	Help() []HelpSection
 }

@@ -83,6 +83,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		// Global mode switching
 		switch keyStr := msg.String(); keyStr {
+		case "?":
+			help := ui.NewHelpDialog(m.screens[m.activeScreen].Help())
+			return ui.NewDialogModel(help, m, m.width, m.height), nil
 		case "s":
 			// Open save dialog
 			prefill := "module"

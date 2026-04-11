@@ -229,7 +229,25 @@ func (s *SynthScreen) renderVoice(clr color.Color, panelIndices ...int) string {
 
 // Footer returns the help text shown in the footer bar on the Synth screen.
 func (s *SynthScreen) Footer() string {
-	return "Tab/Shift+Tab: Switch panel | Ctrl+↑↓←→: Navigate panels | ↑↓: Select | ←→: Adjust | +/-: Octave | b/B: Patch Bank | S: Save | L: Load | T: Tracker | Q: Quit"
+	return "Tab/Shift+Tab: Switch panel | Ctrl+↑↓←→: Navigate | ↑↓: Select | ←→: Adjust | b: Patch Bank | T: Tracker | ?: Help"
+}
+
+// Help returns screen-specific keyboard shortcut sections for the help dialog.
+func (s *SynthScreen) Help() []ui.HelpSection {
+	return []ui.HelpSection{
+		{
+			Title: "Synth",
+			Entries: []ui.HelpEntry{
+				{"Tab / Shift+Tab", "Cycle panels"},
+				{"Ctrl+↑↓←→", "Navigate panels in grid"},
+				{"↑↓", "Select parameter"},
+				{"←→", "Adjust parameter value"},
+				{"Shift+←→", "Large adjustment"},
+				{"b / B", "Open patch bank"},
+				{"1–7 / Shift+1–6", "Preview note"},
+			},
+		},
+	}
 }
 
 // GetSynth builds and returns an audio.Synth from the current panel state.

@@ -160,5 +160,26 @@ func (t *TrackerScreen) Title() string { return "Tracker" }
 
 // Footer returns the help text shown in the footer bar on the Tracker screen.
 func (t *TrackerScreen) Footer() string {
-	return "Tab/Shift+Tab: Switch panel | ↑↓←→: Navigate | 1-7: Notes | Shift+1-6: Sharp Notes | Delete: Clear | +/-: Octave | E: Row effects | p: Play/Pause | P: Loop | S: Save | L: Load | T: Synth | Q: Quit"
+	return "↑↓←→: Navigate | 1-7: Notes | E: Row effects | p: Play | T: Synth | ?: Help"
+}
+
+// Help returns screen-specific keyboard shortcut sections for the help dialog.
+func (t *TrackerScreen) Help() []ui.HelpSection {
+	return []ui.HelpSection{
+		{
+			Title: "Tracker",
+			Entries: []ui.HelpEntry{
+				{"↑↓←→", "Navigate rows / tracks"},
+				{"Home / End", "First / last row"},
+				{"1–7", "Enter note (C D E F G A B)"},
+				{"Shift+1–6", "Enter sharp note"},
+				{"Delete", "Clear current cell"},
+				{"+/-", "Octave up / down"},
+				{"E", "Row effects dialog (arp, fx)"},
+				{"Tab / Shift+Tab", "Switch tracker / settings panel"},
+				{"p", "Play / Pause from row 0"},
+				{"P", "Loop to current row"},
+			},
+		},
+	}
 }
