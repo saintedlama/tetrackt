@@ -1,6 +1,6 @@
 # Tracker Synth Screens
 
-> Status: **In Progress**
+> Status: *Done**
 
 To allow for more flexibility in the UI, including display of additional information such as the current BPM (future), we consider implementing separate screens for the tracker and the synthesizer. This would allow us to display more information and controls without cluttering the main tracker interface.
 
@@ -84,6 +84,7 @@ activeScreen int
 ```
 
 Initialize as:
+
 ```go
 m.screens = []ui.Screen{
     ui.NewSynthScreen(panels),
@@ -126,11 +127,11 @@ No per-screen branching.
 
 ### 8. File changes
 
-| File                   | Change                                                                                    |
-| ---------------------- | ----------------------------------------------------------------------------------------- |
-| `ui/screen.go`         | New — `Screen` interface                                                                  |
-| `ui/synthscreen.go`    | New — `SynthScreen` wrapping existing panels; owns panel navigation                      |
-| `ui/trackerscreen.go`  | New — `TrackerScreen` wrapping existing `TrackerModel`                                    |
-| `main.go`              | Replace `synthPanels`/`tracker`/`mode` with `screens`/`activeScreen`; simplify key logic |
+| File                  | Change                                                                                   |
+| --------------------- | ---------------------------------------------------------------------------------------- |
+| `ui/screen.go`        | New — `Screen` interface                                                                 |
+| `ui/synthscreen.go`   | New — `SynthScreen` wrapping existing panels; owns panel navigation                      |
+| `ui/trackerscreen.go` | New — `TrackerScreen` wrapping existing `TrackerModel`                                   |
+| `main.go`             | Replace `synthPanels`/`tracker`/`mode` with `screens`/`activeScreen`; simplify key logic |
 
 No new files required. All synth panel and tracker component code remains unchanged.
