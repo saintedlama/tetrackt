@@ -169,6 +169,7 @@ func (s *SynthScreen) ApplyTrackChange(msg ui.TrackChanged) {
 	s.GetMixer().SetMixer(synth.Mixer)
 	s.GetMixer().SetPortamento(synth.Portamento)
 	s.GetFilter().Filter = synth.Filter
+	s.GetFilter().FilterEnvelope = synth.FilterEnvelope
 	s.GetFilter().SyncBars()
 	s.LFO1().LFO = synth.LFO1
 	s.LFO2().LFO = synth.LFO2
@@ -238,5 +239,6 @@ func (s *SynthScreen) GetSynth() *audio.Synth {
 	synth.Oscillator3 = s.Osc3().Oscillator
 	synth.Envelope3 = s.Env3().Envelope
 	synth.LFO3 = s.LFO3Screen().LFO
+	synth.FilterEnvelope = s.GetFilter().FilterEnvelope
 	return synth
 }

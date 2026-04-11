@@ -2,6 +2,7 @@ package audio
 
 import (
 	"math"
+	"time"
 
 	"github.com/gopxl/beep/v2"
 )
@@ -24,6 +25,16 @@ type Filter struct {
 	Type      FilterType
 	Cutoff    float64 // 0.0–1.0
 	Resonance float64 // 0.0–1.0
+}
+
+// FilterEnvelope defines an ADSR envelope applied as an additive offset to
+// Filter.Cutoff, scaled by Depth. Depth 0 disables the feature entirely.
+type FilterEnvelope struct {
+	Attack  time.Duration
+	Decay   time.Duration
+	Sustain float64 // [0, 1]
+	Release time.Duration
+	Depth   float64 // [0, 1]; maximum additive offset on Filter.Cutoff
 }
 
 // NewFilter creates a filter with default (bypassed) settings.
@@ -144,3 +155,87 @@ func (b *biquadFilter) Stream(samples [][2]float64) (int, bool) {
 }
 
 func (b *biquadFilter) Err() error { return b.src.Err() }
+
+// filterEnvelopeGenerator applies an ADSR envelope to the filter cutoff.
+// The level drives an additive offset on Filter.Cutoff scaled by Depth.
+// Coefficient updates happen once per Stream call (block granularity).
+type filterEnvelopeGenerator struct {
+	filter     *biquadFilter
+	lfo        *lfoGenerator
+	baseFilter Filter
+	sampleRate beep.SampleRate
+	depth      float64
+
+	idx            int
+	sustain        float64
+	attackSamples  int
+	decaySamples   int
+	sustainSamples int
+	releaseSamples int
+}
+
+// newFilterEnvelopeGenerator creates a filter pipeline driven by an ADSR
+// envelope. Only call when fe.Depth > 0 and f.Type != FilterOff.
+func newFilterEnvelopeGenerator(src beep.Streamer, sampleRate beep.SampleRate, noteSamples int, f Filter, fe FilterEnvelope, lfo *lfoGenerator) *filterEnvelopeGenerator {
+	sr := float64(sampleRate)
+	attackSamples := int(fe.Attack.Seconds() * sr)
+	decaySamples := int(fe.Decay.Seconds() * sr)
+	releaseSamples := int(fe.Release.Seconds() * sr)
+	sustainSamples := max(0, noteSamples-(attackSamples+decaySamples+releaseSamples))
+	return &filterEnvelopeGenerator{
+		filter:         &biquadFilter{src: src, coeffs: calcCoeffs(f, float64(sampleRate))},
+		lfo:            lfo,
+		baseFilter:     f,
+		sampleRate:     sampleRate,
+		depth:          fe.Depth,
+		sustain:        math.Max(minEnvelopeLevel, fe.Sustain),
+		attackSamples:  attackSamples,
+		decaySamples:   decaySamples,
+		sustainSamples: sustainSamples,
+		releaseSamples: releaseSamples,
+	}
+}
+
+// level computes the ADSR envelope level at sample index idx analytically,
+// using exact exponential curves rather than per-sample multiplication.
+func (g *filterEnvelopeGenerator) level() float64 {
+	idx := g.idx
+	switch {
+	case g.attackSamples > 0 && idx < g.attackSamples:
+		return minEnvelopeLevel * math.Pow(1.0/minEnvelopeLevel, float64(idx)/float64(g.attackSamples))
+	case g.decaySamples > 0 && idx < g.attackSamples+g.decaySamples:
+		t := float64(idx-g.attackSamples) / float64(g.decaySamples)
+		return math.Pow(g.sustain, t)
+	case idx < g.attackSamples+g.decaySamples+g.sustainSamples:
+		return g.sustain
+	case g.releaseSamples > 0 && idx < g.attackSamples+g.decaySamples+g.sustainSamples+g.releaseSamples:
+		t := float64(idx-g.attackSamples-g.decaySamples-g.sustainSamples) / float64(g.releaseSamples)
+		return g.sustain * math.Pow(minEnvelopeLevel/g.sustain, t)
+	default:
+		return 0.0
+	}
+}
+
+func (g *filterEnvelopeGenerator) Stream(samples [][2]float64) (int, bool) {
+	effectiveCutoff := g.baseFilter.Cutoff + g.level()*g.depth
+	if g.lfo != nil {
+		effectiveCutoff += g.lfo.nextBlock(len(samples)) * 0.5
+	}
+	if effectiveCutoff < 0 {
+		effectiveCutoff = 0
+	} else if effectiveCutoff > 1 {
+		effectiveCutoff = 1
+	}
+	modFilter := g.baseFilter
+	modFilter.Cutoff = effectiveCutoff
+	g.filter.coeffs = calcCoeffs(modFilter, float64(g.sampleRate))
+	n, ok := g.filter.Stream(samples)
+	g.idx += n
+	return n, ok
+}
+
+func (g *filterEnvelopeGenerator) Err() error { return g.filter.Err() }
+
+func (g *filterEnvelopeGenerator) reset() {
+	g.idx = 0
+}

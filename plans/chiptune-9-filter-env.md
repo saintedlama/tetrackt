@@ -21,14 +21,16 @@ Filter envelope sweeps (e.g. opening an LP filter on a bass hit, closing it on r
 
 ### Synth & Patch Pipeline
 
-- **`Synth`** struct holds parameter definitions (two oscillators with envelopes, mixer, filter, two LFOs, portamento). **No `FilterEnvelope` field yet.**
-- **`Patch`** is the live instance created via `Synth.NewPatch(sampleRate, frequency, noteSamples) *Patch`.
-- The pipeline in `NewPatch()` ends with:
+- **`Synth`** struct holds three oscillators with envelopes (`Oscillator1`/`Envelope1`–`3`), mixer, filter, three LFOs, and portamento. **No `FilterEnvelope` field yet.**
+- **`Patch`** is the live instance. Two factory methods exist:
+  - `Synth.NewPatch(sampleRate, frequency, noteSamples) *Patch` — fixed-duration ADSR
+  - `Synth.NewGatedPatch(sampleRate, frequency) *Patch` — sustains until `NoteOff`; uses `gatedEnvelopeGenerator` per voice
+- Both pipelines end with:
   ```go
   pipeline := NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
   ```
 
-### Filter Implementation (`audio/filter.go`)
+### Filter Implementation (`audio/filter.go` + `audio/lfo.go`)
 
 - **`Filter`** struct:
   ```go
@@ -38,8 +40,9 @@ Filter envelope sweeps (e.g. opening an LP filter on a bass hit, closing it on r
       Resonance float64     // normalised [0, 1]; maps to Q ≈ 0.5–20
   }
   ```
-- **`biquadFilter`** — the core IIR biquad; `calcCoeffs()` recomputes coefficients from a `Filter` value.
-- **`NewModulatedFilterStreamer(src, sampleRate, f Filter, lfo *lfoGenerator)`** — when an LFO is present, cutoff is modulated per block: `newCutoff = f.Cutoff + lfo.mod * 0.5`, clamped to `[0, 1]`, then `calcCoeffs` is rerun.
+- **`biquadFilter`** (in `filter.go`) — the core IIR biquad; `calcCoeffs()` recomputes coefficients from a `Filter` value.
+- **`modulatedFilterStreamer`** (in `lfo.go`) — wraps `biquadFilter`; when an LFO is present, modulates cutoff per block: `newCutoff = f.Cutoff + lfo.mod * 0.5`, clamped to `[0, 1]`, then reruns `calcCoeffs`.
+- **`NewModulatedFilterStreamer(src, sampleRate, f Filter, lfo *lfoGenerator)`** — constructs a `biquadFilter` with optional `modulatedFilterStreamer` wrapper; lives in `lfo.go`.
 
 ### Envelope Implementation (`audio/effects.go`)
 
@@ -52,9 +55,10 @@ Filter envelope sweeps (e.g. opening an LP filter on a bass hit, closing it on r
       Release time.Duration
   }
   ```
-- **`envelopeGenerator`** applies ADSR gain with exponential ramps via `calculateMultiplier(startLevel, endLevel, lengthInSamples) float64`.
+- **`envelopeGenerator`** applies ADSR gain with exponential ramps via `calculateMultiplier(startLevel, endLevel, lengthInSamples) float64` (unexported, but in the same `audio` package — no export needed).
+- **`minEnvelopeLevel = 0.0001`** package constant guards against `math.Log(0)` in `calculateMultiplier`; reuse it in the filter envelope.
 - Stages: `StageOff`, `StageAttack`, `StageDecay`, `StageSustain`, `StageRelease`.
-- `Patch.Reset()` calls `env1.reset()` and `env2.reset()` to restart envelopes.
+- `Patch.Reset()` calls `env1.reset()`, `env2.reset()`, `env3.reset()`, and resets all LFOs.
 
 ## Implementation Plan
 
@@ -80,18 +84,21 @@ type Synth struct {
     Envelope1      Envelope
     Oscillator2    Oscillator
     Envelope2      Envelope
+    Oscillator3    Oscillator
+    Envelope3      Envelope
     Mixer          Mixer
     Filter         Filter
     FilterEnvelope FilterEnvelope  // NEW
     LFO1           LFO
     LFO2           LFO
+    LFO3           LFO
     Portamento     float64
 }
 ```
 
 ### 3. Create `filterEnvelopeGenerator` streamer (`audio/filter.go`)
 
-A new unexported type wrapping the filter with ADSR-driven cutoff modulation. Mirrors the `envelopeGenerator` pattern:
+A new unexported type wrapping the filter with ADSR-driven cutoff modulation. Mirrors the `envelopeGenerator` pattern. Lives in `audio/filter.go`; `calculateMultiplier` and `minEnvelopeLevel` are in the same `audio` package so no export is needed.
 
 ```go
 type filterEnvelopeGenerator struct {
@@ -115,11 +122,11 @@ type filterEnvelopeGenerator struct {
 }
 ```
 
-`newFilterEnvelopeGenerator(src, sampleRate, noteSamples, f Filter, fe FilterEnvelope, lfo) *filterEnvelopeGenerator` converts durations to sample counts and uses `calculateMultiplier` for exponential ramps. (Export `calculateMultiplier` from `effects.go` if needed, or duplicate it.)
+`newFilterEnvelopeGenerator(src, sampleRate, noteSamples, f Filter, fe FilterEnvelope, lfo) *filterEnvelopeGenerator` converts durations to sample counts and uses `calculateMultiplier` and `minEnvelopeLevel` (both already in `audio`).
 
-### 4. Integrate into `NewPatch` pipeline
+### 4. Integrate into `NewPatch` and `NewGatedPatch` pipelines
 
-In `audio/synth.go`, replace the final filter line:
+In `audio/synth.go`, replace the final filter line in **both** factory functions:
 
 ```go
 var pipeline beep.Streamer
@@ -129,6 +136,8 @@ if s.FilterEnvelope.Depth > 0 {
     pipeline = NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
 }
 ```
+
+For `NewGatedPatch`, pass `math.MaxInt` as `noteSamples` (same as `p.noteSamples` for gated patches), making the sustain phase hold indefinitely — correct behaviour for a held note.
 
 Store a reference in `Patch` so `Reset()` can restart it:
 
@@ -142,20 +151,23 @@ type Patch struct {
 ### 5. `filterEnvelopeGenerator.Stream()` logic
 
 For each sample:
-1. Advance ADSR stage and level (same index-based transitions as `envelopeGenerator.nextSample()`).
+1. Advance ADSR stage and level (same index-based transitions as `envelopeGenerator.nextSample()`). Use `minEnvelopeLevel` as the floor for `calculateMultiplier` arguments.
 2. Compute effective cutoff:
    ```go
    effectiveCutoff := m.baseFilter.Cutoff + m.currentLevel*m.depth
    ```
-3. Apply any LFO modulation from `lfo.nextBlock(n)` as an additive offset.
+3. Apply any LFO modulation from `lfo.nextBlock(n)` as an additive offset (identical to `modulatedFilterStreamer`).
 4. Clamp to `[0, 1]`, recompute biquad coefficients, stream through filter.
 
 ### 6. Hook into `Patch.Reset()`
+
+`Reset()` already resets `env1`–`env3` and all LFOs. Add the filter envelope:
 
 ```go
 func (p *Patch) Reset() {
     p.env1.reset()
     p.env2.reset()
+    p.env3.reset()
     if p.filterEnvGen != nil {
         p.filterEnvGen.reset()
     }
@@ -167,8 +179,103 @@ func (p *Patch) Reset() {
 }
 ```
 
+### 7. Persistence (`persistence/song.go`)
+
+The existing pattern: one `Saved*` struct per audio type, with `to*` / `from*` converters. `FilterEnvelope` follows the same convention as `SavedEnvelope` (durations as float64 seconds, depth as float64).
+
+Add `SavedFilterEnvelope`:
+
+```go
+type SavedFilterEnvelope struct {
+    Attack  float64 `json:"attack,omitempty"`
+    Decay   float64 `json:"decay,omitempty"`
+    Sustain float64 `json:"sustain,omitempty"`
+    Release float64 `json:"release,omitempty"`
+    Depth   float64 `json:"depth,omitempty"`
+}
+
+func toSavedFilterEnvelope(fe audio.FilterEnvelope) SavedFilterEnvelope {
+    return SavedFilterEnvelope{
+        Attack:  fe.Attack.Seconds(),
+        Decay:   fe.Decay.Seconds(),
+        Sustain: fe.Sustain,
+        Release: fe.Release.Seconds(),
+        Depth:   fe.Depth,
+    }
+}
+
+func fromSavedFilterEnvelope(s SavedFilterEnvelope) audio.FilterEnvelope {
+    return audio.FilterEnvelope{
+        Attack:  time.Duration(s.Attack * float64(time.Second)),
+        Decay:   time.Duration(s.Decay * float64(time.Second)),
+        Sustain: s.Sustain,
+        Release: time.Duration(s.Release * float64(time.Second)),
+        Depth:   s.Depth,
+    }
+}
+```
+
+Add `FilterEnvelope SavedFilterEnvelope \`json:"filter_envelope,omitempty"\`` to `SavedSynth`, and wire it through `toSavedSynth` / `fromSavedSynth`. All fields use `omitempty` so existing songs without the field deserialise to a zero-depth `FilterEnvelope` (disabled).
+
+### 8. UI (`ui/synth/filter.go`)
+
+The `FilterModel` currently edits three fields (Type, Cutoff, Resonance). Extend it to also edit the four `FilterEnvelope` ADSR fields plus Depth — but only when the filter type is not `FilterOff`.
+
+**Add fields to `FilterModel`:**
+
+```go
+type FilterModel struct {
+    Filter          audio.Filter
+    FilterEnvelope  audio.FilterEnvelope  // NEW
+    // ... existing unexported fields ...
+    envAttackBar  common.Bar  // NEW
+    envDecayBar   common.Bar  // NEW
+    envSustainBar common.Bar  // NEW
+    envReleaseBar common.Bar  // NEW
+    envDepthBar   common.Bar  // NEW
+}
+```
+
+Extend `filterField` constants:
+
+```go
+const (
+    filterFieldType filterField = iota
+    filterFieldCutoff
+    filterFieldResonance
+    filterFieldEnvDepth    // NEW
+    filterFieldEnvAttack   // NEW
+    filterFieldEnvDecay    // NEW
+    filterFieldEnvSustain  // NEW
+    filterFieldEnvRelease  // NEW
+)
+```
+
+Total fields: 8. Up/down navigation wraps with `% 8`.
+
+**`View()` additions** (only rendered when `Filter.Type != FilterOff`):
+
+```
+Env Depth   ██████░░░░  60%
+Env Attack  ██░░░░░░░░  20%
+Env Decay   ███░░░░░░░  30%
+Env Sustain ████░░░░░░  40%
+Env Release ██░░░░░░░░  20%
+```
+
+**`FilterUpdated` message** already carries `audio.Filter`; extend it:
+
+```go
+type FilterUpdated struct {
+    Filter         audio.Filter
+    FilterEnvelope audio.FilterEnvelope  // NEW
+}
+```
+
+**`screen.go` / `ApplyTrackChange`** — the handler for `FilterUpdated` in `ui/synth/screen.go` passes the filter to `GetSynth()`; extend it to also copy `FilterEnvelope`.
+
 ## Impact
 
-- **Files touched:** `audio/filter.go` (new `filterEnvelopeGenerator` type), `audio/synth.go` (`FilterEnvelope` field on `Synth`, `filterEnvGen` field on `Patch`, integration in `NewPatch` and `Reset`).
-- **Invasiveness:** Moderate. Adds a new streamer type and ADSR state machine; the biquad itself is unchanged.
-- **Compatibility:** Fully additive. `FilterEnvelope` defaults to zero `Depth`, which disables the feature — `NewPatch` falls through to the existing `NewModulatedFilterStreamer` path. All existing songs, presets, and synth configurations are unaffected.
+- **Files touched:** `audio/filter.go` (new `filterEnvelopeGenerator` type and `FilterEnvelope` struct), `audio/synth.go` (`FilterEnvelope` field on `Synth`, `filterEnvGen` field on `Patch`, integration in both `NewPatch` and `NewGatedPatch`, and `Reset`), `ui/synth/filter.go` (5 new ADSR/depth fields, extended navigation and view), `persistence/song.go` (`SavedFilterEnvelope` struct and wiring).
+- **Invasiveness:** Moderate. Adds a new streamer type and ADSR state machine; the biquad itself is unchanged. UI and persistence additions are purely additive.
+- **Compatibility:** Fully additive. `FilterEnvelope` defaults to zero `Depth`, which disables the feature — both `NewPatch` and `NewGatedPatch` fall through to the existing `NewModulatedFilterStreamer` path. All existing songs, presets, and synth configurations are unaffected.

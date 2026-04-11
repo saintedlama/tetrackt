@@ -18,18 +18,19 @@ type Streamer = beep.Streamer
 
 // Synth represents the audio synthesis engine (instrument patch definition).
 type Synth struct {
-	Oscillator1 Oscillator
-	Envelope1   Envelope
-	Oscillator2 Oscillator
-	Envelope2   Envelope
-	Oscillator3 Oscillator
-	Envelope3   Envelope
-	Mixer       Mixer
-	Filter      Filter
-	LFO1        LFO
-	LFO2        LFO
-	LFO3        LFO
-	Portamento  float64 // glide duration in seconds; 0 = snap
+	Oscillator1    Oscillator
+	Envelope1      Envelope
+	Oscillator2    Oscillator
+	Envelope2      Envelope
+	Oscillator3    Oscillator
+	Envelope3      Envelope
+	Mixer          Mixer
+	Filter         Filter
+	FilterEnvelope FilterEnvelope // ADSR-driven additive cutoff offset; Depth 0 = disabled
+	LFO1           LFO
+	LFO2           LFO
+	LFO3           LFO
+	Portamento     float64 // glide duration in seconds; 0 = snap
 }
 
 // NewSynth creates a new synthesis engine
@@ -60,24 +61,25 @@ func NewSynth(oscillator1 Oscillator, envelope1 Envelope, oscillator2 Oscillator
 // Patch implements beep.Streamer. It automatically stops after noteSamples
 // samples, so no external beep.Take wrapping is needed.
 type Patch struct {
-	osc1        *oscillatorGenerator
-	osc2        *oscillatorGenerator
-	osc3        *oscillatorGenerator
-	modOsc1     *modulatedOscillatorStreamer // nil when no oscillator LFOs are active
-	modOsc2     *modulatedOscillatorStreamer
-	modOsc3     *modulatedOscillatorStreamer
-	env1        *envelopeGenerator
-	env2        *envelopeGenerator
-	env3        *envelopeGenerator
-	gatedEnv1   *gatedEnvelopeGenerator // nil for fixed-duration patches
-	gatedEnv2   *gatedEnvelopeGenerator
-	gatedEnv3   *gatedEnvelopeGenerator
-	lfos        []*lfoGenerator
-	pipeline    beep.Streamer
-	noteSamples int
-	remaining   int
-	volume      float64 // output scalar; 1.0 = unity, 0 = silent
-	portamento  portamento
+	osc1         *oscillatorGenerator
+	osc2         *oscillatorGenerator
+	osc3         *oscillatorGenerator
+	modOsc1      *modulatedOscillatorStreamer // nil when no oscillator LFOs are active
+	modOsc2      *modulatedOscillatorStreamer
+	modOsc3      *modulatedOscillatorStreamer
+	env1         *envelopeGenerator
+	env2         *envelopeGenerator
+	env3         *envelopeGenerator
+	gatedEnv1    *gatedEnvelopeGenerator // nil for fixed-duration patches
+	gatedEnv2    *gatedEnvelopeGenerator
+	gatedEnv3    *gatedEnvelopeGenerator
+	filterEnvGen *filterEnvelopeGenerator // nil when FilterEnvelope.Depth == 0 or filter off
+	lfos         []*lfoGenerator
+	pipeline     beep.Streamer
+	noteSamples  int
+	remaining    int
+	volume       float64 // output scalar; 1.0 = unity, 0 = silent
+	portamento   portamento
 }
 
 type portamento struct {
@@ -130,7 +132,14 @@ func (s *Synth) NewPatch(sampleRate beep.SampleRate, frequency float64, noteSamp
 	mod3 := newModulatedVolumeStreamer(env3, makeLFO(ModVolume))
 
 	mixed := s.Mixer.Mix(mod1, mod2, mod3)
-	pipeline := NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
+	var filterEnvGen *filterEnvelopeGenerator
+	var pipeline beep.Streamer
+	if s.FilterEnvelope.Depth > 0 && s.Filter.Type != FilterOff {
+		filterEnvGen = newFilterEnvelopeGenerator(mixed, sampleRate, noteSamples, s.Filter, s.FilterEnvelope, makeLFO(ModCutoff))
+		pipeline = filterEnvGen
+	} else {
+		pipeline = NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
+	}
 
 	var modOsc1, modOsc2, modOsc3 *modulatedOscillatorStreamer
 	if mos, ok := raw1.(*modulatedOscillatorStreamer); ok {
@@ -144,20 +153,21 @@ func (s *Synth) NewPatch(sampleRate beep.SampleRate, frequency float64, noteSamp
 	}
 
 	return &Patch{
-		osc1:        osc1,
-		osc2:        osc2,
-		osc3:        osc3,
-		modOsc1:     modOsc1,
-		modOsc2:     modOsc2,
-		modOsc3:     modOsc3,
-		env1:        env1,
-		env2:        env2,
-		env3:        env3,
-		lfos:        lfos,
-		pipeline:    pipeline,
-		noteSamples: noteSamples,
-		remaining:   noteSamples,
-		volume:      1.0,
+		osc1:         osc1,
+		osc2:         osc2,
+		osc3:         osc3,
+		modOsc1:      modOsc1,
+		modOsc2:      modOsc2,
+		modOsc3:      modOsc3,
+		env1:         env1,
+		env2:         env2,
+		env3:         env3,
+		filterEnvGen: filterEnvGen,
+		lfos:         lfos,
+		pipeline:     pipeline,
+		noteSamples:  noteSamples,
+		remaining:    noteSamples,
+		volume:       1.0,
 	}
 }
 
@@ -204,7 +214,14 @@ func (s *Synth) NewGatedPatch(sampleRate beep.SampleRate, frequency float64) *Pa
 	mod3 := newModulatedVolumeStreamer(gatedEnv3, makeLFO(ModVolume))
 
 	mixed := s.Mixer.Mix(mod1, mod2, mod3)
-	pipeline := NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
+	var filterEnvGen *filterEnvelopeGenerator
+	var pipeline beep.Streamer
+	if s.FilterEnvelope.Depth > 0 && s.Filter.Type != FilterOff {
+		filterEnvGen = newFilterEnvelopeGenerator(mixed, sampleRate, math.MaxInt, s.Filter, s.FilterEnvelope, makeLFO(ModCutoff))
+		pipeline = filterEnvGen
+	} else {
+		pipeline = NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
+	}
 
 	var modOsc1, modOsc2, modOsc3 *modulatedOscillatorStreamer
 	if mos, ok := raw1.(*modulatedOscillatorStreamer); ok {
@@ -218,20 +235,21 @@ func (s *Synth) NewGatedPatch(sampleRate beep.SampleRate, frequency float64) *Pa
 	}
 
 	return &Patch{
-		osc1:        osc1,
-		osc2:        osc2,
-		osc3:        osc3,
-		modOsc1:     modOsc1,
-		modOsc2:     modOsc2,
-		modOsc3:     modOsc3,
-		gatedEnv1:   gatedEnv1,
-		gatedEnv2:   gatedEnv2,
-		gatedEnv3:   gatedEnv3,
-		lfos:        lfos,
-		pipeline:    pipeline,
-		noteSamples: math.MaxInt,
-		remaining:   math.MaxInt,
-		volume:      1.0,
+		osc1:         osc1,
+		osc2:         osc2,
+		osc3:         osc3,
+		modOsc1:      modOsc1,
+		modOsc2:      modOsc2,
+		modOsc3:      modOsc3,
+		gatedEnv1:    gatedEnv1,
+		gatedEnv2:    gatedEnv2,
+		gatedEnv3:    gatedEnv3,
+		filterEnvGen: filterEnvGen,
+		lfos:         lfos,
+		pipeline:     pipeline,
+		noteSamples:  math.MaxInt,
+		remaining:    math.MaxInt,
+		volume:       1.0,
 	}
 }
 
@@ -319,6 +337,9 @@ func (p *Patch) Reset() {
 	p.env1.reset()
 	p.env2.reset()
 	p.env3.reset()
+	if p.filterEnvGen != nil {
+		p.filterEnvGen.reset()
+	}
 	for _, lfo := range p.lfos {
 		lfo.reset()
 	}

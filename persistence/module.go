@@ -161,36 +161,69 @@ func fromSavedFilter(s SavedFilter) audio.Filter {
 	}
 }
 
+// SavedFilterEnvelope is the JSON-serializable form of audio.FilterEnvelope.
+// Attack, Decay, Release are stored as seconds (float64). All fields use
+// omitempty so existing modules without this field load as zero (disabled).
+type SavedFilterEnvelope struct {
+	Attack  float64 `json:"attack,omitempty"`
+	Decay   float64 `json:"decay,omitempty"`
+	Sustain float64 `json:"sustain,omitempty"`
+	Release float64 `json:"release,omitempty"`
+	Depth   float64 `json:"depth,omitempty"`
+}
+
+func toSavedFilterEnvelope(fe audio.FilterEnvelope) SavedFilterEnvelope {
+	return SavedFilterEnvelope{
+		Attack:  fe.Attack.Seconds(),
+		Decay:   fe.Decay.Seconds(),
+		Sustain: fe.Sustain,
+		Release: fe.Release.Seconds(),
+		Depth:   fe.Depth,
+	}
+}
+
+func fromSavedFilterEnvelope(s SavedFilterEnvelope) audio.FilterEnvelope {
+	return audio.FilterEnvelope{
+		Attack:  time.Duration(s.Attack * float64(time.Second)),
+		Decay:   time.Duration(s.Decay * float64(time.Second)),
+		Sustain: s.Sustain,
+		Release: time.Duration(s.Release * float64(time.Second)),
+		Depth:   s.Depth,
+	}
+}
+
 // SavedSynth is the JSON-serializable form of audio.Synth.
 type SavedSynth struct {
-	Oscillator1 SavedOscillator `json:"oscillator1"`
-	Envelope1   SavedEnvelope   `json:"envelope1"`
-	LFO1        SavedLFO        `json:"lfo1"`
-	Oscillator2 SavedOscillator `json:"oscillator2"`
-	Envelope2   SavedEnvelope   `json:"envelope2"`
-	LFO2        SavedLFO        `json:"lfo2"`
-	Oscillator3 SavedOscillator `json:"oscillator3"`
-	Envelope3   SavedEnvelope   `json:"envelope3"`
-	LFO3        SavedLFO        `json:"lfo3"`
-	Mixer       SavedMixer      `json:"mixer"`
-	Filter      SavedFilter     `json:"filter"`
-	Portamento  float64         `json:"portamento,omitempty"`
+	Oscillator1    SavedOscillator     `json:"oscillator1"`
+	Envelope1      SavedEnvelope       `json:"envelope1"`
+	LFO1           SavedLFO            `json:"lfo1"`
+	Oscillator2    SavedOscillator     `json:"oscillator2"`
+	Envelope2      SavedEnvelope       `json:"envelope2"`
+	LFO2           SavedLFO            `json:"lfo2"`
+	Oscillator3    SavedOscillator     `json:"oscillator3"`
+	Envelope3      SavedEnvelope       `json:"envelope3"`
+	LFO3           SavedLFO            `json:"lfo3"`
+	Mixer          SavedMixer          `json:"mixer"`
+	Filter         SavedFilter         `json:"filter"`
+	FilterEnvelope SavedFilterEnvelope `json:"filter_envelope,omitempty"`
+	Portamento     float64             `json:"portamento,omitempty"`
 }
 
 func toSavedSynth(s *audio.Synth) SavedSynth {
 	return SavedSynth{
-		Oscillator1: toSavedOscillator(s.Oscillator1),
-		Envelope1:   toSavedEnvelope(s.Envelope1),
-		LFO1:        toSavedLFO(s.LFO1),
-		Oscillator2: toSavedOscillator(s.Oscillator2),
-		Envelope2:   toSavedEnvelope(s.Envelope2),
-		LFO2:        toSavedLFO(s.LFO2),
-		Oscillator3: toSavedOscillator(s.Oscillator3),
-		Envelope3:   toSavedEnvelope(s.Envelope3),
-		LFO3:        toSavedLFO(s.LFO3),
-		Mixer:       toSavedMixer(s.Mixer),
-		Filter:      toSavedFilter(s.Filter),
-		Portamento:  s.Portamento,
+		Oscillator1:    toSavedOscillator(s.Oscillator1),
+		Envelope1:      toSavedEnvelope(s.Envelope1),
+		LFO1:           toSavedLFO(s.LFO1),
+		Oscillator2:    toSavedOscillator(s.Oscillator2),
+		Envelope2:      toSavedEnvelope(s.Envelope2),
+		LFO2:           toSavedLFO(s.LFO2),
+		Oscillator3:    toSavedOscillator(s.Oscillator3),
+		Envelope3:      toSavedEnvelope(s.Envelope3),
+		LFO3:           toSavedLFO(s.LFO3),
+		Mixer:          toSavedMixer(s.Mixer),
+		Filter:         toSavedFilter(s.Filter),
+		FilterEnvelope: toSavedFilterEnvelope(s.FilterEnvelope),
+		Portamento:     s.Portamento,
 	}
 }
 
@@ -209,6 +242,7 @@ func fromSavedSynth(s SavedSynth) *audio.Synth {
 	synth.Oscillator3 = fromSavedOscillator(s.Oscillator3)
 	synth.Envelope3 = fromSavedEnvelope(s.Envelope3)
 	synth.LFO3 = fromSavedLFO(s.LFO3)
+	synth.FilterEnvelope = fromSavedFilterEnvelope(s.FilterEnvelope)
 	return synth
 }
 

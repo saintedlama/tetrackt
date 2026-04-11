@@ -49,7 +49,12 @@ plans/          design docs (not code)
 - `audio.Synth` fields are exported — set them directly, no setters needed.
 - LFO depth 0 means disabled; `GetSynth()` in `SynthScreen` passes `nil` for zero-depth LFOs to `NewSynth`.
 - Tests live alongside source (`*_test.go`). No external test framework.
+- We display time in the UI as milliseconds.
 
 ## Code Style
 
 - Never use `// ── Block` comment. In case a block comment would be needed, extract a function or file instead.
+
+## Workflows
+
+- After an audio feature was implemented, revise the synth patch bank instruments and use the feature for presets that benefit from the feature.
