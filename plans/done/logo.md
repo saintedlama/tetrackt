@@ -1,5 +1,7 @@
 # Logo
 
+> Status Done
+
 Due to space restrictions of the current single screen approach, we did not find space for a logo for a visual synthesizer feel.
 
 Logo Variants
