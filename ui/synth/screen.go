@@ -26,7 +26,7 @@ func NewSynthScreen(synth *audio.Synth) *SynthScreen {
 		ui.NewPanel("Oscillator 2", common.ColorAccentEnvelope, NewOscillatorModel(synth.Oscillator2)),
 		ui.NewPanel("Envelope 2", common.ColorAccentEnvelope, NewEnvelopeModel(synth.Envelope2)),
 		ui.NewPanel("LFO 2", common.ColorAccentEnvelope, NewLFOModel(synth.LFO2)),
-		ui.NewPanel("Mixer", common.ColorAccentModulation, NewMixer(synth.Mixer.Volume1, synth.Mixer.Volume2)),
+		ui.NewPanel("Mixer", common.ColorAccentModulation, NewMixer(synth.Mixer.Volume1, synth.Mixer.Volume2, synth.Portamento)),
 		ui.NewPanel("Filter", common.ColorAccentModulation, NewFilterModel(synth.Filter)),
 	}
 	return &SynthScreen{
@@ -100,6 +100,7 @@ func (s *SynthScreen) ApplyTrackChange(msg ui.TrackChanged) {
 	s.Osc2().Oscillator = synth.Oscillator2
 	s.Env2().Envelope = synth.Envelope2
 	s.GetMixer().SetMixer(synth.Mixer)
+	s.GetMixer().SetPortamento(synth.Portamento)
 	s.GetFilter().Filter = synth.Filter
 	s.GetFilter().SyncBars()
 	s.LFO1().LFO = synth.LFO1
@@ -135,5 +136,7 @@ func (s *SynthScreen) Footer() string {
 
 // GetSynth builds and returns an audio.Synth from the current panel state.
 func (s *SynthScreen) GetSynth() *audio.Synth {
-	return audio.NewSynth(s.Osc1().Oscillator, s.Env1().Envelope, s.Osc2().Oscillator, s.Env2().Envelope, s.GetMixer().Mixer, s.GetFilter().Filter, s.LFO1().LFO, s.LFO2().LFO)
+	synth := audio.NewSynth(s.Osc1().Oscillator, s.Env1().Envelope, s.Osc2().Oscillator, s.Env2().Envelope, s.GetMixer().Mixer, s.GetFilter().Filter, s.LFO1().LFO, s.LFO2().LFO)
+	synth.Portamento = s.GetMixer().Portamento
+	return synth
 }
