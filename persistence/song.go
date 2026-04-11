@@ -62,6 +62,12 @@ type SavedTrack struct {
 	Envelope2             SavedEnvelope   `json:"envelope2"`
 	MixerVolume1          float64         `json:"mixer_volume1"`
 	MixerVolume2          float64         `json:"mixer_volume2"`
+	MixerPan1             float64         `json:"mixer_pan1,omitempty"`
+	MixerPan2             float64         `json:"mixer_pan2,omitempty"`
+	MixerMasterVolume     float64         `json:"mixer_master_volume,omitempty"`
+	MixerMute1            bool            `json:"mixer_mute1,omitempty"`
+	MixerMute2            bool            `json:"mixer_mute2,omitempty"`
+	MixerMode             int             `json:"mixer_mode,omitempty"`
 	FilterType            string          `json:"filter_type"`
 	FilterCutoff          float64         `json:"filter_cutoff"`
 	FilterResonance       float64         `json:"filter_resonance"`
@@ -126,6 +132,12 @@ func TracksToSong(tracker *utracker.TrackerModel) *SavedSong {
 			Envelope2:             toSavedEnvelope(s.Envelope2),
 			MixerVolume1:          s.Mixer.Volume1,
 			MixerVolume2:          s.Mixer.Volume2,
+			MixerPan1:             s.Mixer.Pan1,
+			MixerPan2:             s.Mixer.Pan2,
+			MixerMasterVolume:     s.Mixer.MasterVolume,
+			MixerMute1:            s.Mixer.Mute1,
+			MixerMute2:            s.Mixer.Mute2,
+			MixerMode:             int(s.Mixer.Mode),
 			FilterType:            string(s.Filter.Type),
 			FilterCutoff:          s.Filter.Cutoff,
 			FilterResonance:       s.Filter.Resonance,
@@ -190,7 +202,16 @@ func SongToTracks(saved *SavedSong, tracker *utracker.TrackerModel) {
 				Detune:     savedTrack.Oscillator2Detune,
 			},
 			fromSavedEnvelope(savedTrack.Envelope2),
-			audio.Mixer{Volume1: savedTrack.MixerVolume1, Volume2: savedTrack.MixerVolume2},
+			audio.Mixer{
+				Volume1:      savedTrack.MixerVolume1,
+				Volume2:      savedTrack.MixerVolume2,
+				Pan1:         savedTrack.MixerPan1,
+				Pan2:         savedTrack.MixerPan2,
+				MasterVolume: savedTrack.MixerMasterVolume,
+				Mute1:        savedTrack.MixerMute1,
+				Mute2:        savedTrack.MixerMute2,
+				Mode:         audio.MixMode(savedTrack.MixerMode),
+			},
 			audio.Filter{
 				Type:      audio.FilterType(savedTrack.FilterType),
 				Cutoff:    savedTrack.FilterCutoff,

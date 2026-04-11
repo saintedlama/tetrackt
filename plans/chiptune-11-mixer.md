@@ -1,6 +1,6 @@
 # Chiptune Mixer Enhancements
 
-**Status:** Planned
+**Status:** Done
 
 ## Current state
 
@@ -52,4 +52,4 @@ The NES APU sums pulse channels through a lookup table rather than linear additi
 
 - Steps 1–4 are additive and can be done incrementally without breaking `Synth`.
 - The `ui/synth/mixer.go` panel will need updating for each new field (pan bars, mute toggles, master volume knob).
-- Persistence (`SavedSong` / YAML) will need new fields; add with zero-value defaults to keep existing song files loading correctly.
+- Persistence (`SavedSong` / JSON) will need new fields; add with zero-value defaults to keep existing song files loading correctly.

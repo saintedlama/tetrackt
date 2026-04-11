@@ -13,33 +13,53 @@ import (
 )
 
 type Mixer struct {
-	Bar1          common.Bar
-	Bar2          common.Bar
 	Mixer         audio.Mixer
 	Portamento    float64
+	volBar1       common.Bar
+	panBar1       common.Bar
+	volBar2       common.Bar
+	panBar2       common.Bar
+	masterBar     common.Bar
 	portamentoBar common.Bar
-	selected      int // 0=osc1, 1=osc2, 2=portamento
+	selected      int // 0=vol1, 1=pan1, 2=vol2, 3=pan2, 4=master, 5=portamento
 }
+
+const mixerNumRows = 7
 
 type MixerUpdated struct {
 	Mixer audio.Mixer
 }
 
-func NewMixer(vol1, vol2, portamento float64) *Mixer {
+func NewMixer(mixer audio.Mixer, portamento float64) *Mixer {
+	mv := mixer.MasterVolume
+	if mv == 0 {
+		mv = 1.0
+	}
 	return &Mixer{
-		Mixer:         audio.Mixer{Volume1: vol1, Volume2: vol2},
-		Bar1:          common.NewBar(0, 1, vol1, 10),
-		Bar2:          common.NewBar(0, 1, vol2, 10),
+		Mixer:         mixer,
 		Portamento:    portamento,
+		volBar1:       common.NewBar(0, 1, mixer.Volume1, 10),
+		panBar1:       common.NewBar(-1, 1, mixer.Pan1, 10),
+		volBar2:       common.NewBar(0, 1, mixer.Volume2, 10),
+		panBar2:       common.NewBar(-1, 1, mixer.Pan2, 10),
+		masterBar:     common.NewBar(0, 1, mv, 10),
 		portamentoBar: common.NewBar(0, 2, portamento, 10),
 	}
 }
 
-// SetMixer updates the audio.Mixer value and syncs the bars.
+// SetMixer updates the audio.Mixer value and syncs all bars.
 func (m *Mixer) SetMixer(mixer audio.Mixer) {
 	m.Mixer = mixer
-	m.Bar1.Value = mixer.Volume1
-	m.Bar2.Value = mixer.Volume2
+	m.volBar1.Value = mixer.Volume1
+	m.panBar1.Value = mixer.Pan1
+	m.volBar2.Value = mixer.Volume2
+	m.panBar2.Value = mixer.Pan2
+	mv := mixer.MasterVolume
+	if mv == 0 {
+		mv = 1.0
+	}
+	m.masterBar.Value = mv
+	m.Mixer.MasterVolume = mv
 }
 
 // SetPortamento updates the portamento value and syncs the bar.
@@ -56,25 +76,73 @@ var mixerSelectedStyle = lipgloss.NewStyle().
 	Background(common.ColorGrayDark).
 	Foreground(common.ColorAccentPrimary)
 
+var mixerMutedStyle = lipgloss.NewStyle().Foreground(common.ColorAccentWarning)
+var mixerActiveStyle = lipgloss.NewStyle().Foreground(common.ColorAccentPlay)
+
+func muteIndicator(muted bool) string {
+	if muted {
+		return mixerMutedStyle.Render("[M]")
+	}
+	return mixerActiveStyle.Render("[ ]")
+}
+
 func (m *Mixer) View() string {
 	var sb strings.Builder
-	renderRow := func(label string, bar common.Bar, vol float64, selected bool) string {
-		labelPart := label + ":"
-		if selected {
-			labelPart = mixerSelectedStyle.Render(labelPart)
+	lbl := func(label string, sel bool) string {
+		if sel {
+			return mixerSelectedStyle.Render(label + ":")
 		}
-		return fmt.Sprintf("%s %s %3d%%", labelPart, bar.View(), int(math.Round(vol*100)))
+		return label + ":"
 	}
-	sb.WriteString(renderRow("Osc1", m.Bar1, m.Mixer.Volume1, m.selected == 0))
-	sb.WriteString("\n")
-	sb.WriteString(renderRow("Osc2", m.Bar2, m.Mixer.Volume2, m.selected == 1))
-	sb.WriteString("\n")
-	sb.WriteString("\n")
-	glideLabel := "Glide:"
-	if m.selected == 2 {
-		glideLabel = mixerSelectedStyle.Render(glideLabel)
+
+	mv := m.Mixer.MasterVolume
+	if mv == 0 {
+		mv = 1.0
 	}
-	sb.WriteString(fmt.Sprintf("%s %s %4.2fs", glideLabel, m.portamentoBar.View(), m.Portamento))
+
+	// Channel 1
+	sb.WriteString(fmt.Sprintf("%s %s %3d%%  %s\n",
+		lbl("Osc1", m.selected == 0),
+		m.volBar1.View(),
+		int(math.Round(m.Mixer.Volume1*100)),
+		muteIndicator(m.Mixer.Mute1),
+	))
+	sb.WriteString(fmt.Sprintf("%s %s %+.2f\n",
+		lbl("Pan1", m.selected == 1),
+		m.panBar1.View(),
+		m.Mixer.Pan1,
+	))
+	sb.WriteString("\n")
+	// Channel 2
+	sb.WriteString(fmt.Sprintf("%s %s %3d%%  %s\n",
+		lbl("Osc2", m.selected == 2),
+		m.volBar2.View(),
+		int(math.Round(m.Mixer.Volume2*100)),
+		muteIndicator(m.Mixer.Mute2),
+	))
+	sb.WriteString(fmt.Sprintf("%s %s %+.2f\n",
+		lbl("Pan2", m.selected == 3),
+		m.panBar2.View(),
+		m.Mixer.Pan2,
+	))
+	sb.WriteString("\n")
+	// Output
+	sb.WriteString(fmt.Sprintf("%s %s %3d%%\n",
+		lbl("Master", m.selected == 4),
+		m.masterBar.View(),
+		int(math.Round(mv*100)),
+	))
+	sb.WriteString(fmt.Sprintf("%s %s\n",
+		lbl("Mode", m.selected == 5),
+		m.Mixer.Mode.String(),
+	))
+	sb.WriteString("\n")
+	// Glide / portamento (no trailing newline)
+	sb.WriteString(fmt.Sprintf("%s %s %4.2fs",
+		lbl("Glide", m.selected == 6),
+		m.portamentoBar.View(),
+		m.Portamento,
+	))
 	return sb.String()
 }
 
@@ -87,22 +155,49 @@ func (m *Mixer) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 				m.selected--
 			}
 		case "down":
-			if m.selected < 2 {
+			if m.selected < mixerNumRows-1 {
 				m.selected++
 			}
-		case "left":
-			m.adjustSelected(-0.01)
-		case "shift+left":
-			m.adjustSelected(-0.1)
-		case "right":
-			m.adjustSelected(0.01)
-		case "shift+right":
-			m.adjustSelected(0.1)
+		case "m":
+			switch m.selected {
+			case 0:
+				m.Mixer.Mute1 = !m.Mixer.Mute1
+			case 2:
+				m.Mixer.Mute2 = !m.Mixer.Mute2
+			}
+		case "left", "shift+left":
+			if m.selected == 5 {
+				m.Mixer.Mode = (m.Mixer.Mode - 1 + audio.MixMode(audio.MixModeCount())) % audio.MixMode(audio.MixModeCount())
+				break
+			}
+			delta := -0.01
+			if msg.String() == "shift+left" {
+				delta = -0.1
+			}
+			m.adjustSelected(delta)
+		case "right", "shift+right":
+			if m.selected == 5 {
+				m.Mixer.Mode = (m.Mixer.Mode + 1) % audio.MixMode(audio.MixModeCount())
+				break
+			}
+			delta := 0.01
+			if msg.String() == "shift+right" {
+				delta = 0.1
+			}
+			m.adjustSelected(delta)
 		}
 	}
 
-	m.Bar1.Value = m.Mixer.Volume1
-	m.Bar2.Value = m.Mixer.Volume2
+	m.volBar1.Value = m.Mixer.Volume1
+	m.panBar1.Value = m.Mixer.Pan1
+	m.volBar2.Value = m.Mixer.Volume2
+	m.panBar2.Value = m.Mixer.Pan2
+	mv := m.Mixer.MasterVolume
+	if mv == 0 {
+		mv = 1.0
+		m.Mixer.MasterVolume = mv
+	}
+	m.masterBar.Value = mv
 	m.portamentoBar.Value = m.Portamento
 
 	return m, func() tea.Msg {
@@ -115,10 +210,28 @@ func (m *Mixer) adjustSelected(delta float64) {
 	case 0:
 		m.Mixer.Volume1 = clampVolume(math.Round((m.Mixer.Volume1+delta)*100) / 100)
 	case 1:
-		m.Mixer.Volume2 = clampVolume(math.Round((m.Mixer.Volume2+delta)*100) / 100)
+		m.Mixer.Pan1 = clampPan(math.Round((m.Mixer.Pan1+delta)*100) / 100)
 	case 2:
+		m.Mixer.Volume2 = clampVolume(math.Round((m.Mixer.Volume2+delta)*100) / 100)
+	case 3:
+		m.Mixer.Pan2 = clampPan(math.Round((m.Mixer.Pan2+delta)*100) / 100)
+	case 4:
+		m.Mixer.MasterVolume = clampVolume(math.Round((m.Mixer.MasterVolume+delta)*100) / 100)
+	case 5:
+		// Mode is cycled via left/right in Update, not here
+	case 6:
 		m.Portamento = clampPortamento(math.Round((m.Portamento+delta)*100) / 100)
 	}
+}
+
+func clampPan(v float64) float64 {
+	if v < -1 {
+		return -1
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }
 
 func clampPortamento(v float64) float64 {

@@ -26,7 +26,7 @@ func NewSynthScreen(synth *audio.Synth) *SynthScreen {
 		ui.NewPanel("Oscillator 2", common.ColorAccentEnvelope, NewOscillatorModel(synth.Oscillator2)),
 		ui.NewPanel("Envelope 2", common.ColorAccentEnvelope, NewEnvelopeModel(synth.Envelope2)),
 		ui.NewPanel("LFO 2", common.ColorAccentEnvelope, NewLFOModel(synth.LFO2)),
-		ui.NewPanel("Mixer", common.ColorAccentModulation, NewMixer(synth.Mixer.Volume1, synth.Mixer.Volume2, synth.Portamento)),
+		ui.NewPanel("Mixer", common.ColorAccentModulation, NewMixer(synth.Mixer, synth.Portamento)),
 		ui.NewPanel("Filter", common.ColorAccentModulation, NewFilterModel(synth.Filter)),
 	}
 	return &SynthScreen{
