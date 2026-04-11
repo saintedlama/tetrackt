@@ -1,6 +1,9 @@
 package synth
 
 import (
+	"image/color"
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
@@ -50,6 +53,18 @@ func (s *SynthScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 		case "shift+tab":
 			s.ActivePanel = (s.ActivePanel - 1 + len(s.panels)) % len(s.panels)
 			return s, nil
+		case "ctrl+right":
+			s.navigateGrid(0, 1)
+			return s, nil
+		case "ctrl+left":
+			s.navigateGrid(0, -1)
+			return s, nil
+		case "ctrl+down":
+			s.navigateGrid(1, 0)
+			return s, nil
+		case "ctrl+up":
+			s.navigateGrid(-1, 0)
+			return s, nil
 		}
 
 		// Forward to active panel; convert any component update into SynthUpdated.
@@ -63,6 +78,37 @@ func (s *SynthScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 	}
 
 	return s, nil
+}
+
+// navigateGrid moves the active panel by (dRow, dCol) in the 2-D panel layout:
+//
+//	col: 0=Osc  1=Env  2=LFO  3=right-column
+//	row: 0=Voice1  1=Voice2  2=Voice3
+//
+// The right column has Mixer at row 0 and Filter at row 1; row 2 is empty.
+func (s *SynthScreen) navigateGrid(dRow, dCol int) {
+	grid := [3][4]int{
+		{0, 1, 2, 9},
+		{3, 4, 5, 10},
+		{6, 7, 8, -1},
+	}
+
+	curRow, curCol := 0, 0
+outer:
+	for r := range grid {
+		for c := range grid[r] {
+			if grid[r][c] == s.ActivePanel {
+				curRow, curCol = r, c
+				break outer
+			}
+		}
+	}
+
+	newRow := max(0, min(2, curRow+dRow))
+	newCol := max(0, min(3, curCol+dCol))
+	if target := grid[newRow][newCol]; target != -1 {
+		s.ActivePanel = target
+	}
 }
 
 // toSynthUpdated wraps a panel command, converting any synth component update
@@ -130,19 +176,47 @@ func (s *SynthScreen) View() string {
 		return ui.RenderPanel(p.Title, p.Color, p.Child.View(), idx == s.ActivePanel)
 	}
 
-	voice1 := lipgloss.JoinHorizontal(lipgloss.Top, render(0), render(1), render(2))
-	voice2 := lipgloss.JoinHorizontal(lipgloss.Top, render(3), render(4), render(5))
-	voice3 := lipgloss.JoinHorizontal(lipgloss.Top, render(6), render(7), render(8))
-	left := lipgloss.JoinVertical(lipgloss.Left, voice1, voice2, voice3)
+	voice1 := s.renderVoice(common.ColorAccentPrimary, 0, 1, 2)
+	voice2 := s.renderVoice(common.ColorAccentEnvelope, 3, 4, 5)
+	voice3 := s.renderVoice(common.ColorAccentPlay, 6, 7, 8)
+	left := lipgloss.JoinVertical(lipgloss.Left, voice1, "", voice2, "", voice3)
 
 	right := lipgloss.JoinVertical(lipgloss.Left, render(9), render(10))
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	spacer := "  "
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, spacer, right)
+}
+
+// renderVoice renders a voice group with a colored horizontal rule above
+// and a left-edge ▌ strip in the voice color beside the panels.
+func (s *SynthScreen) renderVoice(clr color.Color, panelIndices ...int) string {
+	// Render all panels in the row.
+	parts := make([]string, len(panelIndices))
+	for i, idx := range panelIndices {
+		p := s.panels[idx]
+		parts[i] = ui.RenderPanel(p.Title, p.Color, p.Child.View(), idx == s.ActivePanel)
+	}
+	panels := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+
+	// Left-edge ▌ strip, one character wide, same height as the panels.
+	h := lipgloss.Height(panels)
+	stripLines := make([]string, h)
+	for i := range stripLines {
+		stripLines[i] = "▌"
+	}
+	strip := lipgloss.NewStyle().Foreground(clr).Render(strings.Join(stripLines, "\n"))
+	withStrip := lipgloss.JoinHorizontal(lipgloss.Top, strip, panels)
+
+	// Horizontal rule above, spanning the full row width.
+	w := lipgloss.Width(withStrip)
+	rule := lipgloss.NewStyle().Foreground(clr).Render(strings.Repeat("─", w))
+
+	return lipgloss.JoinVertical(lipgloss.Left, rule, withStrip)
 }
 
 // Footer returns the help text shown in the footer bar on the Synth screen.
 func (s *SynthScreen) Footer() string {
-	return "Tab/Shift+Tab: Switch panel | ↑↓: Select | ←→: Adjust | +/-: Octave | I: Instruments | p: Play/Pause | P: Loop | S: Save | L: Load | T: Tracker | Q: Quit"
+	return "Tab/Shift+Tab: Switch panel | Ctrl+↑↓←→: Navigate panels | ↑↓: Select | ←→: Adjust | +/-: Octave | I: Instruments | p: Play/Pause | P: Loop | S: Save | L: Load | T: Tracker | Q: Quit"
 }
 
 // GetSynth builds and returns an audio.Synth from the current panel state.

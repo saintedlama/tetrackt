@@ -98,19 +98,21 @@ func (m *OscillatorModel) View() string {
 	oscillatorView.WriteString("\n")
 	oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("Dtune:%+5.0fc", m.Oscillator.Detune), m.editField == oscillatorDetune))
 
-	if m.Oscillator.Type == audio.Wavetable {
+	switch m.Oscillator.Type {
+	case audio.Wavetable:
 		wt := builtinWavetables[m.wavetableIdx]
 		oscillatorView.WriteString("\n")
 		oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("Wave: %-10s", wt.name), m.editField == oscillatorWavetable))
-	}
-
-	if m.Oscillator.Type == audio.NoisePeriodic {
+	case audio.NoisePeriodic:
 		periodStr := "Auto"
 		if m.Oscillator.NoisePeriod > 0 {
 			periodStr = fmt.Sprintf("%4d", m.Oscillator.NoisePeriod)
 		}
 		oscillatorView.WriteString("\n")
 		oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("Period:%-6s", periodStr), m.editField == oscillatorNoisePeriod))
+	default:
+		// Blank 5th line keeps all oscillator panels the same height.
+		oscillatorView.WriteString("\n")
 	}
 
 	return oscillatorView.String()

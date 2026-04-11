@@ -111,7 +111,8 @@ func (m *EnvelopeModel) View() string {
 	envView.WriteString(common.RenderKnobDurationSelected("Attack", m.Envelope.Attack, m.envelopeField == EnvelopeAttack) + "\n")
 	envView.WriteString(common.RenderKnobDurationSelected("Decay", m.Envelope.Decay, m.envelopeField == EnvelopeDecay) + "\n")
 	envView.WriteString(common.RenderKnobSelected("Sustain", m.Envelope.Sustain, m.envelopeField == EnvelopeSustain) + "\n")
-	envView.WriteString(common.RenderKnobDurationSelected("Release", m.Envelope.Release, m.envelopeField == EnvelopeRelease))
+	envView.WriteString(common.RenderKnobDurationSelected("Release", m.Envelope.Release, m.envelopeField == EnvelopeRelease) + "\n")
+	// Blank 5th line keeps all voice panels (Osc/Env/LFO) the same height.
 
 	return envView.String()
 }

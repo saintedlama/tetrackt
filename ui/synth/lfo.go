@@ -12,9 +12,9 @@ import (
 type lfoField int
 
 const (
-	lfoFieldWaveform lfoField = iota
+	lfoFieldDepth lfoField = iota
+	lfoFieldWaveform
 	lfoFieldRate
-	lfoFieldDepth
 	lfoFieldDelay
 	lfoFieldDest
 	lfoFieldCount
@@ -44,13 +44,16 @@ func NewLFOModel(lfo audio.LFO) *LFOModel {
 func (m *LFOModel) Init() tea.Cmd { return nil }
 
 func (m *LFOModel) View() string {
+	var sb strings.Builder
+
+	// Depth is always rendered first — it acts as the enable/disable toggle.
+	sb.WriteString(renderFieldSelected(fmt.Sprintf("Depth: %3d%%", int(m.LFO.Depth*100)), m.editField == lfoFieldDepth))
+	sb.WriteString("\n")
+
 	if m.LFO.Depth == 0 {
-		var sb strings.Builder
 		sb.WriteString(renderFieldSelected(fmt.Sprintf("Wave:  %-10s", string(m.LFO.Waveform)), m.editField == lfoFieldWaveform))
 		sb.WriteString("\n")
 		sb.WriteString(renderFieldSelected("Rate:  (disabled)", m.editField == lfoFieldRate))
-		sb.WriteString("\n")
-		sb.WriteString(renderFieldSelected(fmt.Sprintf("Depth: %3d%%", int(m.LFO.Depth*100)), m.editField == lfoFieldDepth))
 		sb.WriteString("\n")
 		sb.WriteString(renderFieldSelected("Delay: (disabled)", m.editField == lfoFieldDelay))
 		sb.WriteString("\n")
@@ -58,15 +61,11 @@ func (m *LFOModel) View() string {
 		return sb.String()
 	}
 
-	var sb strings.Builder
-
 	destName := lfoDestNames[int(m.LFO.Dest)%len(lfoDestNames)]
 
 	sb.WriteString(renderFieldSelected(fmt.Sprintf("Wave:  %-10s", string(m.LFO.Waveform)), m.editField == lfoFieldWaveform))
 	sb.WriteString("\n")
 	sb.WriteString(renderFieldSelected(fmt.Sprintf("Rate:  %5.2f Hz", m.LFO.Rate), m.editField == lfoFieldRate))
-	sb.WriteString("\n")
-	sb.WriteString(renderFieldSelected(fmt.Sprintf("Depth: %3d%%", int(m.LFO.Depth*100)), m.editField == lfoFieldDepth))
 	sb.WriteString("\n")
 	sb.WriteString(renderFieldSelected(fmt.Sprintf("Delay: %.2f s", m.LFO.Delay), m.editField == lfoFieldDelay))
 	sb.WriteString("\n")
