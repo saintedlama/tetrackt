@@ -1,6 +1,6 @@
 # Chiptune-10: Tracker Effect Commands
 
-**Status:** Partially Implemented (Portamento complete; Arpeggio structure present but not wired to playback; Vibrato, VolumeSlide, NoteCut, NoteDelay remain unimplemented)
+**Status:** Done
 
 **Priority:** Medium
 

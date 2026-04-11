@@ -168,14 +168,14 @@ func (m *TrackerModel) View() string {
 			trackHeader = headerStyle.Foreground(common.ColorGray).Render(trackHeader)
 		}
 		tracks.WriteString(trackHeader)
-		tracks.WriteString("    ")
+		tracks.WriteString("        ")
 	}
 	tracks.WriteString("\n")
 
 	// Separator
 	tracks.WriteString("    ")
 	for i := 0; i < m.NumTracks; i++ {
-		tracks.WriteString(strings.Repeat("─", 10))
+		tracks.WriteString(strings.Repeat("─", 14))
 		tracks.WriteString("   ")
 	}
 	tracks.WriteString("\n")
@@ -197,7 +197,7 @@ func (m *TrackerModel) View() string {
 		// Track cells
 		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
 			trackRow := m.Tracks[trackIdx].Rows[row]
-			cellContent := fmt.Sprintf("%-3s %2s %3s", formatNote(trackRow.Note), formatVolume(trackRow.Volume), formatArpeggio(trackRow.Arpeggio))
+			cellContent := fmt.Sprintf("%-3s %2s %3s %3s", formatNote(trackRow.Note), formatVolume(trackRow.Volume), formatArpeggio(trackRow.Arpeggio), formatEffect(trackRow.Effect))
 
 			if row == m.CursorRow && trackIdx == m.CursorTrack {
 				tracks.WriteString(cursorCellStyle.Render(cellContent))
@@ -305,6 +305,29 @@ func formatArpeggio(arp audio.ArpeggioEffect) string {
 		o2 = arp.Offsets[2] % 10
 	}
 	return fmt.Sprintf("A%d%d", o1, o2)
+}
+
+// formatEffect formats a TrackerEffect for display (3 chars).
+// Shows a letter code and packed parameter: V27 = vibrato speed 2 depth 7,
+// S+4 = volume slide +4/tick, C03 = note cut at tick 3, D05 = note delay to tick 5.
+// Inactive effect shows "---".
+func formatEffect(e TrackerEffect) string {
+	switch e.Type {
+	case EffectVibrato:
+		speed := (e.Param >> 4) & 0xF
+		depth := e.Param & 0xF
+		return fmt.Sprintf("V%X%X", speed, depth)
+	case EffectVolumeSlide:
+		if e.Param >= 0 {
+			return fmt.Sprintf("S+%d", e.Param)
+		}
+		return fmt.Sprintf("S%d", e.Param)
+	case EffectNoteCut:
+		return fmt.Sprintf("C%02d", e.Param)
+	case EffectNoteDelay:
+		return fmt.Sprintf("D%02d", e.Param)
+	}
+	return "---"
 }
 
 func (m Track) CurrentRow() TrackRow {

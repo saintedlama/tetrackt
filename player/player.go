@@ -22,10 +22,16 @@ type channelEffectState struct {
 type Player struct {
 	subTickCount    int
 	activePatches   []*audio.Patch
-	previewPatch    audio.Streamer
+	previewPatch    *audio.Patch
 	prevFrequencies []float64 // last triggered frequency per track; 0 = no prior note
 	arpTickIdx      []int     // current arpeggio step per track; -1 = inactive
 	effectStates    []channelEffectState
+
+	// Preview arp state
+	previewArp      audio.ArpeggioEffect
+	previewBaseFreq float64
+	previewSubTick  int
+	previewSpeed    int
 }
 
 // Init initialises the speaker hardware with the given sample rate.
@@ -53,20 +59,55 @@ func (p *Player) Reset() {
 	p.prevFrequencies = nil
 	p.arpTickIdx = nil
 	p.effectStates = nil
+	p.previewArp = audio.ArpeggioEffect{}
+	p.previewBaseFreq = 0
+	p.previewSubTick = 0
+	p.previewSpeed = 0
 }
 
 // StartPreview plays a single note preview using the given synth.
+// When arp is active it applies the first step immediately and returns true
+// so the caller schedules previewTick calls to cycle through remaining steps.
 func (p *Player) StartPreview(note audio.Note, arp audio.ArpeggioEffect, s *audio.Synth, duration time.Duration, sampleRate audio.SampleRate, globalVolume float64, speed int) bool {
 	noteSamples := sampleRate.N(duration)
 	patch := s.NewPatch(sampleRate, note.Frequency(), noteSamples)
 	p.previewPatch = patch
+
+	if arp.IsActive() {
+		if speed <= 0 {
+			speed = tracker.DefaultSpeed
+		}
+		p.previewArp = arp
+		p.previewBaseFreq = note.Frequency()
+		p.previewSubTick = 0
+		p.previewSpeed = speed
+		// Apply step 0 immediately (mirrors Tick() which also applies step 0 on sub-tick 0).
+		mult := math.Pow(2, float64(arp.Offsets[0])/12)
+		patch.SetFrequency(p.previewBaseFreq * mult)
+		speaker.Play(audio.NewVolume(globalVolume).Streamer(patch))
+		return true
+	}
+
+	p.previewArp = audio.ArpeggioEffect{}
 	speaker.Play(audio.NewVolume(globalVolume).Streamer(patch))
 	return false
 }
 
-// TickPreview is a no-op; arp cycling is handled internally by the streamer.
+// TickPreview advances the arp preview one sub-tick and updates the patch frequency.
+// Returns true while there are more sub-ticks to cycle, false when done.
 func (p *Player) TickPreview() bool {
-	return false
+	if p.previewPatch == nil || !p.previewArp.IsActive() {
+		return false
+	}
+	p.previewSubTick++
+	if p.previewSubTick >= p.previewSpeed {
+		p.previewArp = audio.ArpeggioEffect{}
+		return false
+	}
+	idx := p.previewSubTick % len(p.previewArp.Offsets)
+	mult := math.Pow(2, float64(p.previewArp.Offsets[idx])/12)
+	p.previewPatch.SetFrequency(p.previewBaseFreq * mult)
+	return true
 }
 
 // Tick processes one sub-tick of playback:

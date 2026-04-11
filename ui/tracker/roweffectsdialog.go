@@ -161,13 +161,19 @@ func NewRowEffectsDialog(row TrackRow, trackIdx, rowIdx int) *RowEffectsDialog {
 	if vibratoSpeed == 0 {
 		vibratoSpeed = 4 // sensible default
 	}
+	// Default to Up preset when the row has no existing arpeggio so that enabling
+	// ARP immediately produces an audible chord arpeggio instead of all-zero offsets.
+	preset := ArpPresetNone
+	if !row.Arpeggio.IsActive() {
+		preset = ArpPresetUp
+	}
 	return &RowEffectsDialog{
 		trackIdx:     trackIdx,
 		rowIdx:       rowIdx,
 		ticks:        ticks,
 		arpEnabled:   row.Arpeggio.IsActive(),
 		continuous:   row.Continuous || row.Arpeggio.IsActive(),
-		preset:       ArpPresetNone,
+		preset:       preset,
 		step:         defaultStep,
 		offsets:      offsets,
 		effectType:   row.Effect.Type,
