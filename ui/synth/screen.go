@@ -15,8 +15,9 @@ import (
 // It owns panel navigation state (which panel is active) that was previously
 // held as InputMode in main.go.
 type SynthScreen struct {
-	panels      []ui.Panel
-	ActivePanel int // 0=Osc1, 1=Env1, 2=Osc2, 3=Env2, 4=Mixer
+	panels        []ui.Panel
+	ActivePanel   int // 0=Osc1, 1=Env1, 2=Osc2, 3=Env2, 4=Mixer
+	patchBankView *SynthPatchBankView
 }
 
 // NewSynthScreen creates a new SynthScreen for the given synth instance.
@@ -36,9 +37,20 @@ func NewSynthScreen(synth *audio.Synth) *SynthScreen {
 		ui.NewPanel("Filter", common.ColorAccentModulation, NewFilterModel(synth.Filter)),
 	}
 	return &SynthScreen{
-		panels:      panels,
-		ActivePanel: 0,
+		panels:        panels,
+		ActivePanel:   0,
+		patchBankView: NewSynthPatchBankView(),
 	}
+}
+
+// PatchBankView returns the persistent patch bank view owned by this screen.
+func (s *SynthScreen) PatchBankView() *SynthPatchBankView {
+	return s.patchBankView
+}
+
+// SetUserPatches refreshes the patch bank view with the current user patches.
+func (s *SynthScreen) SetUserPatches(patches []SynthPatch) {
+	s.patchBankView.SetUserPatches(patches)
 }
 
 // Update handles keyboard navigation between panels and forwards all other key
@@ -216,7 +228,7 @@ func (s *SynthScreen) renderVoice(clr color.Color, panelIndices ...int) string {
 
 // Footer returns the help text shown in the footer bar on the Synth screen.
 func (s *SynthScreen) Footer() string {
-	return "Tab/Shift+Tab: Switch panel | Ctrl+↑↓←→: Navigate panels | ↑↓: Select | ←→: Adjust | +/-: Octave | I: Instruments | p: Play/Pause | P: Loop | S: Save | L: Load | T: Tracker | Q: Quit"
+	return "Tab/Shift+Tab: Switch panel | Ctrl+↑↓←→: Navigate panels | ↑↓: Select | ←→: Adjust | +/-: Octave | b/B: Patch Bank | S: Save | L: Load | T: Tracker | Q: Quit"
 }
 
 // GetSynth builds and returns an audio.Synth from the current panel state.

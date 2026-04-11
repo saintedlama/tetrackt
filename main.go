@@ -36,7 +36,7 @@ type model struct {
 	screens      []ui.Screen
 	activeScreen int
 
-	synthPresetView *synth.SynthPresetView // persistent across dialog opens
+	bank *persistence.PatchBank // user patch bank (~/.tetrackt)
 
 	octave       int
 	globalVolume float64
@@ -95,8 +95,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open load dialog
 			d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeLoad, ""), m, m.width, m.height)
 			return d, d.Init()
-		case "i":
-			return ui.NewDialogModel(synth.NewSynthPresetsDialog(m.synthPresetView, m.octave), m, m.width, m.height), nil
 		case "e":
 			if m.activeScreen == trackerScreenIdx {
 				tm := m.trackerModel()
@@ -132,6 +130,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			return m, nil
+		case "b", "B":
+			// On the synth screen b/B opens the patch bank.
+			if m.activeScreen == synthScreenIdx {
+				return ui.NewDialogModel(synth.NewSynthPatchBankDialog(m.synth().PatchBankView(), m.octave, m.synth().GetSynth()), m, m.width, m.height), nil
+			}
 		case "p", "P":
 			// Toggle play/pause
 			tracker := m.trackerModel()
@@ -269,8 +272,52 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// BPM is already updated on the TrackerModel; nothing else to do here.
 		m.dirty = true
 
-	case synth.PlaySynthPresetNoteMsg:
-		m.playNoteWithSynthPreset(msg.Note, msg.Preset)
+	case synth.OpenPatchBankMsg:
+		return ui.NewDialogModel(synth.NewSynthPatchBankDialog(m.synth().PatchBankView(), m.octave, m.synth().GetSynth()), m, m.width, m.height), nil
+
+	case synth.PlayPatchNoteMsg:
+		m.playNoteWithSynthPatch(msg.Note, msg.Patch)
+		return m, nil
+
+	case synth.PatchSaveRequestedMsg:
+		patch := persistence.SavedPatch{
+			Name:     msg.Name,
+			Category: msg.Category,
+			Custom:   true,
+			Synth:    persistence.ToSavedSynth(msg.Synth),
+		}
+		m.bank.SynthPatches = append(m.bank.SynthPatches, patch)
+		if err := m.bank.Save(); err != nil {
+			fmt.Fprintf(os.Stderr, "patch bank save failed: %v\n", err)
+		}
+		m.synth().SetUserPatches(bankToPatches(m.bank))
+		return m, nil
+
+	case synth.PatchDeleteRequestedMsg:
+		patches := m.bank.SynthPatches[:0]
+		for _, p := range m.bank.SynthPatches {
+			if !(p.Custom && p.Name == msg.PatchName) {
+				patches = append(patches, p)
+			}
+		}
+		m.bank.SynthPatches = patches
+		if err := m.bank.Save(); err != nil {
+			fmt.Fprintf(os.Stderr, "patch bank save failed: %v\n", err)
+		}
+		m.synth().SetUserPatches(bankToPatches(m.bank))
+		return m, nil
+
+	case synth.PatchRenameRequestedMsg:
+		for i := range m.bank.SynthPatches {
+			if m.bank.SynthPatches[i].Custom && m.bank.SynthPatches[i].Name == msg.OldName {
+				m.bank.SynthPatches[i].Name = msg.NewName
+				break
+			}
+		}
+		if err := m.bank.Save(); err != nil {
+			fmt.Fprintf(os.Stderr, "patch bank save failed: %v\n", err)
+		}
+		m.synth().SetUserPatches(bankToPatches(m.bank))
 		return m, nil
 
 	case ui.QuitDiscardMsg:
@@ -323,15 +370,29 @@ func (m *model) tick() tea.Cmd {
 	})
 }
 
-// playNoteWithSynthPreset plays a note using the given synth preset's parameters.
-func (m *model) playNoteWithSynthPreset(note audio.Note, preset synth.SynthPreset) {
+// playNoteWithSynthPatch plays a note using the given patch's synth parameters.
+func (m *model) playNoteWithSynthPatch(note audio.Note, patch synth.SynthPatch) {
 	duration := m.trackerModel().BPMDuration()
 	noteSamples := m.sampleRate.N(duration)
-	patch := preset.Synth.NewPatch(m.sampleRate, note.Frequency(), noteSamples)
+	audioPatch := patch.Synth.NewPatch(m.sampleRate, note.Frequency(), noteSamples)
 	m.player.Play(
-		patch,
+		audioPatch,
 		m.globalVolume,
 	)
+}
+
+// bankToPatches converts the patch bank's custom patches to SynthPatch slice for the UI.
+func bankToPatches(bank *persistence.PatchBank) []synth.SynthPatch {
+	patches := make([]synth.SynthPatch, len(bank.SynthPatches))
+	for i, p := range bank.SynthPatches {
+		patches[i] = synth.SynthPatch{
+			Name:     p.Name,
+			Category: p.Category,
+			Custom:   true,
+			Synth:    persistence.SynthFromSavedPatch(p),
+		}
+	}
+	return patches
 }
 
 // playNote plays a note at the given frequency using the current oscillator
@@ -383,21 +444,37 @@ func main() {
 	track := trackerModel.CurrentTrack()
 
 	p := tea.NewProgram(
-		model{
-			sampleRate: sampleRate,
-			screens: []ui.Screen{
-				tracker.NewTrackerScreen(trackerModel),
-				synth.NewSynthScreen(track.Synth),
-			},
-			activeScreen:    trackerScreenIdx,
-			synthPresetView: synth.NewSynthPresetView(),
-			octave:          4,
-			globalVolume:    1.0,
-		},
+		newModel(sampleRate, trackerModel, track),
 	)
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+// newModel constructs the application model, loading the user patch bank from disk.
+func newModel(sampleRate audio.SampleRate, trackerModel *tracker.TrackerModel, track tracker.Track) model {
+	bank, err := persistence.LoadPatchBank()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not load patch bank: %v\n", err)
+		bank = &persistence.PatchBank{Version: 1}
+	}
+
+	synthScreen := synth.NewSynthScreen(track.Synth)
+	if len(bank.SynthPatches) > 0 {
+		synthScreen.SetUserPatches(bankToPatches(bank))
+	}
+
+	return model{
+		sampleRate: sampleRate,
+		screens: []ui.Screen{
+			tracker.NewTrackerScreen(trackerModel),
+			synthScreen,
+		},
+		activeScreen: trackerScreenIdx,
+		bank:         bank,
+		octave:       4,
+		globalVolume: 1.0,
 	}
 }
