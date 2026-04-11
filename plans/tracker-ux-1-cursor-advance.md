@@ -1,5 +1,7 @@
 # Tracker UX: Cursor Advance on Note Entry
 
+> Status: **Done**
+
 ## Feature Description
 
 When the user enters a note (keys 1–7 or sharp variants), the cursor automatically moves down one row. This is the single most impactful usability feature in any tracker — without it the user must manually press Down after every note.
@@ -70,39 +72,45 @@ This is the correct order: write the note, read the row's arpeggio for preview, 
 
 ## Affected Files
 
-| File | Symbol | Change |
-|------|--------|--------|
-| `ui/tracker/tracker.go` | `TrackerModel` | Add `MoveCursorDown()` method |
-| `ui/tracker/tracker.go` | `TrackerModel.Update` | (Optional) replace inline down-logic with `m.MoveCursorDown()` |
-| `main.go` | `model.Update` | Call `tr.MoveCursorDown()` after `tr.SetNote(note)` in the note-key branch |
+| File                    | Symbol                | Change                                                                     |
+| ----------------------- | --------------------- | -------------------------------------------------------------------------- |
+| `ui/tracker/tracker.go` | `TrackerModel`        | Add `MoveCursorDown()` method                                              |
+| `ui/tracker/tracker.go` | `TrackerModel.Update` | (Optional) replace inline down-logic with `m.MoveCursorDown()`             |
+| `main.go`               | `model.Update`        | Call `tr.MoveCursorDown()` after `tr.SetNote(note)` in the note-key branch |
 
 ---
 
 ## Refactoring Risks and Considerations
 
 ### 1. Preview row capture ordering
+
 The existing code reads `row` after `SetNote` but before any cursor movement. If `MoveCursorDown()` is inserted between them, `row` will be read from the **new** cursor position, which is the **next** empty row — its `Arpeggio` field would be the default zero value, silently breaking arpeggio preview. **Fix**: capture `row` before calling `MoveCursorDown()`.
 
 ### 2. `delete` key must NOT advance the cursor
+
 `TrackerScreen.Update` handles `"delete"` by calling `t.Tracker.SetNote(audio.Off())` directly, without going through `main.go`. This path does **not** call `MoveCursorDown()` and should continue to not do so. No change needed there.
 
 ### 3. Octave `+`/`-` keys must NOT advance the cursor
+
 The `"+"` and `"-"` handlers in `main.go` also call `tr.SetNote(...)` (for a transposed note), but these are pitch-transpose operations, not note-entry events. They do not go through the `noteKeyToName` branch and are unaffected by this change.
 
 ### 4. Cursor clamping at last row
+
 `MoveCursorDown()` (matching existing "down" key behaviour) silently does nothing when already at the last row. This is the correct tracker convention — the cursor stops at the bottom rather than wrapping.
 
 ### 5. No new message type required
+
 The advance is a direct synchronous state mutation on `*TrackerModel`. No `tea.Cmd` is needed because the viewport/cursor state is not communicated to other components and is rendered on the next `View()` call.
 
 ### 6. Synth screen isolation
+
 The note-key branch already guards on `m.activeScreen == trackerScreenIdx`. When the user is on the synth screen, `m.playNote(note)` is called instead, and `MoveCursorDown()` is never invoked.
 
 ---
 
 ## Key Bindings / Message Flow
 
-```
+```text
 User presses note key (e.g. "1", "!", "2", …)
   └─ main.go: model.Update (KeyPressMsg)
        └─ noteKeyToName lookup → audio.Note constructed
@@ -117,3 +125,5 @@ User presses note key (e.g. "1", "!", "2", …)
 ```
 
 The `"down"` arrow key continues to work independently via `TrackerModel.Update` → `MoveCursorDown()` (or the existing inline logic). The two paths are orthogonal.
+
+Important note! If the tracker screen is active let the tracker screen handle the keystroke and advancing the cursor. If the synth screen is active, the note should be played but the cursor should not advance. This is already handled by the existing `if m.activeScreen == trackerScreenIdx` guard around the note-key handling block in `main.go`.

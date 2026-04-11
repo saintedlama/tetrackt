@@ -250,14 +250,7 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			}
 		case "down":
 			// Move cursor down (next row)
-			if m.CursorRow < m.NumRows-1 {
-				m.CursorRow++
-				// Adjust viewport if needed
-				visibleRows := m.visibleRows()
-				if m.CursorRow >= m.viewportRow+visibleRows {
-					m.viewportRow = m.CursorRow - visibleRows + 1
-				}
-			}
+			m.MoveCursorDown()
 		case "home":
 			// Jump to first row
 			m.CursorRow = 0
@@ -320,6 +313,18 @@ func (m Track) CurrentRow() TrackRow {
 
 func (m *TrackerModel) CurrentTrack() Track {
 	return m.Tracks[m.CursorTrack]
+}
+
+// MoveCursorDown advances the cursor one row, clamping at the last row
+// and scrolling the viewport if necessary.
+func (m *TrackerModel) MoveCursorDown() {
+	if m.CursorRow < m.NumRows-1 {
+		m.CursorRow++
+		visibleRows := m.visibleRows()
+		if m.CursorRow >= m.viewportRow+visibleRows {
+			m.viewportRow = m.CursorRow - visibleRows + 1
+		}
+	}
 }
 
 func (m *TrackerModel) SetNote(note audio.Note) TrackRow {

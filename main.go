@@ -172,6 +172,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				tr.SetNote(note)
 				m.dirty = true
 				row := tr.Tracks[tr.CursorTrack].Rows[tr.CursorRow]
+				tr.MoveCursorDown()
 				if m.player.StartPreview(note, row.Arpeggio, tr.Tracks[tr.CursorTrack].Synth,
 					tr.BPMDuration(), m.sampleRate, m.globalVolume, tr.Speed) {
 					return m, m.previewTick()
