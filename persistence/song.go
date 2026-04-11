@@ -1,21 +1,21 @@
 package persistence
 
 import (
+	"encoding/json"
 	"os"
 	"time"
 
-	"github.com/goccy/go-yaml"
 	"github.com/tetrackt/tetrackt/audio"
 	utracker "github.com/tetrackt/tetrackt/ui/tracker"
 )
 
-// SavedEnvelope is the YAML-serializable form of audio.Envelope.
+// SavedEnvelope is the JSON-serializable form of audio.Envelope.
 // Attack, Decay, and Release are stored in seconds as float64.
 type SavedEnvelope struct {
-	Attack  float64 `yaml:"attack"`
-	Decay   float64 `yaml:"decay"`
-	Sustain float64 `yaml:"sustain"`
-	Release float64 `yaml:"release"`
+	Attack  float64 `json:"attack"`
+	Decay   float64 `json:"decay"`
+	Sustain float64 `json:"sustain"`
+	Release float64 `json:"release"`
 }
 
 func toSavedEnvelope(e audio.Envelope) SavedEnvelope {
@@ -36,56 +36,56 @@ func fromSavedEnvelope(s SavedEnvelope) audio.Envelope {
 	}
 }
 
-// SavedTrackRow is the YAML-serializable form of TrackRow
+// SavedTrackRow is the JSON-serializable form of TrackRow
 type SavedTrackRow struct {
-	Base            string `yaml:"base"`
-	Octave          int    `yaml:"octave"`
-	Volume          int    `yaml:"volume"`
-	RowTicks        int    `yaml:"row_ticks,omitempty"`
-	Continuous      bool   `yaml:"continuous,omitempty"`
-	ArpeggioOffsets []int  `yaml:"arpeggio_offsets,omitempty"`
-	EffectType      int    `yaml:"effect_type,omitempty"`
-	EffectParam     int    `yaml:"effect_param,omitempty"`
+	Base            string `json:"base"`
+	Octave          int    `json:"octave"`
+	Volume          int    `json:"volume"`
+	RowTicks        int    `json:"row_ticks,omitempty"`
+	Continuous      bool   `json:"continuous,omitempty"`
+	ArpeggioOffsets []int  `json:"arpeggio_offsets,omitempty"`
+	EffectType      int    `json:"effect_type,omitempty"`
+	EffectParam     int    `json:"effect_param,omitempty"`
 }
 
-// SavedTrack is the YAML-serializable form of Track
+// SavedTrack is the JSON-serializable form of Track
 type SavedTrack struct {
-	Oscillator1           string          `yaml:"oscillator1"`
-	Oscillator1Phase      float64         `yaml:"oscillator1_phase"`
-	Oscillator1PulseWidth float64         `yaml:"oscillator1_pulse_width"`
-	Oscillator1Detune     float64         `yaml:"oscillator1_detune,omitempty"`
-	Envelope1             SavedEnvelope   `yaml:"envelope1"`
-	Oscillator2           string          `yaml:"oscillator2"`
-	Oscillator2Phase      float64         `yaml:"oscillator2_phase"`
-	Oscillator2PulseWidth float64         `yaml:"oscillator2_pulse_width"`
-	Oscillator2Detune     float64         `yaml:"oscillator2_detune,omitempty"`
-	Envelope2             SavedEnvelope   `yaml:"envelope2"`
-	MixerVolume1          float64         `yaml:"mixer_volume1"`
-	MixerVolume2          float64         `yaml:"mixer_volume2"`
-	FilterType            string          `yaml:"filter_type"`
-	FilterCutoff          float64         `yaml:"filter_cutoff"`
-	FilterResonance       float64         `yaml:"filter_resonance"`
-	LFO1Waveform          string          `yaml:"lfo1_waveform"`
-	LFO1Rate              float64         `yaml:"lfo1_rate"`
-	LFO1Depth             float64         `yaml:"lfo1_depth"`
-	LFO1Delay             float64         `yaml:"lfo1_delay"`
-	LFO1Dest              int             `yaml:"lfo1_dest"`
-	LFO2Waveform          string          `yaml:"lfo2_waveform"`
-	LFO2Rate              float64         `yaml:"lfo2_rate"`
-	LFO2Depth             float64         `yaml:"lfo2_depth"`
-	LFO2Delay             float64         `yaml:"lfo2_delay"`
-	LFO2Dest              int             `yaml:"lfo2_dest"`
-	Portamento            float64         `yaml:"portamento,omitempty"`
-	Rows                  []SavedTrackRow `yaml:"rows"`
+	Oscillator1           string          `json:"oscillator1"`
+	Oscillator1Phase      float64         `json:"oscillator1_phase"`
+	Oscillator1PulseWidth float64         `json:"oscillator1_pulse_width"`
+	Oscillator1Detune     float64         `json:"oscillator1_detune,omitempty"`
+	Envelope1             SavedEnvelope   `json:"envelope1"`
+	Oscillator2           string          `json:"oscillator2"`
+	Oscillator2Phase      float64         `json:"oscillator2_phase"`
+	Oscillator2PulseWidth float64         `json:"oscillator2_pulse_width"`
+	Oscillator2Detune     float64         `json:"oscillator2_detune,omitempty"`
+	Envelope2             SavedEnvelope   `json:"envelope2"`
+	MixerVolume1          float64         `json:"mixer_volume1"`
+	MixerVolume2          float64         `json:"mixer_volume2"`
+	FilterType            string          `json:"filter_type"`
+	FilterCutoff          float64         `json:"filter_cutoff"`
+	FilterResonance       float64         `json:"filter_resonance"`
+	LFO1Waveform          string          `json:"lfo1_waveform"`
+	LFO1Rate              float64         `json:"lfo1_rate"`
+	LFO1Depth             float64         `json:"lfo1_depth"`
+	LFO1Delay             float64         `json:"lfo1_delay"`
+	LFO1Dest              int             `json:"lfo1_dest"`
+	LFO2Waveform          string          `json:"lfo2_waveform"`
+	LFO2Rate              float64         `json:"lfo2_rate"`
+	LFO2Depth             float64         `json:"lfo2_depth"`
+	LFO2Delay             float64         `json:"lfo2_delay"`
+	LFO2Dest              int             `json:"lfo2_dest"`
+	Portamento            float64         `json:"portamento,omitempty"`
+	Rows                  []SavedTrackRow `json:"rows"`
 }
 
-// SavedSong is the complete song structure for YAML serialization
+// SavedSong is the complete song structure for JSON serialization
 type SavedSong struct {
-	NumRows   int          `yaml:"num_rows"`
-	NumTracks int          `yaml:"num_tracks"`
-	BPM       int          `yaml:"bpm"`
-	Speed     int          `yaml:"speed,omitempty"`
-	Tracks    []SavedTrack `yaml:"tracks"`
+	NumRows   int          `json:"num_rows"`
+	NumTracks int          `json:"num_tracks"`
+	BPM       int          `json:"bpm"`
+	Speed     int          `json:"speed,omitempty"`
+	Tracks    []SavedTrack `json:"tracks"`
 }
 
 // TracksToSong converts the runtime TrackerModel to a SavedSong for YAML serialization
@@ -247,23 +247,23 @@ func SongToTracks(saved *SavedSong, tracker *utracker.TrackerModel) {
 	}
 }
 
-// SaveToFile writes a SavedSong to a YAML file
+// SaveToFile writes a SavedSong to a JSON file
 func SaveToFile(filename string, song *SavedSong) error {
-	data, err := yaml.Marshal(song)
+	data, err := json.MarshalIndent(song, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(filename, data, 0644)
 }
 
-// LoadFromFile reads a YAML file and returns a SavedSong
+// LoadFromFile reads a JSON file and returns a SavedSong
 func LoadFromFile(filename string) (*SavedSong, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 	var saved SavedSong
-	err = yaml.Unmarshal(data, &saved)
+	err = json.Unmarshal(data, &saved)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -14,9 +15,9 @@ func TestFileDialogModeSet(t *testing.T) {
 }
 
 func TestFileDialogPrefill(t *testing.T) {
-	dialog := NewFileDialog(ModeSave, "mysong.yaml")
-	if dialog.Input != "mysong.yaml" {
-		t.Errorf("Expected Input='mysong.yaml', got '%s'", dialog.Input)
+	dialog := NewFileDialog(ModeSave, "mysong.json")
+	if dialog.InputValue() != "mysong.json" {
+		t.Errorf("Expected InputValue='mysong.json', got '%s'", dialog.InputValue())
 	}
 	if dialog.Mode != ModeSave {
 		t.Errorf("Expected Mode=ModeSave, got %v", dialog.Mode)
@@ -25,8 +26,8 @@ func TestFileDialogPrefill(t *testing.T) {
 
 func TestFileDialogInput(t *testing.T) {
 	dialog := NewFileDialog(ModeSave, "")
+	dialog.FocusInput()
 
-	// Type some characters
 	model, _ := dialog.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
 	dialog = model.(*FileDialogModel)
 	model, _ = dialog.Update(tea.KeyPressMsg{Code: 'e', Text: "e"})
@@ -36,23 +37,22 @@ func TestFileDialogInput(t *testing.T) {
 	model, _ = dialog.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
 	dialog = model.(*FileDialogModel)
 
-	if dialog.Input != "test" {
-		t.Errorf("Expected Input='test', got '%s'", dialog.Input)
+	if dialog.InputValue() != "test" {
+		t.Errorf("Expected InputValue='test', got '%s'", dialog.InputValue())
 	}
 
-	// Test backspace
 	model, _ = dialog.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	dialog = model.(*FileDialogModel)
-	if dialog.Input != "tes" {
-		t.Errorf("Expected Input='tes' after backspace, got '%s'", dialog.Input)
+	if dialog.InputValue() != "tes" {
+		t.Errorf("Expected InputValue='tes' after backspace, got '%s'", dialog.InputValue())
 	}
 }
 
 func TestFileDialogConfirm(t *testing.T) {
 	dialog := NewFileDialog(ModeSave, "test")
+	dialog.FocusInput()
 
 	_, cmd := dialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-
 	if cmd == nil {
 		t.Fatal("Expected command to be returned")
 	}
@@ -68,8 +68,8 @@ func TestFileDialogConfirm(t *testing.T) {
 		t.Fatal("Expected FileDialogConfirmed payload")
 	}
 
-	if confirmed.Filename != "test.yaml" {
-		t.Errorf("Expected Filename='test.yaml', got '%s'", confirmed.Filename)
+	if !strings.HasSuffix(confirmed.Filename, "test.json") {
+		t.Errorf("Expected Filename to end with 'test.json', got '%s'", confirmed.Filename)
 	}
 	if confirmed.Mode != ModeSave {
 		t.Errorf("Expected Mode=ModeSave, got %v", confirmed.Mode)
@@ -80,7 +80,6 @@ func TestFileDialogCancel(t *testing.T) {
 	dialog := NewFileDialog(ModeSave, "test")
 
 	_, cmd := dialog.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-
 	if cmd == nil {
 		t.Fatal("Expected command to be returned")
 	}
@@ -98,11 +97,13 @@ func TestFileDialogCancel(t *testing.T) {
 
 func TestFileDialogEmptyFilename(t *testing.T) {
 	dialog := NewFileDialog(ModeSave, "")
+	dialog.FocusInput()
 
-	model, _ := dialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	dialog = model.(*FileDialogModel)
-
-	if dialog.Error == "" {
-		t.Error("Expected error for empty filename")
+	_, cmd := dialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd != nil {
+		t.Error("Expected nil command for empty filename")
+	}
+	if dialog.ErrMsg == "" {
+		t.Error("Expected error message for empty filename")
 	}
 }

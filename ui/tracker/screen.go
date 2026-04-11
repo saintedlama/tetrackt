@@ -144,9 +144,15 @@ func (t *TrackerScreen) View() string {
 	bpmRow := render(settingsPanelActive && t.settingsFocus == 1, "BPM") +
 		fmt.Sprintf("     %3d", t.Tracker.BPM)
 	settingsContent := volumeRow + "\n" + bpmRow
+
+	currentSynth := t.Tracker.Tracks[t.Tracker.CursorTrack].Synth
+	synthInfoContent := renderSynthInfo(currentSynth)
+
 	trackerPanel := ui.RenderPanel("Tracker", common.ColorAccentPrimary, t.Tracker.View(), t.activePanel == 0)
 	settingsPanel := ui.RenderPanel("Settings", common.ColorAccentModulation, settingsContent, t.activePanel == 1)
-	return lipgloss.JoinHorizontal(lipgloss.Top, trackerPanel, settingsPanel)
+	synthInfoPanel := ui.RenderPanel("Synth", common.ColorAccentEnvelope, synthInfoContent, false)
+	rightColumn := lipgloss.JoinVertical(lipgloss.Left, settingsPanel, synthInfoPanel)
+	return lipgloss.JoinHorizontal(lipgloss.Top, trackerPanel, rightColumn)
 }
 
 // Title returns the tab label for the TrackerScreen.

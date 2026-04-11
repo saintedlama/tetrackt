@@ -33,7 +33,7 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 
 	// Save to a temporary file
-	tmpFile := "test_song.yaml"
+	tmpFile := "test_song.json"
 	defer os.Remove(tmpFile)
 
 	song := TracksToSong(trackerModel)

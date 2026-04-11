@@ -44,6 +44,11 @@ type model struct {
 	// current loaded/saved filename (prefill on save)
 	currentFilename string
 
+	// dirty is true when there are unsaved changes.
+	dirty bool
+	// quitAfterSave signals that the app should quit once the next save completes.
+	quitAfterSave bool
+
 	player player.Player
 }
 
@@ -84,10 +89,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.currentFilename != "" {
 				prefill = m.currentFilename
 			}
-			return ui.NewDialogModel(ui.NewFileDialog(ui.ModeSave, prefill), m, m.width, m.height), nil
+			d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeSave, prefill), m, m.width, m.height)
+			return d, d.Init()
 		case "l":
 			// Open load dialog
-			return ui.NewDialogModel(ui.NewFileDialog(ui.ModeLoad, ""), m, m.width, m.height), nil
+			d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeLoad, ""), m, m.width, m.height)
+			return d, d.Init()
 		case "i":
 			return ui.NewDialogModel(synth.NewSynthPresetsDialog(m.synthPresetView, m.octave), m, m.width, m.height), nil
 		case "e":
@@ -145,7 +152,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				//speaker.Clear()
 			}
-		case "q", "ctrl+c":
+		case "ctrl+c", "q":
+			if m.dirty {
+				return ui.NewDialogModel(ui.NewQuitDialog(), m, m.width, m.height), nil
+			}
 			m.player.Clear()
 			return m, tea.Quit
 		}
@@ -157,6 +167,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activeScreen == trackerScreenIdx {
 				tr := m.trackerModel()
 				tr.SetNote(note)
+				m.dirty = true
 				row := tr.Tracks[tr.CursorTrack].Rows[tr.CursorRow]
 				if m.player.StartPreview(note, row.Arpeggio, tr.Tracks[tr.CursorTrack].Synth,
 					tr.BPMDuration(), m.sampleRate, m.globalVolume, tr.Speed) {
@@ -172,6 +183,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Forward remaining key events to the active screen
 		var cmd tea.Cmd
 		m.screens[m.activeScreen], cmd = m.screens[m.activeScreen].Update(msg)
+		// Mark dirty when delete clears a note in the tracker
+		if msg.String() == "delete" && m.activeScreen == trackerScreenIdx {
+			m.dirty = true
+		}
 		return m, cmd
 
 	case previewTickMsg:
@@ -211,6 +226,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Continuous = msg.Continuous
 			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Effect = msg.Effect
 		}
+		m.dirty = true
 		return m, nil
 
 	case ui.FileDialogConfirmed:
@@ -225,6 +241,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				fmt.Fprintf(os.Stderr, "Save failed: %v\n", err)
 			} else {
 				m.currentFilename = filename
+				m.dirty = false
+				if m.quitAfterSave {
+					m.player.Clear()
+					return m, tea.Quit
+				}
 			}
 		case ui.ModeLoad:
 			// Load song
@@ -235,24 +256,41 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Update existing tracker model instead of creating new one
 				persistence.SongToTracks(song, m.trackerModel())
 				m.currentFilename = filename
+				m.dirty = false
 			}
 		}
 		return m, nil
 
 	case tracker.VolumeChanged:
 		m.globalVolume = msg.Volume
+		m.dirty = true
 
 	case tracker.BPMChanged:
 		// BPM is already updated on the TrackerModel; nothing else to do here.
+		m.dirty = true
 
 	case synth.PlaySynthPresetNoteMsg:
 		m.playNoteWithSynthPreset(msg.Note, msg.Preset)
 		return m, nil
 
+	case ui.QuitDiscardMsg:
+		m.player.Clear()
+		return m, tea.Quit
+
+	case ui.QuitSaveMsg:
+		prefill := "song"
+		if m.currentFilename != "" {
+			prefill = m.currentFilename
+		}
+		m.quitAfterSave = true
+		d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeSave, prefill), m, m.width, m.height)
+		return d, d.Init()
+
 	case ui.SynthUpdated:
 		var cmd1, cmd2 tea.Cmd
 		m.screens[synthScreenIdx], cmd1 = m.screens[synthScreenIdx].Update(msg)
 		m.screens[trackerScreenIdx], cmd2 = m.screens[trackerScreenIdx].Update(msg)
+		m.dirty = true
 		return m, tea.Batch(cmd1, cmd2)
 	}
 
