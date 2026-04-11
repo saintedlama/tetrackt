@@ -27,13 +27,19 @@ func renderSynthInfo(synth *audio.Synth) string {
 	sb.WriteString("\n")
 	sb.WriteString(renderOscLine("Osc2", synth.Oscillator2))
 	sb.WriteString("\n")
+	sb.WriteString(renderOscLine("Osc3", synth.Oscillator3))
+	sb.WriteString("\n")
 	sb.WriteString(renderEnvLine("Env1", synth.Envelope1))
 	sb.WriteString("\n")
 	sb.WriteString(renderEnvLine("Env2", synth.Envelope2))
 	sb.WriteString("\n")
+	sb.WriteString(renderEnvLine("Env3", synth.Envelope3))
+	sb.WriteString("\n")
 	sb.WriteString(renderLFOLine("LFO1", synth.LFO1))
 	sb.WriteString("\n")
 	sb.WriteString(renderLFOLine("LFO2", synth.LFO2))
+	sb.WriteString("\n")
+	sb.WriteString(renderLFOLine("LFO3", synth.LFO3))
 	sb.WriteString("\n")
 	sb.WriteString(renderMixLine(synth.Mixer, synth.Portamento))
 	sb.WriteString("\n")
@@ -85,10 +91,11 @@ func renderLFOLine(label string, lfo audio.LFO) string {
 }
 
 func renderMixLine(m audio.Mixer, portamento float64) string {
-	s := fmt.Sprintf("%s %s%d%% %s%d%%",
+	s := fmt.Sprintf("%s %s%d%% %s%d%% %s%d%%",
 		lbl("Mix:"),
 		lbl("Osc1:"), int(m.Volume1*100),
 		lbl("Osc2:"), int(m.Volume2*100),
+		lbl("Osc3:"), int(m.Volume3*100),
 	)
 	if portamento > 0 {
 		s += fmt.Sprintf(" %s%.2fs", lbl("Glide:"), portamento)

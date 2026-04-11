@@ -33,7 +33,7 @@ var (
 	fdLabelStyle = lipgloss.NewStyle().Foreground(common.ColorTextMuted)
 )
 
-// FileDialogModel is the file browser dialog for loading and saving songs.
+// FileDialogModel is the file browser dialog for loading and saving modules.
 // In Load mode the filepicker is used directly; in Save mode a filename
 // textinput is shown below the filepicker and Tab switches focus between them.
 type FileDialogModel struct {
@@ -85,7 +85,7 @@ func NewFileDialog(mode FileDialogMode, prefill string) *FileDialogModel {
 
 	if mode == ModeSave {
 		ti := textinput.New()
-		ti.Placeholder = "song"
+		ti.Placeholder = "module"
 		ti.CharLimit = 200
 		ti.SetWidth(40)
 		if prefill != "" {
@@ -209,9 +209,9 @@ func (m *FileDialogModel) View() tea.View {
 	var sb strings.Builder
 
 	// Title
-	title := "Load Song"
+	title := "Load Module"
 	if m.Mode == ModeSave {
-		title = "Save Song"
+		title = "Save Module"
 	}
 	sb.WriteString(fdTitleStyle.Render(title))
 	sb.WriteString("\n\n")

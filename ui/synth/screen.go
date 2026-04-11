@@ -26,6 +26,9 @@ func NewSynthScreen(synth *audio.Synth) *SynthScreen {
 		ui.NewPanel("Oscillator 2", common.ColorAccentEnvelope, NewOscillatorModel(synth.Oscillator2)),
 		ui.NewPanel("Envelope 2", common.ColorAccentEnvelope, NewEnvelopeModel(synth.Envelope2)),
 		ui.NewPanel("LFO 2", common.ColorAccentEnvelope, NewLFOModel(synth.LFO2)),
+		ui.NewPanel("Oscillator 3", common.ColorAccentPlay, NewOscillatorModel(synth.Oscillator3)),
+		ui.NewPanel("Envelope 3", common.ColorAccentPlay, NewEnvelopeModel(synth.Envelope3)),
+		ui.NewPanel("LFO 3", common.ColorAccentPlay, NewLFOModel(synth.LFO3)),
 		ui.NewPanel("Mixer", common.ColorAccentModulation, NewMixer(synth.Mixer, synth.Portamento)),
 		ui.NewPanel("Filter", common.ColorAccentModulation, NewFilterModel(synth.Filter)),
 	}
@@ -81,15 +84,18 @@ func (s *SynthScreen) toSynthUpdated(cmd tea.Cmd) tea.Cmd {
 
 // Accessors for synth component children, used by main for audio playback and
 // cross-screen state synchronisation.
-// Panel order: 0=Osc1, 1=Env1, 2=LFO1, 3=Osc2, 4=Env2, 5=LFO2, 6=Mixer, 7=Filter
+// Panel order: 0=Osc1, 1=Env1, 2=LFO1, 3=Osc2, 4=Env2, 5=LFO2, 6=Osc3, 7=Env3, 8=LFO3, 9=Mixer, 10=Filter
 func (s *SynthScreen) Osc1() *OscillatorModel  { return s.panels[0].Child.(*OscillatorModel) }
 func (s *SynthScreen) Env1() *EnvelopeModel    { return s.panels[1].Child.(*EnvelopeModel) }
 func (s *SynthScreen) LFO1() *LFOModel         { return s.panels[2].Child.(*LFOModel) }
 func (s *SynthScreen) Osc2() *OscillatorModel  { return s.panels[3].Child.(*OscillatorModel) }
 func (s *SynthScreen) Env2() *EnvelopeModel    { return s.panels[4].Child.(*EnvelopeModel) }
 func (s *SynthScreen) LFO2() *LFOModel         { return s.panels[5].Child.(*LFOModel) }
-func (s *SynthScreen) GetMixer() *Mixer        { return s.panels[6].Child.(*Mixer) }
-func (s *SynthScreen) GetFilter() *FilterModel { return s.panels[7].Child.(*FilterModel) }
+func (s *SynthScreen) Osc3() *OscillatorModel  { return s.panels[6].Child.(*OscillatorModel) }
+func (s *SynthScreen) Env3() *EnvelopeModel    { return s.panels[7].Child.(*EnvelopeModel) }
+func (s *SynthScreen) LFO3Screen() *LFOModel   { return s.panels[8].Child.(*LFOModel) }
+func (s *SynthScreen) GetMixer() *Mixer        { return s.panels[9].Child.(*Mixer) }
+func (s *SynthScreen) GetFilter() *FilterModel { return s.panels[10].Child.(*FilterModel) }
 
 // ApplyTrackChange updates all panels to reflect the settings of the newly
 // selected track.
@@ -99,6 +105,9 @@ func (s *SynthScreen) ApplyTrackChange(msg ui.TrackChanged) {
 	s.Env1().Envelope = synth.Envelope1
 	s.Osc2().Oscillator = synth.Oscillator2
 	s.Env2().Envelope = synth.Envelope2
+	s.Osc3().Oscillator = synth.Oscillator3
+	s.Env3().Envelope = synth.Envelope3
+	s.LFO3Screen().LFO = synth.LFO3
 	s.GetMixer().SetMixer(synth.Mixer)
 	s.GetMixer().SetPortamento(synth.Portamento)
 	s.GetFilter().Filter = synth.Filter
@@ -114,6 +123,7 @@ func (s *SynthScreen) Title() string { return "Synth" }
 //
 //	Voice 1: Osc1  Env1  LFO1  │ Mixer
 //	Voice 2: Osc2  Env2  LFO2  │ Filter
+//	Voice 3: Osc3  Env3  LFO3  │
 func (s *SynthScreen) View() string {
 	render := func(idx int) string {
 		p := s.panels[idx]
@@ -122,9 +132,10 @@ func (s *SynthScreen) View() string {
 
 	voice1 := lipgloss.JoinHorizontal(lipgloss.Top, render(0), render(1), render(2))
 	voice2 := lipgloss.JoinHorizontal(lipgloss.Top, render(3), render(4), render(5))
-	left := lipgloss.JoinVertical(lipgloss.Left, voice1, voice2)
+	voice3 := lipgloss.JoinHorizontal(lipgloss.Top, render(6), render(7), render(8))
+	left := lipgloss.JoinVertical(lipgloss.Left, voice1, voice2, voice3)
 
-	right := lipgloss.JoinVertical(lipgloss.Left, render(6), render(7))
+	right := lipgloss.JoinVertical(lipgloss.Left, render(9), render(10))
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 }
@@ -138,5 +149,8 @@ func (s *SynthScreen) Footer() string {
 func (s *SynthScreen) GetSynth() *audio.Synth {
 	synth := audio.NewSynth(s.Osc1().Oscillator, s.Env1().Envelope, s.Osc2().Oscillator, s.Env2().Envelope, s.GetMixer().Mixer, s.GetFilter().Filter, s.LFO1().LFO, s.LFO2().LFO)
 	synth.Portamento = s.GetMixer().Portamento
+	synth.Oscillator3 = s.Osc3().Oscillator
+	synth.Envelope3 = s.Env3().Envelope
+	synth.LFO3 = s.LFO3Screen().LFO
 	return synth
 }

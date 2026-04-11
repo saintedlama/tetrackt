@@ -22,10 +22,13 @@ type Synth struct {
 	Envelope1   Envelope
 	Oscillator2 Oscillator
 	Envelope2   Envelope
+	Oscillator3 Oscillator
+	Envelope3   Envelope
 	Mixer       Mixer
 	Filter      Filter
 	LFO1        LFO
 	LFO2        LFO
+	LFO3        LFO
 	Portamento  float64 // glide duration in seconds; 0 = snap
 }
 
@@ -59,12 +62,16 @@ func NewSynth(oscillator1 Oscillator, envelope1 Envelope, oscillator2 Oscillator
 type Patch struct {
 	osc1        *oscillatorGenerator
 	osc2        *oscillatorGenerator
+	osc3        *oscillatorGenerator
 	modOsc1     *modulatedOscillatorStreamer // nil when no oscillator LFOs are active
 	modOsc2     *modulatedOscillatorStreamer
+	modOsc3     *modulatedOscillatorStreamer
 	env1        *envelopeGenerator
 	env2        *envelopeGenerator
+	env3        *envelopeGenerator
 	gatedEnv1   *gatedEnvelopeGenerator // nil for fixed-duration patches
 	gatedEnv2   *gatedEnvelopeGenerator
+	gatedEnv3   *gatedEnvelopeGenerator
 	lfos        []*lfoGenerator
 	pipeline    beep.Streamer
 	noteSamples int
@@ -88,6 +95,7 @@ func (s *Synth) NewPatch(sampleRate beep.SampleRate, frequency float64, noteSamp
 
 	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth, s.Oscillator1.Detune, s.Oscillator1.Wavetable, s.Oscillator1.NoisePeriod)
 	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth, s.Oscillator2.Detune, s.Oscillator2.Wavetable, s.Oscillator2.NoisePeriod)
+	osc3 := NewOscillator(s.Oscillator3.Type, frequency, sampleRate, s.Oscillator3.Phase, s.Oscillator3.PulseWidth, s.Oscillator3.Detune, s.Oscillator3.Wavetable, s.Oscillator3.NoisePeriod)
 
 	var lfos []*lfoGenerator
 	makeLFO := func(dest ModDest) *lfoGenerator {
@@ -101,36 +109,50 @@ func (s *Synth) NewPatch(sampleRate beep.SampleRate, frequency float64, noteSamp
 			lfos = append(lfos, g)
 			return g
 		}
+		if s.LFO3.Depth > 0 && s.LFO3.Dest == dest {
+			g := newLFOGenerator(s.LFO3, sr)
+			lfos = append(lfos, g)
+			return g
+		}
 		return nil
 	}
 
 	raw1 := newModulatedOscillatorStreamer(osc1, osc1.frequency, osc1.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
 	raw2 := newModulatedOscillatorStreamer(osc2, osc2.frequency, osc2.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
+	raw3 := newModulatedOscillatorStreamer(osc3, osc3.frequency, osc3.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
 
 	env1 := NewEnvelope(raw1, sampleRate, noteSamples, s.Envelope1).(*envelopeGenerator)
 	env2 := NewEnvelope(raw2, sampleRate, noteSamples, s.Envelope2).(*envelopeGenerator)
+	env3 := NewEnvelope(raw3, sampleRate, noteSamples, s.Envelope3).(*envelopeGenerator)
 
 	mod1 := newModulatedVolumeStreamer(env1, makeLFO(ModVolume))
 	mod2 := newModulatedVolumeStreamer(env2, makeLFO(ModVolume))
+	mod3 := newModulatedVolumeStreamer(env3, makeLFO(ModVolume))
 
-	mixed := s.Mixer.Mix(mod1, mod2)
+	mixed := s.Mixer.Mix(mod1, mod2, mod3)
 	pipeline := NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
 
-	var modOsc1, modOsc2 *modulatedOscillatorStreamer
+	var modOsc1, modOsc2, modOsc3 *modulatedOscillatorStreamer
 	if mos, ok := raw1.(*modulatedOscillatorStreamer); ok {
 		modOsc1 = mos
 	}
 	if mos, ok := raw2.(*modulatedOscillatorStreamer); ok {
 		modOsc2 = mos
 	}
+	if mos, ok := raw3.(*modulatedOscillatorStreamer); ok {
+		modOsc3 = mos
+	}
 
 	return &Patch{
 		osc1:        osc1,
 		osc2:        osc2,
+		osc3:        osc3,
 		modOsc1:     modOsc1,
 		modOsc2:     modOsc2,
+		modOsc3:     modOsc3,
 		env1:        env1,
 		env2:        env2,
+		env3:        env3,
 		lfos:        lfos,
 		pipeline:    pipeline,
 		noteSamples: noteSamples,
@@ -147,6 +169,7 @@ func (s *Synth) NewGatedPatch(sampleRate beep.SampleRate, frequency float64) *Pa
 
 	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth, s.Oscillator1.Detune, s.Oscillator1.Wavetable, s.Oscillator1.NoisePeriod)
 	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth, s.Oscillator2.Detune, s.Oscillator2.Wavetable, s.Oscillator2.NoisePeriod)
+	osc3 := NewOscillator(s.Oscillator3.Type, frequency, sampleRate, s.Oscillator3.Phase, s.Oscillator3.PulseWidth, s.Oscillator3.Detune, s.Oscillator3.Wavetable, s.Oscillator3.NoisePeriod)
 
 	var lfos []*lfoGenerator
 	makeLFO := func(dest ModDest) *lfoGenerator {
@@ -160,36 +183,50 @@ func (s *Synth) NewGatedPatch(sampleRate beep.SampleRate, frequency float64) *Pa
 			lfos = append(lfos, g)
 			return g
 		}
+		if s.LFO3.Depth > 0 && s.LFO3.Dest == dest {
+			g := newLFOGenerator(s.LFO3, sr)
+			lfos = append(lfos, g)
+			return g
+		}
 		return nil
 	}
 
 	raw1 := newModulatedOscillatorStreamer(osc1, osc1.frequency, osc1.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
 	raw2 := newModulatedOscillatorStreamer(osc2, osc2.frequency, osc2.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
+	raw3 := newModulatedOscillatorStreamer(osc3, osc3.frequency, osc3.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
 
 	gatedEnv1 := newGatedEnvelopeGenerator(raw1, sampleRate, s.Envelope1)
 	gatedEnv2 := newGatedEnvelopeGenerator(raw2, sampleRate, s.Envelope2)
+	gatedEnv3 := newGatedEnvelopeGenerator(raw3, sampleRate, s.Envelope3)
 
 	mod1 := newModulatedVolumeStreamer(gatedEnv1, makeLFO(ModVolume))
 	mod2 := newModulatedVolumeStreamer(gatedEnv2, makeLFO(ModVolume))
+	mod3 := newModulatedVolumeStreamer(gatedEnv3, makeLFO(ModVolume))
 
-	mixed := s.Mixer.Mix(mod1, mod2)
+	mixed := s.Mixer.Mix(mod1, mod2, mod3)
 	pipeline := NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
 
-	var modOsc1, modOsc2 *modulatedOscillatorStreamer
+	var modOsc1, modOsc2, modOsc3 *modulatedOscillatorStreamer
 	if mos, ok := raw1.(*modulatedOscillatorStreamer); ok {
 		modOsc1 = mos
 	}
 	if mos, ok := raw2.(*modulatedOscillatorStreamer); ok {
 		modOsc2 = mos
 	}
+	if mos, ok := raw3.(*modulatedOscillatorStreamer); ok {
+		modOsc3 = mos
+	}
 
 	return &Patch{
 		osc1:        osc1,
 		osc2:        osc2,
+		osc3:        osc3,
 		modOsc1:     modOsc1,
 		modOsc2:     modOsc2,
+		modOsc3:     modOsc3,
 		gatedEnv1:   gatedEnv1,
 		gatedEnv2:   gatedEnv2,
+		gatedEnv3:   gatedEnv3,
 		lfos:        lfos,
 		pipeline:    pipeline,
 		noteSamples: math.MaxInt,
@@ -206,6 +243,9 @@ func (p *Patch) NoteOn() {
 	if p.gatedEnv2 != nil {
 		p.gatedEnv2.NoteOn()
 	}
+	if p.gatedEnv3 != nil {
+		p.gatedEnv3.NoteOn()
+	}
 }
 
 // NoteOff triggers the release phase. No-op for fixed-duration patches.
@@ -215,6 +255,9 @@ func (p *Patch) NoteOff() {
 	}
 	if p.gatedEnv2 != nil {
 		p.gatedEnv2.NoteOff()
+	}
+	if p.gatedEnv3 != nil {
+		p.gatedEnv3.NoteOff()
 	}
 }
 
@@ -230,11 +273,15 @@ func (p *Patch) SetVolume(v float64) {
 func (p *Patch) SetFrequency(frequency float64) {
 	p.osc1.SetFrequency(frequency)
 	p.osc2.SetFrequency(frequency)
+	p.osc3.SetFrequency(frequency)
 	if p.modOsc1 != nil {
 		p.modOsc1.baseFreq = p.osc1.frequency
 	}
 	if p.modOsc2 != nil {
 		p.modOsc2.baseFreq = p.osc2.frequency
+	}
+	if p.modOsc3 != nil {
+		p.modOsc3.baseFreq = p.osc3.frequency
 	}
 }
 
@@ -271,6 +318,7 @@ func (p *Patch) TickPortamento() {
 func (p *Patch) Reset() {
 	p.env1.reset()
 	p.env2.reset()
+	p.env3.reset()
 	for _, lfo := range p.lfos {
 		lfo.reset()
 	}

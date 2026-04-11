@@ -33,24 +33,24 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 
 	// Save to a temporary file
-	tmpFile := "test_song.json"
+	tmpFile := "test_module.json"
 	defer os.Remove(tmpFile)
 
-	song := TracksToSong(trackerModel)
-	err := SaveToFile(tmpFile, song)
+	mod := TracksToModule(trackerModel)
+	err := SaveToFile(tmpFile, mod)
 	if err != nil {
 		t.Fatalf("SaveToFile failed: %v", err)
 	}
 
 	// Load from file
-	loadedSong, err := LoadFromFile(tmpFile)
+	loadedMod, err := LoadFromFile(tmpFile)
 	if err != nil {
 		t.Fatalf("LoadFromFile failed: %v", err)
 	}
 
 	// Create a new tracker and load data into it
 	newTracker := tracker.NewTracker(8, 64, 0, 0) // Different dimensions initially
-	SongToTracks(loadedSong, newTracker)
+	ModuleToTracks(loadedMod, newTracker)
 
 	// Verify dimensions were updated
 	if newTracker.NumRows != 16 {

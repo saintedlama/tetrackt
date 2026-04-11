@@ -34,4 +34,4 @@ go.work.sum
 # .vscode/
 
 # Samples and generated files
-song.yaml
+module.json

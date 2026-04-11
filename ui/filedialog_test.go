@@ -15,9 +15,9 @@ func TestFileDialogModeSet(t *testing.T) {
 }
 
 func TestFileDialogPrefill(t *testing.T) {
-	dialog := NewFileDialog(ModeSave, "mysong.json")
-	if dialog.InputValue() != "mysong.json" {
-		t.Errorf("Expected InputValue='mysong.json', got '%s'", dialog.InputValue())
+	dialog := NewFileDialog(ModeSave, "mymodule.json")
+	if dialog.InputValue() != "mymodule.json" {
+		t.Errorf("Expected InputValue='mymodule.json', got '%s'", dialog.InputValue())
 	}
 	if dialog.Mode != ModeSave {
 		t.Errorf("Expected Mode=ModeSave, got %v", dialog.Mode)

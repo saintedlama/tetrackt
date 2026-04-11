@@ -36,11 +36,14 @@ func (m MixMode) String() string {
 type Mixer struct {
 	Volume1      float64 // 0.0–1.0, independent volume for oscillator 1
 	Volume2      float64 // 0.0–1.0, independent volume for oscillator 2
+	Volume3      float64 // 0.0–1.0, independent volume for oscillator 3
 	Pan1         float64 // -1.0 (full left) to +1.0 (full right); 0.0 = centre
 	Pan2         float64
+	Pan3         float64
 	MasterVolume float64 // 0.0–1.0 output gain; zero value treated as 1.0 (unity)
 	Mute1        bool    // silence channel 1 while preserving its volume/pan settings
 	Mute2        bool
+	Mute3        bool
 	Mode         MixMode // post-mix summing curve
 }
 
@@ -118,12 +121,13 @@ func nesApprox(x float64) float64 {
 	return sign * v / nesMaxOut // normalise so max-input → 1.0
 }
 
-// Mix applies per-channel volume, muting and panning to s1/s2, sums them,
+// Mix applies per-channel volume, muting and panning to s1/s2/s3, sums them,
 // applies the MixMode shaping curve, then applies master volume.
-func (m Mixer) Mix(s1, s2 beep.Streamer) beep.Streamer {
+func (m Mixer) Mix(s1, s2, s3 beep.Streamer) beep.Streamer {
 	v1 := &effects.Volume{Streamer: s1, Base: 2, Volume: math.Log2(m.Volume1), Silent: m.Volume1 == 0 || m.Mute1}
 	v2 := &effects.Volume{Streamer: s2, Base: 2, Volume: math.Log2(m.Volume2), Silent: m.Volume2 == 0 || m.Mute2}
-	var mixed beep.Streamer = beep.Mix(newPanStreamer(v1, m.Pan1), newPanStreamer(v2, m.Pan2))
+	v3 := &effects.Volume{Streamer: s3, Base: 2, Volume: math.Log2(m.Volume3), Silent: m.Volume3 == 0 || m.Mute3}
+	var mixed beep.Streamer = beep.Mix(newPanStreamer(v1, m.Pan1), newPanStreamer(v2, m.Pan2), newPanStreamer(v3, m.Pan3))
 
 	if m.Mode != MixLinear {
 		mixed = &mixModeStreamer{s: mixed, mode: m.Mode}

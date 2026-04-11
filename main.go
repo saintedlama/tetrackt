@@ -85,7 +85,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch keyStr := msg.String(); keyStr {
 		case "s":
 			// Open save dialog
-			prefill := "song"
+			prefill := "module"
 			if m.currentFilename != "" {
 				prefill = m.currentFilename
 			}
@@ -234,9 +234,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		filename := msg.Filename
 		switch msg.Mode {
 		case ui.ModeSave:
-			// Save song
-			song := persistence.TracksToSong(m.trackerModel())
-			err := persistence.SaveToFile(filename, song)
+			// Save module
+			mod := persistence.TracksToModule(m.trackerModel())
+			err := persistence.SaveToFile(filename, mod)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Save failed: %v\n", err)
 			} else {
@@ -248,13 +248,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case ui.ModeLoad:
-			// Load song
-			song, err := persistence.LoadFromFile(filename)
+			// Load module
+			mod, err := persistence.LoadFromFile(filename)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Load failed: %v\n", err)
 			} else {
 				// Update existing tracker model instead of creating new one
-				persistence.SongToTracks(song, m.trackerModel())
+				persistence.ModuleToTracks(mod, m.trackerModel())
 				m.currentFilename = filename
 				m.dirty = false
 			}
@@ -278,7 +278,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case ui.QuitSaveMsg:
-		prefill := "song"
+		prefill := "module"
 		if m.currentFilename != "" {
 			prefill = m.currentFilename
 		}

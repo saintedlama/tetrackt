@@ -33,14 +33,14 @@ plans/          design docs (not code)
 
 ## Key types
 
-| Type                    | Package       | Purpose                                                                                                |
-| ----------------------- | ------------- | ------------------------------------------------------------------------------------------------------ |
-| `audio.Synth`           | `audio`       | Full synthesis engine; call `.Streamer(sr, note, dur)` to render audio                                 |
-| `audio.LFO`             | `audio`       | Modulation source; `Dest` field selects target (`ModPitch`, `ModVolume`, `ModCutoff`, `ModPulseWidth`) |
-| `ui.TrackerModel`       | `ui`          | Pattern editor state; each `Track` owns a `*audio.Synth`                                               |
-| `ui.SynthScreen`        | `ui`          | Panel editor; `GetSynth()` returns the current `*audio.Synth`                                          |
-| `ui.SynthPreset`        | `ui`          | Named synth snapshot; applied via `SynthPresetApplied` message                                         |
-| `persistence.SavedSong` | `persistence` | YAML wire format; convert with `TracksToSong` / `SongToTracks`                                         |
+| Type                      | Package       | Purpose                                                                                                |
+| ------------------------- | ------------- | ------------------------------------------------------------------------------------------------------ |
+| `audio.Synth`             | `audio`       | Full synthesis engine; call `.Streamer(sr, note, dur)` to render audio                                 |
+| `audio.LFO`               | `audio`       | Modulation source; `Dest` field selects target (`ModPitch`, `ModVolume`, `ModCutoff`, `ModPulseWidth`) |
+| `ui.TrackerModel`         | `ui`          | Pattern editor state; each `Track` owns a `*audio.Synth`                                               |
+| `ui.SynthScreen`          | `ui`          | Panel editor; `GetSynth()` returns the current `*audio.Synth`                                          |
+| `ui.SynthPreset`          | `ui`          | Named synth snapshot; applied via `SynthPresetApplied` message                                         |
+| `persistence.SavedModule` | `persistence` | JSON wire format; convert with `TracksToModule` / `ModuleToTracks`                                     |
 
 ## Conventions
 
