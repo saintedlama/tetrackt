@@ -8,6 +8,11 @@ import (
 	"github.com/gopxl/beep/v2"
 )
 
+// minEnvelopeLevel is the floor for exponential envelope calculations.
+// math.Log(0) = -Inf, which corrupts the multiplier; using this small positive
+// value instead produces ~-80 dB, which is inaudible.
+const minEnvelopeLevel = 0.0001
+
 type gateState int
 
 const (
@@ -41,7 +46,7 @@ func newGatedEnvelopeGenerator(streamer beep.Streamer, sampleRate beep.SampleRat
 		attackSamples:  int(env.Attack.Seconds() * sr),
 		decaySamples:   int(env.Decay.Seconds() * sr),
 		releaseSamples: int(env.Release.Seconds() * sr),
-		sustainLevel:   env.Sustain,
+		sustainLevel:   math.Max(minEnvelopeLevel, env.Sustain),
 		state:          gateIdle,
 		currentLevel:   0,
 		multiplier:     1.0,
@@ -54,7 +59,7 @@ func (g *gatedEnvelopeGenerator) NoteOn() {
 	g.pos = 0
 	if g.attackSamples > 0 {
 		g.state = gateAttack
-		g.currentLevel = 0.0001
+		g.currentLevel = minEnvelopeLevel
 		g.multiplier = calculateMultiplier(g.currentLevel, 1.0, g.attackSamples)
 	} else if g.decaySamples > 0 {
 		g.state = gateDecay
@@ -77,7 +82,7 @@ func (g *gatedEnvelopeGenerator) NoteOff() {
 	if g.releaseSamples > 0 {
 		g.state = gateRelease
 		g.pos = 0
-		g.multiplier = calculateMultiplier(math.Max(g.currentLevel, 0.0001), 0.0001, g.releaseSamples)
+		g.multiplier = calculateMultiplier(math.Max(g.currentLevel, minEnvelopeLevel), minEnvelopeLevel, g.releaseSamples)
 	} else {
 		g.state = gateDone
 		g.currentLevel = 0
@@ -208,7 +213,7 @@ func NewEnvelope(streamer beep.Streamer, sampleRate beep.SampleRate, noteSamples
 		currentStage:      StageOff,
 		currentLevel:      0, // start with minimum level greater than 0 for multiplicative increase
 		currentMultiplier: 1.0,
-		sustain:           envelope.Sustain,
+		sustain:           math.Max(minEnvelopeLevel, envelope.Sustain),
 		attackSamples:     attackSamples,
 		decaySamples:      decaySamples,
 		sustainSamples:    sustainSamples,
@@ -222,7 +227,7 @@ func (e *envelopeGenerator) nextSample() {
 	if e.idx < e.attackSamples {
 		if e.currentStage != StageAttack {
 			e.currentStage = StageAttack
-			e.currentLevel = 0.0001 // TODO: Extract mininimum level constant
+			e.currentLevel = minEnvelopeLevel
 			e.currentMultiplier = calculateMultiplier(e.currentLevel, 1, e.attackSamples)
 		}
 	} else if e.idx < e.attackSamples+e.decaySamples {
@@ -241,7 +246,7 @@ func (e *envelopeGenerator) nextSample() {
 		if e.currentStage != StageRelease {
 			e.currentStage = StageRelease
 			e.currentLevel = e.sustain
-			e.currentMultiplier = calculateMultiplier(e.currentLevel, 0.0001, e.releaseSamples)
+			e.currentMultiplier = calculateMultiplier(e.currentLevel, minEnvelopeLevel, e.releaseSamples)
 		}
 	} else {
 		if e.currentStage != StageOff {
