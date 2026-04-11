@@ -25,6 +25,7 @@ type PlayPatchNoteMsg struct {
 type PatchSaveRequestedMsg struct {
 	Name     string
 	Category string
+	Tags     []string
 	Synth    *audio.Synth
 }
 
@@ -45,6 +46,7 @@ const (
 	modeBrowse       patchBankMode = iota
 	modeSaveName                   // entering patch name
 	modeSaveCategory               // entering patch category
+	modeSaveTags                   // entering comma-separated tags
 	modeRename                     // renaming a custom patch
 )
 
@@ -61,6 +63,7 @@ type SynthPatchBankDialog struct {
 	mode         patchBankMode
 	input        string       // current text input
 	saveName     string       // patch name captured during modeSaveName
+	saveCategory string       // category captured during modeSaveCategory
 	currentSynth *audio.Synth // synth snapshot used when saving
 }
 
@@ -80,7 +83,7 @@ func (d *SynthPatchBankDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return d, nil
 	case tea.KeyPressMsg:
 		switch d.mode {
-		case modeSaveName, modeSaveCategory, modeRename:
+		case modeSaveName, modeSaveCategory, modeSaveTags, modeRename:
 			return d.updateTextInput(msg)
 		default:
 			return d.updateBrowse(msg)
@@ -116,7 +119,7 @@ func (d *SynthPatchBankDialog) updateBrowse(msg tea.KeyPressMsg) (tea.Model, tea
 			return d, nil
 		}
 		patch := d.view.Patches[d.view.SelectedPatch]
-		if !patch.Custom {
+		if !patch.IsCustom() {
 			return d, nil // built-in patches cannot be renamed
 		}
 		d.mode = modeRename
@@ -127,7 +130,7 @@ func (d *SynthPatchBankDialog) updateBrowse(msg tea.KeyPressMsg) (tea.Model, tea
 			return d, nil
 		}
 		patch := d.view.Patches[d.view.SelectedPatch]
-		if !patch.Custom {
+		if !patch.IsCustom() {
 			return d, nil // built-in patches cannot be deleted
 		}
 		name := patch.Name
@@ -166,16 +169,28 @@ func (d *SynthPatchBankDialog) updateTextInput(msg tea.KeyPressMsg) (tea.Model, 
 			d.mode = modeSaveCategory
 			d.input = ""
 		case modeSaveCategory:
+			d.saveCategory = strings.TrimSpace(d.input)
+			d.mode = modeSaveTags
+			d.input = ""
+		case modeSaveTags:
 			name := d.saveName
-			category := strings.TrimSpace(d.input)
+			category := d.saveCategory
+			var tags []string
+			for _, t := range strings.Split(d.input, ",") {
+				if s := strings.TrimSpace(t); s != "" {
+					tags = append(tags, s)
+				}
+			}
 			currentSynth := d.currentSynth
 			d.mode = modeBrowse
 			d.input = ""
 			d.saveName = ""
+			d.saveCategory = ""
 			return d, func() tea.Msg {
 				return ui.PassThroughMsg{Payload: PatchSaveRequestedMsg{
 					Name:     name,
 					Category: category,
+					Tags:     tags,
 					Synth:    currentSynth,
 				}}
 			}
@@ -227,7 +242,10 @@ func (d *SynthPatchBankDialog) View() tea.View {
 		help = patchBankDialogHelpStyle.Render("Type name | Enter: Next | Esc: Cancel")
 	case modeSaveCategory:
 		body = fmt.Sprintf("Patch Bank\n\nSave patch — Category (optional): %s_", d.input)
-		help = patchBankDialogHelpStyle.Render("Type category | Enter: Save | Esc: Cancel")
+		help = patchBankDialogHelpStyle.Render("Type category | Enter: Next | Esc: Cancel")
+	case modeSaveTags:
+		body = fmt.Sprintf("Patch Bank\n\nSave patch — Tags, comma-separated (optional): %s_", d.input)
+		help = patchBankDialogHelpStyle.Render("e.g. NES, C64 | Enter: Save | Esc: Cancel")
 	case modeRename:
 		body = fmt.Sprintf("Patch Bank\n\nRename: %s_", d.input)
 		help = patchBankDialogHelpStyle.Render("Type new name | Enter: Confirm | Esc: Cancel")

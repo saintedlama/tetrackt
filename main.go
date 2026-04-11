@@ -281,10 +281,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case synth.PatchSaveRequestedMsg:
+		tags := append([]string{"Custom"}, msg.Tags...)
 		patch := persistence.SavedPatch{
 			Name:     msg.Name,
 			Category: msg.Category,
-			Custom:   true,
+			Tags:     tags,
 			Synth:    persistence.ToSavedSynth(msg.Synth),
 		}
 		m.bank.SynthPatches = append(m.bank.SynthPatches, patch)
@@ -297,7 +298,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case synth.PatchDeleteRequestedMsg:
 		patches := m.bank.SynthPatches[:0]
 		for _, p := range m.bank.SynthPatches {
-			if !(p.Custom && p.Name == msg.PatchName) {
+			if !(p.IsCustom() && p.Name == msg.PatchName) {
 				patches = append(patches, p)
 			}
 		}
@@ -310,7 +311,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case synth.PatchRenameRequestedMsg:
 		for i := range m.bank.SynthPatches {
-			if m.bank.SynthPatches[i].Custom && m.bank.SynthPatches[i].Name == msg.OldName {
+			if m.bank.SynthPatches[i].IsCustom() && m.bank.SynthPatches[i].Name == msg.OldName {
 				m.bank.SynthPatches[i].Name = msg.NewName
 				break
 			}
@@ -382,14 +383,14 @@ func (m *model) playNoteWithSynthPatch(note audio.Note, patch synth.SynthPatch) 
 	)
 }
 
-// bankToPatches converts the patch bank's custom patches to SynthPatch slice for the UI.
+// bankToPatches converts the patch bank's patches to SynthPatch slice for the UI.
 func bankToPatches(bank *persistence.PatchBank) []synth.SynthPatch {
 	patches := make([]synth.SynthPatch, len(bank.SynthPatches))
 	for i, p := range bank.SynthPatches {
 		patches[i] = synth.SynthPatch{
 			Name:     p.Name,
 			Category: p.Category,
-			Custom:   true,
+			Tags:     p.Tags,
 			Synth:    persistence.SynthFromSavedPatch(p),
 		}
 	}

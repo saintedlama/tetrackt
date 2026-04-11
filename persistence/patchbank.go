@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/tetrackt/tetrackt/audio"
 )
@@ -20,8 +21,13 @@ type PatchBank struct {
 type SavedPatch struct {
 	Name     string     `json:"name"`
 	Category string     `json:"category,omitempty"`
-	Custom   bool       `json:"custom"`
+	Tags     []string   `json:"tags,omitempty"`
 	Synth    SavedSynth `json:"synth"`
+}
+
+// IsCustom reports whether this patch was saved by the user.
+func (p SavedPatch) IsCustom() bool {
+	return slices.Contains(p.Tags, "Custom")
 }
 
 // LoadPatchBank reads ~/.tetrackt and returns the stored PatchBank.

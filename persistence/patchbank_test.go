@@ -28,7 +28,7 @@ func TestPatchBankRoundTrip(t *testing.T) {
 			{
 				Name:     "Cool Bass",
 				Category: "Bass",
-				Custom:   true,
+				Tags:     []string{"Custom", "C64"},
 				Synth:    ToSavedSynth(synth),
 			},
 		},
@@ -67,8 +67,11 @@ func TestPatchBankRoundTrip(t *testing.T) {
 	if p.Category != "Bass" {
 		t.Errorf("expected Category='Bass', got %q", p.Category)
 	}
-	if !p.Custom {
-		t.Error("expected Custom=true")
+	if !p.IsCustom() {
+		t.Error("expected IsCustom()=true")
+	}
+	if len(p.Tags) != 2 {
+		t.Errorf("expected 2 tags, got %d", len(p.Tags))
 	}
 
 	// Reconstruct synth and check oscillator type round-trips.
@@ -118,7 +121,7 @@ func TestPatchBankSaveAtomic(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
-	bank := &PatchBank{Version: 1, SynthPatches: []SavedPatch{{Name: "Test", Custom: true}}}
+	bank := &PatchBank{Version: 1, SynthPatches: []SavedPatch{{Name: "Test", Tags: []string{"Custom"}}}}
 	if err := bank.Save(); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}

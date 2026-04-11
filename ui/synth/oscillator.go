@@ -54,8 +54,17 @@ type OscillatorUpdated struct {
 	Oscillator audio.Oscillator
 }
 
+func normalizeOscillator(o audio.Oscillator) audio.Oscillator {
+	if o.Type == "" {
+		o.Type = audio.Silent
+	}
+	return o
+}
+
 func NewOscillatorModel(oscillator audio.Oscillator) *OscillatorModel {
 	oscillatorList := []audio.OscillatorType{audio.Sine, audio.Square, audio.Triangle, audio.Sawtooth, audio.SawtoothReverse, audio.Noise, audio.NoisePeriodic, audio.Wavetable, audio.Silent}
+
+	oscillator = normalizeOscillator(oscillator)
 
 	oscillatorTypeStyle := lipgloss.NewStyle().Width(calcOscWidth(oscillatorList))
 

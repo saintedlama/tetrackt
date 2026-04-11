@@ -159,11 +159,11 @@ func (s *SynthScreen) GetFilter() *FilterModel { return s.panels[10].Child.(*Fil
 // selected track.
 func (s *SynthScreen) ApplyTrackChange(msg ui.TrackChanged) {
 	synth := msg.Synth
-	s.Osc1().Oscillator = synth.Oscillator1
+	s.Osc1().Oscillator = normalizeOscillator(synth.Oscillator1)
 	s.Env1().Envelope = synth.Envelope1
-	s.Osc2().Oscillator = synth.Oscillator2
+	s.Osc2().Oscillator = normalizeOscillator(synth.Oscillator2)
 	s.Env2().Envelope = synth.Envelope2
-	s.Osc3().Oscillator = synth.Oscillator3
+	s.Osc3().Oscillator = normalizeOscillator(synth.Oscillator3)
 	s.Env3().Envelope = synth.Envelope3
 	s.LFO3Screen().LFO = synth.LFO3
 	s.GetMixer().SetMixer(synth.Mixer)
