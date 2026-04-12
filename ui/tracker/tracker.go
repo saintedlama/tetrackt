@@ -1072,29 +1072,6 @@ func formatArpeggio(arp audio.ArpeggioEffect) string {
 	return fmt.Sprintf("A%d%d", o1, o2)
 }
 
-// formatEffect formats a TrackerEffect for display (3 chars).
-// Shows a letter code and packed parameter: V27 = vibrato speed 2 depth 7,
-// S+4 = volume slide +4/tick, C03 = note cut at tick 3, D05 = note delay to tick 5.
-// Inactive effect shows "---".
-func formatEffect(e TrackerEffect) string {
-	switch e.Type {
-	case EffectVibrato:
-		speed := (e.Param >> 4) & 0xF
-		depth := e.Param & 0xF
-		return fmt.Sprintf("V%X%X", speed, depth)
-	case EffectVolumeSlide:
-		if e.Param >= 0 {
-			return fmt.Sprintf("S+%d", e.Param)
-		}
-		return fmt.Sprintf("S%d", e.Param)
-	case EffectNoteCut:
-		return fmt.Sprintf("C%02d", e.Param)
-	case EffectNoteDelay:
-		return fmt.Sprintf("D%02d", e.Param)
-	}
-	return "---"
-}
-
 func formatEffectType(t EffectType) string {
 	switch t {
 	case EffectVibrato:
@@ -1147,16 +1124,4 @@ func (m *TrackerModel) MoveCursorDown() {
 			m.viewportRow = m.CursorRow - visibleRows + 1
 		}
 	}
-}
-
-func (m *TrackerModel) SetNote(note audio.Note) TrackRow {
-	trackCell := &m.Tracks[m.CursorTrack].Rows[m.CursorRow]
-	trackCell.Note = note
-
-	return *trackCell
-}
-
-func (m *TrackerModel) GetNote() audio.Note {
-	trackCell := &m.Tracks[m.CursorTrack].Rows[m.CursorRow]
-	return trackCell.Note
 }
