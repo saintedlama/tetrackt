@@ -103,8 +103,15 @@ func (d *SynthPatchBankDialog) updateBrowse(msg tea.KeyPressMsg) (tea.Model, tea
 			return d, cmd
 		}
 		patch := d.view.Patches[d.view.SelectedPatch]
+		tags := append([]string(nil), patch.Tags...)
 		return d, func() tea.Msg {
-			return ui.CloseDialogMsg{Payload: ui.SynthUpdated{Synth: patch.Synth}}
+			return ui.CloseDialogMsg{Payload: ui.SynthUpdated{
+				Synth:         patch.Synth,
+				PatchName:     patch.Name,
+				PatchCategory: patch.Category,
+				PatchTags:     tags,
+				HasPatchMeta:  true,
+			}}
 		}
 	case "up", "down", "left", "right":
 		// All navigation is handled by the view.
@@ -251,7 +258,7 @@ func (d *SynthPatchBankDialog) View() tea.View {
 		help = patchBankDialogHelpStyle.Render("Type new name | Enter: Confirm | Esc: Cancel")
 	default:
 		body = d.view.View()
-		help = patchBankDialogHelpStyle.Render("↑↓: Navigate | ←→: Category | Enter: Apply | S: Save | R: Rename | D: Delete | 1-7: Preview | Esc: Close")
+		help = patchBankDialogHelpStyle.Render("↑↓: Navigate | ←→: Category | Enter: Apply | S: Save | R: Rename | D: Delete | Z-M/Q-U: Preview | Esc: Close")
 	}
 
 	return tea.NewView(fmt.Sprintf("%s\n%s", bodyStyle.Render(body), help))

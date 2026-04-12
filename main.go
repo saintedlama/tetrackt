@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
@@ -69,7 +70,11 @@ type tickMsg time.Time
 // previewTickMsg is sent to advance arp preview one sub-tick
 type previewTickMsg time.Time
 
-var noteKeyToName = ui.NoteKeys
+//go:embed modules/quickstart.json
+var embeddedQuickstart []byte
+
+//go:embed modules/chiptune-demo.json
+var embeddedDemo []byte
 
 func (m model) Init() tea.Cmd {
 	// Initialize speaker with sample rate
@@ -87,7 +92,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			help := ui.NewHelpDialog(m.screens[m.activeScreen].Help())
 			return ui.NewDialogModel(help, m, m.width, m.height), nil
-		case "s":
+		case "ctrl+s":
 			// Open save dialog
 			prefill := "module"
 			if m.currentFilename != "" {
@@ -95,44 +100,32 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeSave, prefill), m, m.width, m.height)
 			return d, d.Init()
-		case "l":
+		case "ctrl+l":
 			// Open load dialog
 			d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeLoad, ""), m, m.width, m.height)
 			return d, d.Init()
-		case "e":
+		case "ctrl+e":
 			if m.activeScreen == trackerScreenIdx {
 				tm := m.trackerModel()
 				row := tm.Tracks[tm.CursorTrack].Rows[tm.CursorRow]
-				return ui.NewDialogModel(tracker.NewRowEffectsDialog(row, tm.CursorTrack, tm.CursorRow), m, m.width, m.height), nil
+				d := tracker.NewRowEffectsDialog(row, tm.CursorTrack, tm.CursorRow)
+				d.FocusForEffect(row.Effect)
+				return ui.NewDialogModel(d, m, m.width, m.height), nil
 			}
-		case "t":
+		case "ctrl+t":
 			m.activeScreen = (m.activeScreen + 1) % len(m.screens)
 			return m, nil
 		case "+":
 			if m.octave < maxOctave {
 				m.octave++
+				m.trackerModel().Octave = m.octave
 			}
-
-			note := m.trackerModel().GetNote()
-			if newNote, ok := note.Transpose(-12); ok {
-				m.trackerModel().SetNote(newNote)
-				m.playNote(newNote)
-				return m, nil
-			}
-
 			return m, nil
 		case "-":
 			if m.octave > minOctave {
 				m.octave--
+				m.trackerModel().Octave = m.octave
 			}
-
-			note := m.trackerModel().CurrentTrack().CurrentRow().Note
-			if newNote, ok := note.Transpose(-12); ok {
-				m.trackerModel().SetNote(newNote)
-				m.playNote(newNote)
-				return m, nil
-			}
-
 			return m, nil
 		case "b", "B":
 			// On the synth screen b/B opens the patch bank.
@@ -159,7 +152,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				//speaker.Clear()
 			}
-		case "ctrl+c", "q":
+		case "ctrl+c":
 			if m.dirty {
 				return ui.NewDialogModel(ui.NewQuitDialog(), m, m.width, m.height), nil
 			}
@@ -167,22 +160,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		// Global note playing (available in any mode)
-		if base, ok := noteKeyToName[msg.String()]; ok {
+		// Global note playing for synth screen.
+		if base, ok := ui.NoteKeys[msg.String()]; ok && m.activeScreen != trackerScreenIdx {
 			note := audio.Note{Base: base, Octave: audio.Octave(m.octave)}
-
-			if m.activeScreen == trackerScreenIdx {
-				tr := m.trackerModel()
-				tr.SetNote(note)
-				m.dirty = true
-				row := tr.Tracks[tr.CursorTrack].Rows[tr.CursorRow]
-				tr.MoveCursorDown()
-				if m.player.StartPreview(note, row.Arpeggio, tr.Tracks[tr.CursorTrack].Synth,
-					tr.BPMDuration(), m.sampleRate, m.globalVolume, tr.Speed) {
-					return m, m.previewTick()
-				}
-				return m, nil
-			}
 
 			m.playNote(note)
 			return m, nil
@@ -191,10 +171,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Forward remaining key events to the active screen
 		var cmd tea.Cmd
 		m.screens[m.activeScreen], cmd = m.screens[m.activeScreen].Update(msg)
-		// Mark dirty when delete clears a note in the tracker
-		if msg.String() == "delete" && m.activeScreen == trackerScreenIdx {
-			m.dirty = true
-		}
 		return m, cmd
 
 	case previewTickMsg:
@@ -215,8 +191,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
+		// Keep enough vertical budget for:
+		// - header/tab area (3)
+		// - tracker panel border+padding chrome (4)
+		viewportHeight := m.height - 7
+		if viewportHeight < 1 {
+			viewportHeight = 1
+		}
+
 		m.trackerModel().Viewport = tracker.Viewport{
-			Height: m.height - 7, // tab bar (1) + blank line (1) + newline (1) + footer padding+text (2) + panel border (2)
+			Height: viewportHeight,
 			Width:  m.width,
 		}
 
@@ -257,14 +241,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case ui.ModeLoad:
 			// Load module
-			mod, err := persistence.LoadFromFile(filename)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Load failed: %v\n", err)
-			} else {
-				// Update existing tracker model instead of creating new one
-				persistence.ModuleToTracks(mod, m.trackerModel())
-				m.currentFilename = filename
-				m.dirty = false
+			switch filename {
+			case ui.EmbeddedQuickstartToken:
+				if err := m.loadEmbeddedQuickstart(); err != nil {
+					fmt.Fprintf(os.Stderr, "Load quickstart failed: %v\n", err)
+				}
+			case ui.EmbeddedDemoToken:
+				if err := m.loadEmbeddedDemo(); err != nil {
+					fmt.Fprintf(os.Stderr, "Load demo song failed: %v\n", err)
+				}
+			default:
+				mod, err := persistence.LoadFromFile(filename)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Load failed: %v\n", err)
+				} else {
+					// Update existing tracker model instead of creating new one
+					persistence.ModuleToTracks(mod, m.trackerModel())
+					m.currentFilename = filename
+					m.dirty = false
+				}
 			}
 		}
 		return m, nil
@@ -276,6 +271,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tracker.BPMChanged:
 		// BPM is already updated on the TrackerModel; nothing else to do here.
 		m.dirty = true
+
+	case tracker.TrackerEdited:
+		m.dirty = true
+		return m, nil
+
+	case tracker.TrackerNoteEntered:
+		m.dirty = true
+		speed := msg.Speed
+		if speed <= 0 {
+			speed = tracker.DefaultSpeed
+		}
+		if m.player.StartPreview(msg.Note, msg.Row.Arpeggio, msg.Synth,
+			m.trackerModel().BPMDuration(), m.sampleRate, m.globalVolume, speed) {
+			return m, m.previewTick()
+		}
+		return m, nil
 
 	case synth.OpenPatchBankMsg:
 		return ui.NewDialogModel(synth.NewSynthPatchBankDialog(m.synth().PatchBankView(), m.octave, m.synth().GetSynth()), m, m.width, m.height), nil
@@ -418,6 +429,30 @@ func (m *model) playNote(note audio.Note) {
 	)
 }
 
+// loadEmbeddedQuickstart restores the built-in quickstart module from the
+// executable and applies it to the current tracker model.
+func (m *model) loadEmbeddedQuickstart() error {
+	mod, err := persistence.LoadFromBytes(embeddedQuickstart)
+	if err != nil {
+		return err
+	}
+	persistence.ModuleToTracks(mod, m.trackerModel())
+	m.currentFilename = "quickstart (embedded)"
+	m.dirty = false
+	return nil
+}
+
+func (m *model) loadEmbeddedDemo() error {
+	mod, err := persistence.LoadFromBytes(embeddedDemo)
+	if err != nil {
+		return err
+	}
+	persistence.ModuleToTracks(mod, m.trackerModel())
+	m.currentFilename = "demo song (embedded)"
+	m.dirty = false
+	return nil
+}
+
 // View renders the UI
 func (m model) View() tea.View {
 	// Tab bar
@@ -431,17 +466,19 @@ func (m model) View() tea.View {
 	}
 	tabBar := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
 
-	logoStr := ui.Logo()
-	spacerWidth := m.width - lipgloss.Width(tabBar) - lipgloss.Width(logoStr)
+	helpHint := lipgloss.NewStyle().
+		Foreground(common.ColorTextDisabled).
+		Render("? - Help")
+	right := lipgloss.JoinHorizontal(lipgloss.Top, helpHint, "  ", ui.Logo())
+	spacerWidth := m.width - lipgloss.Width(tabBar) - lipgloss.Width(right)
 	if spacerWidth < 0 {
 		spacerWidth = 0
 	}
-	header := tabBar + strings.Repeat(" ", spacerWidth) + logoStr + "\n\n"
+	header := tabBar + strings.Repeat(" ", spacerWidth) + right + "\n\n"
 
 	body := m.screens[m.activeScreen].View()
-	footer := common.StyleHelp.Render(m.screens[m.activeScreen].Footer())
 
-	v := tea.NewView(header + body + "\n" + footer)
+	v := tea.NewView(header + body)
 	v.AltScreen = true
 	return v
 }
@@ -478,11 +515,20 @@ func main() {
 
 // newModel constructs the application model, loading the user patch bank from disk.
 func newModel(sampleRate audio.SampleRate, trackerModel *tracker.TrackerModel, track tracker.Track) model {
+	trackerModel.Octave = 4
+
 	bank, err := persistence.LoadPatchBank()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not load patch bank: %v\n", err)
 		bank = &persistence.PatchBank{Version: 1}
 	}
+
+	if bank.InputProfile != "" {
+		ui.SetInputProfileFromString(bank.InputProfile)
+	} else {
+		ui.SetInputProfile(ui.InputProfileQWERTY)
+	}
+	bank.InputProfile = string(ui.CurrentInputProfile())
 
 	synthScreen := synth.NewSynthScreen(track.Synth)
 	if len(bank.SynthPatches) > 0 {

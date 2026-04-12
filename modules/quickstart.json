@@ -1,0 +1,331 @@
+{
+  "num_rows": 16,
+  "num_tracks": 4,
+  "bpm": 156,
+  "speed": 6,
+  "tracks": [
+    {
+      "synth": {
+        "oscillator1": {
+          "type": "square",
+          "pulse_width": 0.22
+        },
+        "envelope1": {
+          "attack": 0.002,
+          "decay": 0.055,
+          "sustain": 0.72,
+          "release": 0.045
+        },
+        "lfo1": {
+          "waveform": "sine",
+          "rate": 6,
+          "depth": 0.01,
+          "delay": 0.12,
+          "dest": 0
+        },
+        "oscillator2": {
+          "type": "sawtooth",
+          "detune": 7
+        },
+        "envelope2": {
+          "attack": 0,
+          "decay": 0.035,
+          "sustain": 0.5,
+          "release": 0.03
+        },
+        "lfo2": {
+          "waveform": "triangle",
+          "rate": 0.9,
+          "depth": 0.06,
+          "dest": 3
+        },
+        "oscillator3": {
+          "type": "silent"
+        },
+        "envelope3": {
+          "attack": 0,
+          "decay": 0,
+          "sustain": 1,
+          "release": 0
+        },
+        "lfo3": {
+          "waveform": "sine",
+          "rate": 1,
+          "dest": 0
+        },
+        "mixer": {
+          "volume1": 0.85,
+          "volume2": 0.3,
+          "master_volume": 1
+        },
+        "filter": {
+          "type": "lowpass",
+          "cutoff": 0.66,
+          "resonance": 0.14
+        },
+        "filter_envelope": {
+          "decay": 0.08,
+          "sustain": 0.55,
+          "release": 0.065,
+          "depth": 0.22
+        }
+      },
+      "rows": [
+        { "base": "E", "octave": 5, "volume": 54 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "C", "octave": 5, "volume": 54 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "A", "octave": 4, "volume": 54 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "C", "octave": 5, "volume": 54 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "F", "octave": 5, "volume": 54 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "E", "octave": 5, "volume": 54 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "C", "octave": 5, "volume": 54 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "A", "octave": 4, "volume": 54, "effect_type": 1, "effect_param": 38 },
+        { "base": "---", "octave": 0, "volume": 0 }
+      ]
+    },
+    {
+      "synth": {
+        "oscillator1": {
+          "type": "square",
+          "pulse_width": 0.5
+        },
+        "envelope1": {
+          "attack": 0,
+          "decay": 0.08,
+          "sustain": 0.62,
+          "release": 0.03
+        },
+        "lfo1": {
+          "waveform": "sine",
+          "rate": 1,
+          "dest": 0
+        },
+        "oscillator2": {
+          "type": "sawtooth_reverse",
+          "detune": -4
+        },
+        "envelope2": {
+          "attack": 0,
+          "decay": 0.065,
+          "sustain": 0.45,
+          "release": 0.025
+        },
+        "lfo2": {
+          "waveform": "sine",
+          "rate": 1,
+          "dest": 1
+        },
+        "oscillator3": {
+          "type": "silent"
+        },
+        "envelope3": {
+          "attack": 0,
+          "decay": 0,
+          "sustain": 1,
+          "release": 0
+        },
+        "lfo3": {
+          "waveform": "sine",
+          "rate": 1,
+          "dest": 0
+        },
+        "mixer": {
+          "volume1": 0.86,
+          "volume2": 0.34,
+          "master_volume": 1
+        },
+        "filter": {
+          "type": "lowpass",
+          "cutoff": 0.45,
+          "resonance": 0.22
+        },
+        "filter_envelope": {
+          "decay": 0.07,
+          "sustain": 0.34,
+          "release": 0.045,
+          "depth": 0.24
+        }
+      },
+      "rows": [
+        { "base": "A", "octave": 2, "volume": 62, "row_ticks": 12, "continuous": true },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "F", "octave": 2, "volume": 62, "row_ticks": 12, "continuous": true },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "C", "octave": 2, "volume": 62, "row_ticks": 12, "continuous": true },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "G", "octave": 2, "volume": 62, "row_ticks": 12, "continuous": true },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 }
+      ]
+    },
+    {
+      "synth": {
+        "oscillator1": {
+          "type": "triangle"
+        },
+        "envelope1": {
+          "attack": 0,
+          "decay": 0.04,
+          "sustain": 0.8,
+          "release": 0.03
+        },
+        "lfo1": {
+          "waveform": "sine",
+          "rate": 1,
+          "dest": 0
+        },
+        "oscillator2": {
+          "type": "square",
+          "pulse_width": 0.4,
+          "detune": 3
+        },
+        "envelope2": {
+          "attack": 0,
+          "decay": 0.03,
+          "sustain": 0.55,
+          "release": 0.025
+        },
+        "lfo2": {
+          "waveform": "sine",
+          "rate": 1,
+          "dest": 1
+        },
+        "oscillator3": {
+          "type": "silent"
+        },
+        "envelope3": {
+          "attack": 0,
+          "decay": 0,
+          "sustain": 1,
+          "release": 0
+        },
+        "lfo3": {
+          "waveform": "sine",
+          "rate": 1,
+          "dest": 0
+        },
+        "mixer": {
+          "volume1": 0.62,
+          "volume2": 0.28,
+          "master_volume": 1
+        },
+        "filter": {
+          "type": "highpass",
+          "cutoff": 0.62,
+          "resonance": 0.1
+        },
+        "filter_envelope": {
+          "decay": 0.04,
+          "sustain": 0.7,
+          "release": 0.035,
+          "depth": 0.1
+        }
+      },
+      "rows": [
+        { "base": "A", "octave": 3, "volume": 42, "row_ticks": 6, "arpeggio_offsets": [0, 3, 7] },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "F", "octave": 3, "volume": 42, "row_ticks": 6, "arpeggio_offsets": [0, 4, 7] },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "C", "octave": 4, "volume": 42, "row_ticks": 6, "arpeggio_offsets": [0, 4, 7] },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "G", "octave": 3, "volume": 42, "row_ticks": 6, "arpeggio_offsets": [0, 4, 7] },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "---", "octave": 0, "volume": 0 }
+      ]
+    },
+    {
+      "synth": {
+        "oscillator1": {
+          "type": "noise_periodic"
+        },
+        "envelope1": {
+          "attack": 0,
+          "decay": 0.014,
+          "sustain": 0.08,
+          "release": 0.01
+        },
+        "lfo1": {
+          "waveform": "sine",
+          "rate": 1,
+          "dest": 0
+        },
+        "oscillator2": {
+          "type": "noise"
+        },
+        "envelope2": {
+          "attack": 0,
+          "decay": 0.02,
+          "sustain": 0.02,
+          "release": 0.008
+        },
+        "lfo2": {
+          "waveform": "sine",
+          "rate": 1,
+          "dest": 1
+        },
+        "oscillator3": {
+          "type": "silent"
+        },
+        "envelope3": {
+          "attack": 0,
+          "decay": 0,
+          "sustain": 1,
+          "release": 0
+        },
+        "lfo3": {
+          "waveform": "sine",
+          "rate": 1,
+          "dest": 0
+        },
+        "mixer": {
+          "volume1": 0.7,
+          "volume2": 0.35,
+          "master_volume": 1
+        },
+        "filter": {
+          "type": "highpass",
+          "cutoff": 0.84,
+          "resonance": 0
+        }
+      },
+      "rows": [
+        { "base": "C", "octave": 6, "volume": 28, "effect_type": 3, "effect_param": 1 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "C", "octave": 6, "volume": 28, "effect_type": 3, "effect_param": 1 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "G", "octave": 5, "volume": 38, "effect_type": 3, "effect_param": 2 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "C", "octave": 6, "volume": 28, "effect_type": 3, "effect_param": 1 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "C", "octave": 6, "volume": 28, "effect_type": 3, "effect_param": 1 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "C", "octave": 6, "volume": 28, "effect_type": 3, "effect_param": 1 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "G", "octave": 5, "volume": 38, "effect_type": 3, "effect_param": 2 },
+        { "base": "---", "octave": 0, "volume": 0 },
+        { "base": "C", "octave": 6, "volume": 28, "effect_type": 3, "effect_param": 1 },
+        { "base": "---", "octave": 0, "volume": 0 }
+      ]
+    }
+  ]
+}

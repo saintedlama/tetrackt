@@ -157,7 +157,11 @@ func (p *Player) Tick(trackerModel *tracker.TrackerModel, sampleRate audio.Sampl
 					patch.SetFrequency(p.prevFrequencies[trackIdx] * mult)
 				}
 			case tracker.EffectVolumeSlide:
-				state.volume = math.Max(0, math.Min(1, state.volume+float64(trackRow.Effect.Param)/64.0))
+				delta := trackRow.Effect.Param
+				if delta > 127 {
+					delta = int(int8(uint8(delta)))
+				}
+				state.volume = math.Max(0, math.Min(1, state.volume+float64(delta)/64.0))
 				patch.SetVolume(state.volume)
 			case tracker.EffectNoteCut:
 				if p.subTickCount == trackRow.Effect.Param {

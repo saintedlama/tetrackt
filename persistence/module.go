@@ -260,8 +260,11 @@ type SavedTrackRow struct {
 
 // SavedTrack is the JSON-serializable form of Track
 type SavedTrack struct {
-	Synth SavedSynth      `json:"synth"`
-	Rows  []SavedTrackRow `json:"rows"`
+	Synth         SavedSynth      `json:"synth"`
+	PatchName     string          `json:"patch_name,omitempty"`
+	PatchCategory string          `json:"patch_category,omitempty"`
+	PatchTags     []string        `json:"patch_tags,omitempty"`
+	Rows          []SavedTrackRow `json:"rows"`
 }
 
 // SavedModule is the complete module structure for JSON serialization
@@ -298,8 +301,11 @@ func TracksToModule(tracker *utracker.TrackerModel) *SavedModule {
 			}
 		}
 		saved.Tracks[i] = SavedTrack{
-			Synth: toSavedSynth(track.Synth),
-			Rows:  rows,
+			Synth:         toSavedSynth(track.Synth),
+			PatchName:     track.PatchName,
+			PatchCategory: track.PatchCategory,
+			PatchTags:     append([]string(nil), track.PatchTags...),
+			Rows:          rows,
 		}
 	}
 	return saved
@@ -307,9 +313,18 @@ func TracksToModule(tracker *utracker.TrackerModel) *SavedModule {
 
 // ModuleToTracks updates an existing TrackerModel with data from a SavedModule.
 func ModuleToTracks(mod *SavedModule, tracker *utracker.TrackerModel) {
+	const minVisibleTracks = 8
+	const minVisibleRows = 64
+
 	// Update tracker dimensions
 	tracker.NumRows = mod.NumRows
+	if tracker.NumRows < minVisibleRows {
+		tracker.NumRows = minVisibleRows
+	}
 	tracker.NumTracks = mod.NumTracks
+	if tracker.NumTracks < minVisibleTracks {
+		tracker.NumTracks = minVisibleTracks
+	}
 
 	// Restore BPM; fall back to default for old saves that omit it
 	if mod.BPM > 0 {
@@ -325,20 +340,21 @@ func ModuleToTracks(mod *SavedModule, tracker *utracker.TrackerModel) {
 		tracker.Speed = utracker.DefaultSpeed
 	}
 
-	// Resize tracks slice if needed
-	if len(tracker.Tracks) != mod.NumTracks {
-		tracker.Tracks = make([]utracker.Track, mod.NumTracks)
-	}
+	// Reset tracks to tracker defaults so any missing tracks/rows after loading
+	// are valid and playable (default synth + empty note rows).
+	defaults := utracker.NewTracker(tracker.NumTracks, tracker.NumRows, tracker.Viewport.Width, tracker.Viewport.Height)
+	tracker.Tracks = defaults.Tracks
 
 	// Update each track with saved data
 	for i, savedTrack := range mod.Tracks {
+		if i >= len(tracker.Tracks) {
+			break
+		}
 		track := &tracker.Tracks[i]
 		track.Synth = fromSavedSynth(savedTrack.Synth)
-
-		// Resize rows slice if needed
-		if len(track.Rows) != mod.NumRows {
-			track.Rows = make([]utracker.TrackRow, mod.NumRows)
-		}
+		track.PatchName = savedTrack.PatchName
+		track.PatchCategory = savedTrack.PatchCategory
+		track.PatchTags = append([]string(nil), savedTrack.PatchTags...)
 
 		// Update each row with saved data
 		for j, row := range savedTrack.Rows {
@@ -384,8 +400,13 @@ func LoadFromFile(filename string) (*SavedModule, error) {
 	if err != nil {
 		return nil, err
 	}
+	return LoadFromBytes(data)
+}
+
+// LoadFromBytes reads JSON bytes and returns a SavedModule.
+func LoadFromBytes(data []byte) (*SavedModule, error) {
 	var saved SavedModule
-	err = json.Unmarshal(data, &saved)
+	err := json.Unmarshal(data, &saved)
 	if err != nil {
 		return nil, err
 	}

@@ -14,6 +14,7 @@ import (
 // The Version field allows future format migrations.
 type PatchBank struct {
 	Version      int          `json:"version"`
+	InputProfile string       `json:"inputProfile,omitempty"`
 	SynthPatches []SavedPatch `json:"synthPatches"`
 }
 

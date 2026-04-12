@@ -3,10 +3,10 @@ package tracker
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/tetrackt/tetrackt/audio"
 	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 )
@@ -49,15 +49,15 @@ func (t *TrackerScreen) SetGlobalVolume(v float64) {
 	t.volumeBar.Value = v
 }
 
-// Update handles tab navigation between tracker/volume panels and key events.
+// Update routes key events between tracker grid and settings panel.
 func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "tab":
+		case "ctrl+right":
 			t.activePanel = (t.activePanel + 1) % trackerPanelCount
 			return t, nil
-		case "shift+tab":
+		case "ctrl+left":
 			t.activePanel = (t.activePanel - 1 + trackerPanelCount) % trackerPanelCount
 			return t, nil
 		}
@@ -115,15 +115,17 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 		}
 
 		// Tracker panel is active
-		if msg.String() == "delete" {
-			t.Tracker.SetNote(audio.Off())
-			return t, nil
-		}
 		_, cmd := t.Tracker.Update(msg)
 		return t, cmd
 
 	case ui.SynthUpdated:
-		t.Tracker.Tracks[t.Tracker.CursorTrack].Synth = msg.Synth
+		track := &t.Tracker.Tracks[t.Tracker.CursorTrack]
+		track.Synth = msg.Synth
+		if msg.HasPatchMeta {
+			track.PatchName = msg.PatchName
+			track.PatchCategory = msg.PatchCategory
+			track.PatchTags = append([]string(nil), msg.PatchTags...)
+		}
 		return t, nil
 	}
 	return t, nil
@@ -145,8 +147,8 @@ func (t *TrackerScreen) View() string {
 		fmt.Sprintf("     %3d", t.Tracker.BPM)
 	settingsContent := volumeRow + "\n" + bpmRow
 
-	currentSynth := t.Tracker.Tracks[t.Tracker.CursorTrack].Synth
-	synthInfoContent := renderSynthInfo(currentSynth)
+	currentTrack := t.Tracker.Tracks[t.Tracker.CursorTrack]
+	synthInfoContent := renderSynthInfo(currentTrack.Synth, currentTrack.PatchName, currentTrack.PatchCategory, currentTrack.PatchTags)
 
 	trackerPanel := ui.RenderPanel("Tracker", common.ColorAccentPrimary, t.Tracker.View(), t.activePanel == 0)
 	settingsPanel := ui.RenderPanel("Settings", common.ColorAccentModulation, settingsContent, t.activePanel == 1)
@@ -160,25 +162,55 @@ func (t *TrackerScreen) Title() string { return "Tracker" }
 
 // Footer returns the help text shown in the footer bar on the Tracker screen.
 func (t *TrackerScreen) Footer() string {
-	return "↑↓←→: Navigate | 1-7: Notes | E: Row effects | p: Play | T: Synth | ?: Help"
+	mode := "NAV"
+	if t.Tracker.Mode == EditMode {
+		mode = "EDIT"
+	}
+	return fmt.Sprintf("%s | Space: Mode | Tab: Column | Ctrl+←→: Panel | Ctrl+E: Effects | p: Play | Ctrl+T: Synth | ?: Help", mode)
 }
 
 // Help returns screen-specific keyboard shortcut sections for the help dialog.
 func (t *TrackerScreen) Help() []ui.HelpSection {
+	profile := ui.CurrentInputProfile()
+	lower, upper := ui.NoteMappingRows(profile)
+
 	return []ui.HelpSection{
 		{
 			Title: "Tracker",
 			Entries: []ui.HelpEntry{
-				{"↑↓←→", "Navigate rows / tracks"},
-				{"Home / End", "First / last row"},
-				{"1–7", "Enter note (C D E F G A B)"},
-				{"Shift+1–6", "Enter sharp note"},
-				{"Delete", "Clear current cell"},
-				{"+/-", "Octave up / down"},
-				{"E", "Row effects dialog (arp, fx)"},
-				{"Tab / Shift+Tab", "Switch tracker / settings panel"},
-				{"p", "Play / Pause from row 0"},
-				{"P", "Loop to current row"},
+				{Key: "Space", Desc: "Toggle Navigate / Edit mode"},
+				{Key: "↑↓←→", Desc: "Navigate rows / tracks"},
+				{Key: "Tab / Shift+Tab", Desc: "Move subcolumn focus"},
+				{Key: "", Desc: ""},
+
+				{Key: "PgUp / PgDn", Desc: "Jump by viewport height"},
+				{Key: "Home / End", Desc: "First / last row"},
+				{Key: "", Desc: ""},
+				{Key: "0-9 / A-F", Desc: "Hex entry for volume/fx columns"},
+				{Key: "FX cmd (0..7)", Desc: "0 none, 1 vib, 2 volslide, 3 cut, 4 delay, 5 ticks, 6 cont, 7 arp"},
+				{Key: "FX aliases", Desc: "V S C D T O A in Effect column"},
+				{Key: "FX param", Desc: "2 hex nibbles in Param column"},
+				{Key: "Ctrl+E", Desc: "Advanced row effects editor"},
+				{Key: "Delete", Desc: "Clear focused subcolumn"},
+				{Key: "", Desc: ""},
+				{Key: "Shift+Arrows", Desc: "Rectangular selection"},
+				{Key: "Ctrl+A", Desc: "Select full pattern"},
+				{Key: "Alt+C / Alt+X / Alt+V", Desc: "Copy / cut / paste block"},
+				{Key: "Alt+Shift+V", Desc: "Paste effects only (keep note)"},
+				{Key: "", Desc: ""},
+				{Key: "Alt+↑ / Alt+↓", Desc: "Transpose notes +/- 1 semitone"},
+				{Key: "Alt+Shift+↑ / Alt+Shift+↓", Desc: "Transpose notes +/- 1 octave"},
+				{Key: "F8 / F7", Desc: "Transpose notes +/- 1 semitone"},
+				{Key: "Shift+F8 / Shift+F7", Desc: "Transpose notes +/- 1 octave"},
+				{Key: "", Desc: ""},
+				{Key: "Insert / Shift+Insert", Desc: "Insert track / global row space"},
+			},
+		},
+		{
+			Title: fmt.Sprintf("Note Mapping (%s)", strings.ToUpper(string(profile))),
+			Entries: []ui.HelpEntry{
+				{Key: "Lower row", Desc: lower},
+				{Key: "Upper row", Desc: upper},
 			},
 		},
 	}
