@@ -107,7 +107,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activeScreen == trackerScreenIdx {
 				tm := m.trackerModel()
 				row := tm.Tracks[tm.CursorTrack].Rows[tm.CursorRow]
-				return ui.NewDialogModel(tracker.NewRowEffectsDialog(row, tm.CursorTrack, tm.CursorRow), m, m.width, m.height), nil
+				d := tracker.NewRowEffectsDialog(row, tm.CursorTrack, tm.CursorRow)
+				d.FocusForEffect(row.Effect)
+				return ui.NewDialogModel(d, m, m.width, m.height), nil
 			}
 		case "ctrl+t":
 			m.activeScreen = (m.activeScreen + 1) % len(m.screens)

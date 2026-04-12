@@ -82,15 +82,10 @@ func CurrentInputProfile() InputProfile {
 	return currentInputProfile
 }
 
-func NoteMappingRows(profile InputProfile) (lower, upper, naturals, sharps string) {
+func NoteMappingRows(profile InputProfile) (lower, upper string) {
 	if profile == InputProfileQWERTZ {
-		return "Y S X D C V G B H N J M",
-			"Q 2 W 3 E R 5 T 6 Z 7 U",
-			"Y X C V B N M and Q W E R T Z U",
-			"S D G H J and 2 3 5 6 7"
+		return "Y S X D C V G B H N J M", "Q 2 W 3 E R 5 T 6 Z 7 U"
 	}
-	return "Z S X D C V G B H N J M",
-		"Q 2 W 3 E R 5 T 6 Y 7 U",
-		"Z X C V B N M and Q W E R T Y U",
-		"S D G H J and 2 3 5 6 7"
+
+	return "Z S X D C V G B H N J M", "Q 2 W 3 E R 5 T 6 Y 7 U"
 }

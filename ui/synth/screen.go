@@ -232,10 +232,10 @@ func (s *SynthScreen) Help() []ui.HelpSection {
 		{
 			Title: "Synth",
 			Entries: []ui.HelpEntry{
-				{Key: "Ctrl+↑↓←→", Desc: "Switch panels in grid"},
 				{Key: "↑↓", Desc: "Select parameter"},
 				{Key: "←→", Desc: "Adjust parameter value"},
 				{Key: "Shift+←→", Desc: "Large adjustment"},
+				{Key: "", Desc: ""},
 				{Key: "b / B", Desc: "Open patch bank"},
 				{Key: "Z-M / Q-U + black keys", Desc: "Preview note"},
 			},

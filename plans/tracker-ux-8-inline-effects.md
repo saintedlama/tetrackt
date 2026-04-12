@@ -1,6 +1,6 @@
 # Tracker UX: Fully Inline Effects Editing
 
-Status: Planned
+Status: Done
 
 ## Feature Description
 

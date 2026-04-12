@@ -36,14 +36,17 @@ var GlobalHelpSections = []HelpSection{
 		Entries: []HelpEntry{
 			{"?", "Open this help"},
 			{"Ctrl+t", "Toggle Tracker / Synth screen"},
+			{"", ""},
 			{"p", "Play / Pause from row 0"},
 			{"P", "Loop current row"},
+			{"", ""},
 			{"Ctrl+s", "Save module"},
 			{"Ctrl+l", "Load module"},
+			{"", ""},
 			{"+/-", "Octave up / down"},
-			{"Ctrl+↑↓←→", "Panel navigation (Synth, Tracker panels)"},
+			{"Ctrl+←→ / Ctrl+↑↓←→", "Panel navigation (Tracker / Synth)"},
 			{"Input profile", "QWERTY default, QWERTZ via .tetrackt file"},
-			{"Ctrl+e", "Row effects dialog (NAV mode)"},
+			{"", ""},
 			{"Ctrl+c", "Quit"},
 		},
 	},
@@ -88,6 +91,10 @@ func (d *HelpDialog) View() tea.View {
 		var sb strings.Builder
 		fmt.Fprintln(&sb, helpSectionStyle.Render(section.Title))
 		for _, e := range section.Entries {
+			if e.Key == "" && e.Desc == "" {
+				sb.WriteByte('\n')
+				continue
+			}
 			fmt.Fprintf(&sb, "  %-18s %s\n",
 				helpKeyStyle.Render(e.Key),
 				helpDescStyle.Render(e.Desc),

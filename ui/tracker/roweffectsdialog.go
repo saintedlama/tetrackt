@@ -183,6 +183,32 @@ func NewRowEffectsDialog(row TrackRow, trackIdx, rowIdx int) *RowEffectsDialog {
 	}
 }
 
+// FocusForEffect moves initial focus to the field most relevant for the current
+// inline effect command, keeping Ctrl+E as an advanced fallback editor.
+func (d *RowEffectsDialog) FocusForEffect(effect TrackerEffect) {
+	arpBase := d.numArpFields()
+	switch effect.Type {
+	case EffectRowTicks:
+		d.focusField = 0
+	case EffectContinuous:
+		if d.arpEnabled {
+			d.focusField = 1
+			return
+		}
+		d.focusField = 2
+	case EffectArpPreset:
+		if !d.arpEnabled {
+			d.focusField = 1
+			return
+		}
+		d.focusField = 2
+	case EffectVibrato, EffectVolumeSlide, EffectNoteCut, EffectNoteDelay:
+		d.focusField = arpBase
+	default:
+		d.focusField = 0
+	}
+}
+
 func (d *RowEffectsDialog) Init() tea.Cmd { return nil }
 
 func (d *RowEffectsDialog) numArpFields() int {

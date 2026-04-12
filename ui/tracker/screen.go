@@ -172,7 +172,7 @@ func (t *TrackerScreen) Footer() string {
 // Help returns screen-specific keyboard shortcut sections for the help dialog.
 func (t *TrackerScreen) Help() []ui.HelpSection {
 	profile := ui.CurrentInputProfile()
-	lower, upper, naturals, sharps := ui.NoteMappingRows(profile)
+	lower, upper := ui.NoteMappingRows(profile)
 
 	return []ui.HelpSection{
 		{
@@ -181,27 +181,29 @@ func (t *TrackerScreen) Help() []ui.HelpSection {
 				{Key: "Space", Desc: "Toggle Navigate / Edit mode"},
 				{Key: "↑↓←→", Desc: "Navigate rows / tracks"},
 				{Key: "Tab / Shift+Tab", Desc: "Move subcolumn focus"},
-				{Key: "Ctrl+← / Ctrl+→", Desc: "Switch tracker / settings panel"},
-				{Key: "Settings panel: ↑↓", Desc: "Switch volume / BPM row"},
-				{Key: "Settings panel: ←→", Desc: "Adjust selected value"},
+				{Key: "", Desc: ""},
+
 				{Key: "PgUp / PgDn", Desc: "Jump by viewport height"},
 				{Key: "Home / End", Desc: "First / last row"},
-				{Key: "Z-M / Q-U", Desc: "Enter natural notes"},
-				{Key: "S D G H J / 2 3 5 6 7", Desc: "Enter sharp notes"},
+				{Key: "", Desc: ""},
 				{Key: "0-9 / A-F", Desc: "Hex entry for volume/fx columns"},
+				{Key: "FX cmd (0..7)", Desc: "0 none, 1 vib, 2 volslide, 3 cut, 4 delay, 5 ticks, 6 cont, 7 arp"},
+				{Key: "FX aliases", Desc: "V S C D T O A in Effect column"},
+				{Key: "FX param", Desc: "2 hex nibbles in Param column"},
+				{Key: "Ctrl+E", Desc: "Advanced row effects editor"},
 				{Key: "Delete", Desc: "Clear focused subcolumn"},
+				{Key: "", Desc: ""},
 				{Key: "Shift+Arrows", Desc: "Rectangular selection"},
-				{Key: "Ctrl+C / Ctrl+X / Ctrl+V", Desc: "Copy / cut / paste block"},
+				{Key: "Ctrl+A", Desc: "Select full pattern"},
+				{Key: "Alt+C / Alt+X / Alt+V", Desc: "Copy / cut / paste block"},
+				{Key: "Alt+Shift+V", Desc: "Paste effects only (keep note)"},
+				{Key: "", Desc: ""},
 				{Key: "Alt+↑ / Alt+↓", Desc: "Transpose notes +/- 1 semitone"},
 				{Key: "Alt+Shift+↑ / Alt+Shift+↓", Desc: "Transpose notes +/- 1 octave"},
 				{Key: "F8 / F7", Desc: "Transpose notes +/- 1 semitone"},
 				{Key: "Shift+F8 / Shift+F7", Desc: "Transpose notes +/- 1 octave"},
+				{Key: "", Desc: ""},
 				{Key: "Insert / Shift+Insert", Desc: "Insert track / global row space"},
-				{Key: "+/-", Desc: "Octave up / down"},
-				{Key: "Ctrl+E", Desc: "Row effects dialog (arp, fx)"},
-				{Key: "Ctrl+T", Desc: "Switch to Synth screen"},
-				{Key: "P", Desc: "Loop to current row"},
-				{Key: "Ctrl+L", Desc: "Load dialog (includes quickstart)"},
 			},
 		},
 		{
@@ -209,9 +211,6 @@ func (t *TrackerScreen) Help() []ui.HelpSection {
 			Entries: []ui.HelpEntry{
 				{Key: "Lower row", Desc: lower},
 				{Key: "Upper row", Desc: upper},
-				{Key: "Naturals", Desc: naturals},
-				{Key: "Sharps", Desc: sharps},
-				{Key: "+ / -", Desc: "Octave up / down"},
 			},
 		},
 	}

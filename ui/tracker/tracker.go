@@ -101,10 +101,19 @@ const (
 	EffectVolumeSlide            // Param: volume delta per tick in 1/64 units; positive = louder
 	EffectNoteCut                // Param: sub-tick at which to silence the note
 	EffectNoteDelay              // Param: sub-tick at which to trigger NoteOn
+	EffectRowTicks               // Param: 00 clears row tick override; 01..20 sets per-row sub-ticks
+	EffectContinuous             // Param: 00 = off, 01 = on
+	EffectArpPreset              // Param: high nibble preset, low nibble step bucket
 )
 
 // TrackerEffect is a per-row effect command evaluated every sub-tick during playback.
 type TrackerEffect struct {
+	Type  EffectType
+	Param int
+}
+
+// InlineEffectEdit represents an effect command + parameter pair typed inline.
+type InlineEffectEdit struct {
 	Type  EffectType
 	Param int
 }
@@ -261,7 +270,7 @@ func (m *TrackerModel) View() string {
 				formatVolume(trackRow.Volume),
 				formatArpeggio(trackRow.Arpeggio),
 				formatEffectType(trackRow.Effect.Type),
-				formatEffectParam(trackRow.Effect.Param),
+				formatEffectParam(trackRow.Effect.Type, trackRow.Effect.Param),
 			}
 
 			selected := m.isSelected(row, trackIdx)
@@ -288,9 +297,26 @@ func (m *TrackerModel) View() string {
 		mode = "EDIT"
 	}
 	tracks.WriteString("\n")
-	tracks.WriteString(fmt.Sprintf("Mode: %s  Step: %d", mode, m.EditStep))
+	tracks.WriteString(fmt.Sprintf("Mode: %s  Step: %d  Col: %s", mode, m.EditStep, m.cursorColumnLabel()))
 
 	return tracks.String()
+}
+
+func (m *TrackerModel) cursorColumnLabel() string {
+	switch m.CursorCol {
+	case ColumnNote:
+		return "Note"
+	case ColumnVolume:
+		return "Volume"
+	case ColumnArpeggio:
+		return "Arp"
+	case ColumnEffect:
+		return "Fx"
+	case ColumnParam:
+		return "Param"
+	default:
+		return "?"
+	}
 }
 
 func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
@@ -467,11 +493,11 @@ func (m *TrackerModel) handleGlobalEditingKey(key string) bool {
 		}
 		m.clearNibbleBuffer()
 		return false
-	case "ctrl+c":
+	case "alt+c":
 		m.copySelectionToClipboard()
 		m.clearNibbleBuffer()
 		return false
-	case "ctrl+x":
+	case "alt+x":
 		m.copySelectionToClipboard()
 		m.clearSelectedCells()
 		m.clearNibbleBuffer()
@@ -486,18 +512,23 @@ func (m *TrackerModel) handleGlobalEditingKey(key string) bool {
 			m.clearNibbleBuffer()
 			return true
 		}
-	case "alt+shift+up", "shift+f8":
+	case "alt+shift+up", "shift+alt+up", "shift+f8":
 		if m.transposeSelection(12) {
 			m.clearNibbleBuffer()
 			return true
 		}
-	case "alt+shift+down", "shift+f7":
+	case "alt+shift+down", "shift+alt+down", "shift+f7":
 		if m.transposeSelection(-12) {
 			m.clearNibbleBuffer()
 			return true
 		}
-	case "ctrl+v":
+	case "alt+v":
 		if m.pasteClipboard() {
+			m.clearNibbleBuffer()
+			return true
+		}
+	case "alt+shift+v", "shift+alt+v":
+		if m.pasteClipboardEffectsOnly() {
 			m.clearNibbleBuffer()
 			return true
 		}
@@ -547,20 +578,21 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 			}
 		}
 	case ColumnEffect:
-		if v, ok := parseHexNibble(key); ok {
-			if v <= int(EffectNoteDelay) {
-				row.Effect.Type = EffectType(v)
-				m.clearNibbleBuffer()
-				return nil, true
-			}
+		if effectType, ok := parseEffectCommandKey(key); ok {
+			row.Effect.Type = effectType
+			m.clearNibbleBuffer()
+			return nil, true
 		}
 	case ColumnParam:
 		if v, ok := parseHexNibble(key); ok {
 			val := m.pushNibble(v)
 			if val != nil {
-				row.Effect.Param = *val
-				m.advanceByEditStep()
-				return nil, true
+				if applyInlineEffect(row, row.Effect.Type, *val) {
+					m.advanceByEditStep()
+					return nil, true
+				}
+				m.clearNibbleBuffer()
+				return nil, false
 			}
 		}
 	}
@@ -584,9 +616,19 @@ func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 		row.Arpeggio = audio.ArpeggioEffect{}
 		row.Continuous = false
 	case ColumnEffect:
+		switch row.Effect.Type {
+		case EffectRowTicks:
+			row.Ticks = 0
+		case EffectContinuous:
+			row.Continuous = false
+		case EffectArpPreset:
+			row.Arpeggio = audio.ArpeggioEffect{}
+			row.Continuous = false
+		}
 		row.Effect.Type = EffectNone
-	case ColumnParam:
 		row.Effect.Param = 0
+	case ColumnParam:
+		_ = applyInlineEffect(row, row.Effect.Type, 0)
 	}
 }
 
@@ -708,6 +750,32 @@ func (m *TrackerModel) pasteClipboard() bool {
 	return true
 }
 
+func (m *TrackerModel) pasteClipboardEffectsOnly() bool {
+	if !m.clipboard.HasData || len(m.clipboard.Cells) == 0 {
+		return false
+	}
+	for r := range len(m.clipboard.Cells) {
+		dstRow := m.CursorRow + r
+		if dstRow >= m.NumRows {
+			break
+		}
+		for t := range len(m.clipboard.Cells[r]) {
+			dstTrack := m.CursorTrack + t
+			if dstTrack >= m.NumTracks {
+				break
+			}
+			src := m.clipboard.Cells[r][t]
+			dst := &m.Tracks[dstTrack].Rows[dstRow]
+			dst.Volume = src.Volume
+			dst.Ticks = src.Ticks
+			dst.Continuous = src.Continuous
+			dst.Arpeggio = src.Arpeggio
+			dst.Effect = src.Effect
+		}
+	}
+	return true
+}
+
 func (m *TrackerModel) transposeSelection(semitones int) bool {
 	r0, r1, t0, t1, hasSelection := m.selectionBounds()
 	if !hasSelection {
@@ -772,6 +840,195 @@ func parseHexNibble(key string) (int, bool) {
 		return 0, false
 	}
 	return int(v), true
+}
+
+func parseEffectCommandNibble(v int) (EffectType, bool) {
+	if v < int(EffectNone) || v > int(EffectArpPreset) {
+		return EffectNone, false
+	}
+	return EffectType(v), true
+}
+
+func parseEffectCommandKey(key string) (EffectType, bool) {
+	switch strings.ToLower(key) {
+	case "v":
+		return EffectVibrato, true
+	case "s":
+		return EffectVolumeSlide, true
+	case "c":
+		return EffectNoteCut, true
+	case "d":
+		return EffectNoteDelay, true
+	case "t":
+		return EffectRowTicks, true
+	case "o":
+		return EffectContinuous, true
+	case "a":
+		return EffectArpPreset, true
+	}
+
+	if v, ok := parseHexNibble(key); ok {
+		return parseEffectCommandNibble(v)
+	}
+
+	return EffectNone, false
+}
+
+func decodeEffectParam(effectType EffectType, param int) (int, bool) {
+	if param < 0 || param > 255 {
+		return 0, false
+	}
+
+	switch effectType {
+	case EffectNone:
+		return 0, true
+	case EffectVibrato, EffectNoteCut, EffectNoteDelay, EffectArpPreset:
+		return param, true
+	case EffectVolumeSlide:
+		return int(int8(uint8(param))), true
+	case EffectRowTicks:
+		if param == 0 || (param >= 1 && param <= 32) {
+			return param, true
+		}
+		return 0, false
+	case EffectContinuous:
+		if param == 0 || param == 1 {
+			return param, true
+		}
+		return 0, false
+	default:
+		return 0, false
+	}
+}
+
+func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {
+	decoded, ok := decodeEffectParam(effectType, param)
+	if !ok {
+		return false
+	}
+
+	switch effectType {
+	case EffectNone:
+		row.Effect.Type = effectType
+		row.Effect.Param = 0
+		return true
+	case EffectVolumeSlide:
+		row.Effect.Type = effectType
+		row.Effect.Param = decoded // signed delta for playback
+		return true
+	case EffectVibrato, EffectNoteCut, EffectNoteDelay:
+		row.Effect.Type = effectType
+		row.Effect.Param = decoded
+		return true
+	case EffectRowTicks:
+		row.Effect.Type = effectType
+		row.Effect.Param = param
+		if decoded == 0 {
+			row.Ticks = 0
+		} else {
+			row.Ticks = decoded
+		}
+		return true
+	case EffectContinuous:
+		row.Effect.Type = effectType
+		row.Effect.Param = param
+		row.Continuous = decoded == 1
+		return true
+	case EffectArpPreset:
+		preset := (param >> 4) & 0xF
+		step := param & 0xF
+		if step == 0 {
+			step = 4
+		}
+		if preset == 0 {
+			row.Effect.Type = effectType
+			row.Effect.Param = param
+			row.Arpeggio = audio.ArpeggioEffect{}
+			return true
+		}
+		if preset > 5 {
+			return false
+		}
+
+		ticks := row.Ticks
+		if ticks <= 0 {
+			ticks = DefaultSpeed
+		}
+		row.Effect.Type = effectType
+		row.Effect.Param = param
+		row.Arpeggio = audio.ArpeggioEffect{Offsets: generateInlineArpOffsets(preset, ticks, step)}
+		row.Continuous = true
+		return true
+	default:
+		return false
+	}
+}
+
+func generateInlineArpOffsets(preset, ticks, step int) []int {
+	if ticks <= 0 {
+		return nil
+	}
+
+	degrees := make([]int, ticks)
+	for i := range ticks {
+		degrees[i] = i * step
+	}
+
+	switch preset {
+	case 1: // Up
+		return degrees
+	case 2: // Down
+		out := make([]int, ticks)
+		for i, v := range degrees {
+			out[ticks-1-i] = v
+		}
+		return out
+	case 3: // Converge
+		out := make([]int, 0, ticks)
+		lo, hi := 0, ticks-1
+		for lo <= hi {
+			out = append(out, degrees[lo])
+			lo++
+			if lo <= hi {
+				out = append(out, degrees[hi])
+				hi--
+			}
+		}
+		return out
+	case 4: // Diverge
+		out := make([]int, 0, ticks)
+		lo := (ticks - 1) / 2
+		hi := ticks / 2
+		if ticks%2 == 1 {
+			out = append(out, degrees[lo])
+			lo--
+			hi++
+		}
+		for hi < ticks && len(out) < ticks {
+			if lo >= 0 {
+				out = append(out, degrees[lo])
+			}
+			out = append(out, degrees[hi])
+			lo--
+			hi++
+		}
+		if len(out) > ticks {
+			return out[:ticks]
+		}
+		return out
+	case 5: // Random (stable LCG)
+		out := make([]int, ticks)
+		copy(out, degrees)
+		s := uint64(ticks*131 + step*17 + preset)
+		for i := ticks - 1; i > 0; i-- {
+			s = s*6364136223846793005 + 1442695040888963407
+			j := int(s>>33) % (i + 1)
+			out[i], out[j] = out[j], out[i]
+		}
+		return out
+	default:
+		return degrees
+	}
 }
 
 func (m *TrackerModel) visibleRows() int {
@@ -848,12 +1105,21 @@ func formatEffectType(t EffectType) string {
 		return "C"
 	case EffectNoteDelay:
 		return "D"
+	case EffectRowTicks:
+		return "T"
+	case EffectContinuous:
+		return "O"
+	case EffectArpPreset:
+		return "A"
 	default:
 		return "."
 	}
 }
 
-func formatEffectParam(param int) string {
+func formatEffectParam(effectType EffectType, param int) string {
+	if effectType == EffectVolumeSlide && param < 0 {
+		return fmt.Sprintf("%02X", uint8(int8(param)))
+	}
 	if param < 0 {
 		param = 0
 	}
