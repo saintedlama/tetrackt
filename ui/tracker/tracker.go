@@ -2,7 +2,6 @@ package tracker
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -300,23 +299,6 @@ func (m *TrackerModel) View() string {
 	tracks.WriteString(fmt.Sprintf("Mode: %s  Step: %d  Col: %s", mode, m.EditStep, m.cursorColumnLabel()))
 
 	return tracks.String()
-}
-
-func (m *TrackerModel) cursorColumnLabel() string {
-	switch m.CursorCol {
-	case ColumnNote:
-		return "Note"
-	case ColumnVolume:
-		return "Volume"
-	case ColumnArpeggio:
-		return "Arp"
-	case ColumnEffect:
-		return "Fx"
-	case ColumnParam:
-		return "Param"
-	default:
-		return "?"
-	}
 }
 
 func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
@@ -831,74 +813,9 @@ func (m *TrackerModel) pushNibble(v int) *int {
 	return &val
 }
 
-func parseHexNibble(key string) (int, bool) {
-	if len(key) != 1 {
-		return 0, false
-	}
-	v, err := strconv.ParseInt(key, 16, 32)
-	if err != nil {
-		return 0, false
-	}
-	return int(v), true
-}
-
-func parseEffectCommandNibble(v int) (EffectType, bool) {
-	if v < int(EffectNone) || v > int(EffectArpPreset) {
-		return EffectNone, false
-	}
-	return EffectType(v), true
-}
-
-func parseEffectCommandKey(key string) (EffectType, bool) {
-	switch strings.ToLower(key) {
-	case "v":
-		return EffectVibrato, true
-	case "s":
-		return EffectVolumeSlide, true
-	case "c":
-		return EffectNoteCut, true
-	case "d":
-		return EffectNoteDelay, true
-	case "t":
-		return EffectRowTicks, true
-	case "o":
-		return EffectContinuous, true
-	case "a":
-		return EffectArpPreset, true
-	}
-
-	if v, ok := parseHexNibble(key); ok {
-		return parseEffectCommandNibble(v)
-	}
-
-	return EffectNone, false
-}
-
-func decodeEffectParam(effectType EffectType, param int) (int, bool) {
-	if param < 0 || param > 255 {
-		return 0, false
-	}
-
-	switch effectType {
-	case EffectNone:
-		return 0, true
-	case EffectVibrato, EffectNoteCut, EffectNoteDelay, EffectArpPreset:
-		return param, true
-	case EffectVolumeSlide:
-		return int(int8(uint8(param))), true
-	case EffectRowTicks:
-		if param == 0 || (param >= 1 && param <= 32) {
-			return param, true
-		}
-		return 0, false
-	case EffectContinuous:
-		if param == 0 || param == 1 {
-			return param, true
-		}
-		return 0, false
-	default:
-		return 0, false
-	}
+func (m *TrackerModel) visibleRows() int {
+	chromeRows := 4 // header + separator + padding
+	return m.Viewport.Height - chromeRows
 }
 
 func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {
@@ -962,148 +879,6 @@ func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {
 	default:
 		return false
 	}
-}
-
-func generateInlineArpOffsets(preset, ticks, step int) []int {
-	if ticks <= 0 {
-		return nil
-	}
-
-	degrees := make([]int, ticks)
-	for i := range ticks {
-		degrees[i] = i * step
-	}
-
-	switch preset {
-	case 1: // Up
-		return degrees
-	case 2: // Down
-		out := make([]int, ticks)
-		for i, v := range degrees {
-			out[ticks-1-i] = v
-		}
-		return out
-	case 3: // Converge
-		out := make([]int, 0, ticks)
-		lo, hi := 0, ticks-1
-		for lo <= hi {
-			out = append(out, degrees[lo])
-			lo++
-			if lo <= hi {
-				out = append(out, degrees[hi])
-				hi--
-			}
-		}
-		return out
-	case 4: // Diverge
-		out := make([]int, 0, ticks)
-		lo := (ticks - 1) / 2
-		hi := ticks / 2
-		if ticks%2 == 1 {
-			out = append(out, degrees[lo])
-			lo--
-			hi++
-		}
-		for hi < ticks && len(out) < ticks {
-			if lo >= 0 {
-				out = append(out, degrees[lo])
-			}
-			out = append(out, degrees[hi])
-			lo--
-			hi++
-		}
-		if len(out) > ticks {
-			return out[:ticks]
-		}
-		return out
-	case 5: // Random (stable LCG)
-		out := make([]int, ticks)
-		copy(out, degrees)
-		s := uint64(ticks*131 + step*17 + preset)
-		for i := ticks - 1; i > 0; i-- {
-			s = s*6364136223846793005 + 1442695040888963407
-			j := int(s>>33) % (i + 1)
-			out[i], out[j] = out[j], out[i]
-		}
-		return out
-	default:
-		return degrees
-	}
-}
-
-func (m *TrackerModel) visibleRows() int {
-	chromeRows := 4 // header + separator + padding
-	return m.Viewport.Height - chromeRows
-}
-
-func formatNote(note audio.Note) string {
-	if note.Base == audio.BaseOff {
-		return "---"
-	}
-
-	if len(string(note.Base)) < 2 {
-		return fmt.Sprintf("%s-%d", note.Base, note.Octave)
-	}
-
-	return fmt.Sprintf("%s%d", note.Base, note.Octave)
-}
-
-// formatVolume formats volume value for display
-func formatVolume(volume int) string {
-	if volume == 0 {
-		return ".."
-	}
-	return fmt.Sprintf("%02d", volume)
-}
-
-// formatArpeggio formats an arpeggio effect for display (3 chars).
-// Active arp with offsets [0,4,7] shows "A47"; inactive shows "---".
-func formatArpeggio(arp audio.ArpeggioEffect) string {
-	if !arp.IsActive() {
-		return "---"
-	}
-	o1, o2 := 0, 0
-	if len(arp.Offsets) > 1 {
-		o1 = arp.Offsets[1] % 10
-	}
-	if len(arp.Offsets) > 2 {
-		o2 = arp.Offsets[2] % 10
-	}
-	return fmt.Sprintf("A%d%d", o1, o2)
-}
-
-func formatEffectType(t EffectType) string {
-	switch t {
-	case EffectVibrato:
-		return "V"
-	case EffectVolumeSlide:
-		return "S"
-	case EffectNoteCut:
-		return "C"
-	case EffectNoteDelay:
-		return "D"
-	case EffectRowTicks:
-		return "T"
-	case EffectContinuous:
-		return "O"
-	case EffectArpPreset:
-		return "A"
-	default:
-		return "."
-	}
-}
-
-func formatEffectParam(effectType EffectType, param int) string {
-	if effectType == EffectVolumeSlide && param < 0 {
-		return fmt.Sprintf("%02X", uint8(int8(param)))
-	}
-	if param < 0 {
-		param = 0
-	}
-	if param > 255 {
-		param = 255
-	}
-	return fmt.Sprintf("%02X", param)
 }
 
 func (m Track) CurrentRow() TrackRow {
