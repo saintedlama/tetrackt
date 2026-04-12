@@ -258,7 +258,7 @@ func (d *SynthPatchBankDialog) View() tea.View {
 		help = patchBankDialogHelpStyle.Render("Type new name | Enter: Confirm | Esc: Cancel")
 	default:
 		body = d.view.View()
-		help = patchBankDialogHelpStyle.Render("↑↓: Navigate | ←→: Category | Enter: Apply | S: Save | R: Rename | D: Delete | 1-7: Preview | Esc: Close")
+		help = patchBankDialogHelpStyle.Render("↑↓: Navigate | ←→: Category | Enter: Apply | S: Save | R: Rename | D: Delete | Z-M/Q-U: Preview | Esc: Close")
 	}
 
 	return tea.NewView(fmt.Sprintf("%s\n%s", bodyStyle.Render(body), help))

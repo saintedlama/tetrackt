@@ -59,12 +59,6 @@ func (s *SynthScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "tab":
-			s.ActivePanel = (s.ActivePanel + 1) % len(s.panels)
-			return s, nil
-		case "shift+tab":
-			s.ActivePanel = (s.ActivePanel - 1 + len(s.panels)) % len(s.panels)
-			return s, nil
 		case "ctrl+right":
 			s.navigateGrid(0, 1)
 			return s, nil
@@ -229,7 +223,7 @@ func (s *SynthScreen) renderVoice(clr color.Color, panelIndices ...int) string {
 
 // Footer returns the help text shown in the footer bar on the Synth screen.
 func (s *SynthScreen) Footer() string {
-	return "Tab/Shift+Tab: Switch panel | Ctrl+↑↓←→: Navigate | ↑↓: Select | ←→: Adjust | b: Patch Bank | T: Tracker | ?: Help"
+	return "Ctrl+↑↓←→: Switch panel | ↑↓: Select | ←→: Adjust | b: Patch Bank | T: Tracker | ?: Help"
 }
 
 // Help returns screen-specific keyboard shortcut sections for the help dialog.
@@ -238,13 +232,12 @@ func (s *SynthScreen) Help() []ui.HelpSection {
 		{
 			Title: "Synth",
 			Entries: []ui.HelpEntry{
-				{Key: "Tab / Shift+Tab", Desc: "Cycle panels"},
-				{Key: "Ctrl+↑↓←→", Desc: "Navigate panels in grid"},
+				{Key: "Ctrl+↑↓←→", Desc: "Switch panels in grid"},
 				{Key: "↑↓", Desc: "Select parameter"},
 				{Key: "←→", Desc: "Adjust parameter value"},
 				{Key: "Shift+←→", Desc: "Large adjustment"},
 				{Key: "b / B", Desc: "Open patch bank"},
-				{Key: "1-7 / Shift+1-6", Desc: "Preview note"},
+				{Key: "Z-M / Q-U + black keys", Desc: "Preview note"},
 			},
 		},
 	}

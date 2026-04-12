@@ -45,6 +45,46 @@ Built-in songs included:
   - synth patch bank presets
   - save/load module data via JSON
 
+## Using The Tracker
+
+The tracker now has a modern two-mode workflow.
+
+- `Space`: toggle between `NAV` (navigate) and `EDIT` (write values).
+- `Ctrl+Left` / `Ctrl+Right`: switch between Tracker and Settings panels.
+- `Tab` / `Shift+Tab`: move subcolumn focus within the grid.
+
+Tracker grid controls:
+
+- `Arrow keys`: move row/track cursor.
+- `PgUp` / `PgDn`: jump by viewport height.
+- `Home` / `End`: jump to first/last row.
+- `Z-M` and `Q-U`: enter natural notes in `EDIT` mode.
+- `S D G H J` and `2 3 5 6 7`: enter sharp notes.
+- `0-9` / `A-F`: hex entry for focused subcolumns (volume/effects).
+- `Delete`: clear the focused subcolumn.
+- `Ctrl+C` / `Ctrl+X` / `Ctrl+V`: copy, cut, and paste block selection.
+- `Shift+Arrow`: create/extend rectangular selection.
+- `Alt+Up` / `Alt+Down`: transpose selected notes (or current note) by semitone.
+- `Alt+Shift+Up` / `Alt+Shift+Down`: transpose by octave.
+- `F8` / `F7` and `Shift+F8` / `Shift+F7`: transpose aliases.
+- `Insert`: insert space in current track at cursor row.
+- `Shift+Insert`: insert row space across all tracks.
+
+Settings panel controls:
+
+- `Up` / `Down`: choose Volume or BPM.
+- `Left` / `Right`: adjust selected value.
+- `Shift+Left` / `Shift+Right`: larger adjustment.
+
+Playback and utilities:
+
+- `p`: play/pause from row 0.
+- `P`: loop to current row.
+- `e`: open row effects dialog.
+- `l`: open load dialog.
+- `s`: open save dialog.
+- `?`: open in-app keyboard help.
+
 ## Contributing
 
 Contributions are welcome.

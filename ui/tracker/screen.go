@@ -6,7 +6,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/tetrackt/tetrackt/audio"
 	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 )
@@ -49,15 +48,15 @@ func (t *TrackerScreen) SetGlobalVolume(v float64) {
 	t.volumeBar.Value = v
 }
 
-// Update handles tab navigation between tracker/volume panels and key events.
+// Update routes key events between tracker grid and settings panel.
 func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "tab":
+		case "ctrl+right":
 			t.activePanel = (t.activePanel + 1) % trackerPanelCount
 			return t, nil
-		case "shift+tab":
+		case "ctrl+left":
 			t.activePanel = (t.activePanel - 1 + trackerPanelCount) % trackerPanelCount
 			return t, nil
 		}
@@ -115,10 +114,6 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 		}
 
 		// Tracker panel is active
-		if msg.String() == "delete" {
-			t.Tracker.SetNote(audio.Off())
-			return t, nil
-		}
 		_, cmd := t.Tracker.Update(msg)
 		return t, cmd
 
@@ -166,7 +161,11 @@ func (t *TrackerScreen) Title() string { return "Tracker" }
 
 // Footer returns the help text shown in the footer bar on the Tracker screen.
 func (t *TrackerScreen) Footer() string {
-	return "↑↓←→: Navigate | 1-7: Notes | E: Row effects | p: Play | T: Synth | ?: Help"
+	mode := "NAV"
+	if t.Tracker.Mode == EditMode {
+		mode = "EDIT"
+	}
+	return fmt.Sprintf("%s | Space: Mode | Tab: Column | Ctrl+←→: Panel | E: Row effects | p: Play | T: Synth | ?: Help", mode)
 }
 
 // Help returns screen-specific keyboard shortcut sections for the help dialog.
@@ -175,17 +174,40 @@ func (t *TrackerScreen) Help() []ui.HelpSection {
 		{
 			Title: "Tracker",
 			Entries: []ui.HelpEntry{
+				{Key: "Space", Desc: "Toggle Navigate / Edit mode"},
 				{Key: "↑↓←→", Desc: "Navigate rows / tracks"},
+				{Key: "Tab / Shift+Tab", Desc: "Move subcolumn focus"},
+				{Key: "Ctrl+← / Ctrl+→", Desc: "Switch tracker / settings panel"},
+				{Key: "Settings panel: ↑↓", Desc: "Switch volume / BPM row"},
+				{Key: "Settings panel: ←→", Desc: "Adjust selected value"},
+				{Key: "PgUp / PgDn", Desc: "Jump by viewport height"},
 				{Key: "Home / End", Desc: "First / last row"},
-				{Key: "1-7", Desc: "Enter note (C D E F G A B)"},
-				{Key: "Shift+1-6", Desc: "Enter sharp note"},
-				{Key: "Delete", Desc: "Clear current cell"},
+				{Key: "Z-M / Q-U", Desc: "Enter natural notes"},
+				{Key: "S D G H J / 2 3 5 6 7", Desc: "Enter sharp notes"},
+				{Key: "0-9 / A-F", Desc: "Hex entry for volume/fx columns"},
+				{Key: "Delete", Desc: "Clear focused subcolumn"},
+				{Key: "Shift+Arrows", Desc: "Rectangular selection"},
+				{Key: "Ctrl+C / Ctrl+X / Ctrl+V", Desc: "Copy / cut / paste block"},
+				{Key: "Alt+↑ / Alt+↓", Desc: "Transpose notes +/- 1 semitone"},
+				{Key: "Alt+Shift+↑ / Alt+Shift+↓", Desc: "Transpose notes +/- 1 octave"},
+				{Key: "F8 / F7", Desc: "Transpose notes +/- 1 semitone"},
+				{Key: "Shift+F8 / Shift+F7", Desc: "Transpose notes +/- 1 octave"},
+				{Key: "Insert / Shift+Insert", Desc: "Insert track / global row space"},
 				{Key: "+/-", Desc: "Octave up / down"},
 				{Key: "E", Desc: "Row effects dialog (arp, fx)"},
-				{Key: "Tab / Shift+Tab", Desc: "Switch tracker / settings panel"},
 				{Key: "p", Desc: "Play / Pause from row 0"},
 				{Key: "P", Desc: "Loop to current row"},
 				{Key: "l", Desc: "Load dialog (includes quickstart)"},
+			},
+		},
+		{
+			Title: "Note Mapping",
+			Entries: []ui.HelpEntry{
+				{Key: "Lower row", Desc: "Z S X D C V G B H N J M"},
+				{Key: "Upper row", Desc: "Q 2 W 3 E R 5 T 6 Y 7 U"},
+				{Key: "Naturals", Desc: "Z X C V B N M and Q W E R T Y U"},
+				{Key: "Sharps", Desc: "S D G H J and 2 3 5 6 7"},
+				{Key: "+ / -", Desc: "Octave up / down"},
 			},
 		},
 	}

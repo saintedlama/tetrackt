@@ -117,28 +117,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "+":
 			if m.octave < maxOctave {
 				m.octave++
+				m.trackerModel().Octave = m.octave
 			}
-
-			note := m.trackerModel().GetNote()
-			if newNote, ok := note.Transpose(-12); ok {
-				m.trackerModel().SetNote(newNote)
-				m.playNote(newNote)
-				return m, nil
-			}
-
 			return m, nil
 		case "-":
 			if m.octave > minOctave {
 				m.octave--
+				m.trackerModel().Octave = m.octave
 			}
-
-			note := m.trackerModel().CurrentTrack().CurrentRow().Note
-			if newNote, ok := note.Transpose(-12); ok {
-				m.trackerModel().SetNote(newNote)
-				m.playNote(newNote)
-				return m, nil
-			}
-
 			return m, nil
 		case "b", "B":
 			// On the synth screen b/B opens the patch bank.
@@ -173,22 +159,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		// Global note playing (available in any mode)
-		if base, ok := noteKeyToName[msg.String()]; ok {
+		// Global note playing for synth screen.
+		if base, ok := noteKeyToName[msg.String()]; ok && m.activeScreen != trackerScreenIdx {
 			note := audio.Note{Base: base, Octave: audio.Octave(m.octave)}
-
-			if m.activeScreen == trackerScreenIdx {
-				tr := m.trackerModel()
-				tr.SetNote(note)
-				m.dirty = true
-				row := tr.Tracks[tr.CursorTrack].Rows[tr.CursorRow]
-				tr.MoveCursorDown()
-				if m.player.StartPreview(note, row.Arpeggio, tr.Tracks[tr.CursorTrack].Synth,
-					tr.BPMDuration(), m.sampleRate, m.globalVolume, tr.Speed) {
-					return m, m.previewTick()
-				}
-				return m, nil
-			}
 
 			m.playNote(note)
 			return m, nil
@@ -197,10 +170,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Forward remaining key events to the active screen
 		var cmd tea.Cmd
 		m.screens[m.activeScreen], cmd = m.screens[m.activeScreen].Update(msg)
-		// Mark dirty when delete clears a note in the tracker
-		if msg.String() == "delete" && m.activeScreen == trackerScreenIdx {
-			m.dirty = true
-		}
 		return m, cmd
 
 	case previewTickMsg:
@@ -293,6 +262,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tracker.BPMChanged:
 		// BPM is already updated on the TrackerModel; nothing else to do here.
 		m.dirty = true
+
+	case tracker.TrackerEdited:
+		m.dirty = true
+		return m, nil
+
+	case tracker.TrackerNoteEntered:
+		m.dirty = true
+		speed := msg.Speed
+		if speed <= 0 {
+			speed = tracker.DefaultSpeed
+		}
+		if m.player.StartPreview(msg.Note, msg.Row.Arpeggio, msg.Synth,
+			m.trackerModel().BPMDuration(), m.sampleRate, m.globalVolume, speed) {
+			return m, m.previewTick()
+		}
+		return m, nil
 
 	case synth.OpenPatchBankMsg:
 		return ui.NewDialogModel(synth.NewSynthPatchBankDialog(m.synth().PatchBankView(), m.octave, m.synth().GetSynth()), m, m.width, m.height), nil
@@ -502,6 +487,8 @@ func main() {
 
 // newModel constructs the application model, loading the user patch bank from disk.
 func newModel(sampleRate audio.SampleRate, trackerModel *tracker.TrackerModel, track tracker.Track) model {
+	trackerModel.Octave = 4
+
 	bank, err := persistence.LoadPatchBank()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not load patch bank: %v\n", err)
