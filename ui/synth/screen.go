@@ -238,13 +238,13 @@ func (s *SynthScreen) Help() []ui.HelpSection {
 		{
 			Title: "Synth",
 			Entries: []ui.HelpEntry{
-				{"Tab / Shift+Tab", "Cycle panels"},
-				{"Ctrl+↑↓←→", "Navigate panels in grid"},
-				{"↑↓", "Select parameter"},
-				{"←→", "Adjust parameter value"},
-				{"Shift+←→", "Large adjustment"},
-				{"b / B", "Open patch bank"},
-				{"1–7 / Shift+1–6", "Preview note"},
+				{Key: "Tab / Shift+Tab", Desc: "Cycle panels"},
+				{Key: "Ctrl+↑↓←→", Desc: "Navigate panels in grid"},
+				{Key: "↑↓", Desc: "Select parameter"},
+				{Key: "←→", Desc: "Adjust parameter value"},
+				{Key: "Shift+←→", Desc: "Large adjustment"},
+				{Key: "b / B", Desc: "Open patch bank"},
+				{Key: "1-7 / Shift+1-6", Desc: "Preview note"},
 			},
 		},
 	}

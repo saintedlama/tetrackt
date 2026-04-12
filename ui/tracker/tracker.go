@@ -96,6 +96,10 @@ type Track struct {
 	number int
 	Synth  *audio.Synth
 	Rows   []TrackRow
+	// Optional informational metadata for synth patches selected from patch bank.
+	PatchName     string
+	PatchCategory string
+	PatchTags     []string
 }
 
 // TrackRow represents a single row in a track
@@ -227,7 +231,12 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 				m.CursorTrack--
 				currentTrack := m.Tracks[m.CursorTrack]
 				cmd = func() tea.Msg {
-					return ui.TrackChanged{Synth: currentTrack.Synth}
+					return ui.TrackChanged{
+						Synth:         currentTrack.Synth,
+						PatchName:     currentTrack.PatchName,
+						PatchCategory: currentTrack.PatchCategory,
+						PatchTags:     append([]string(nil), currentTrack.PatchTags...),
+					}
 				}
 			}
 		case "right":
@@ -236,7 +245,12 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 				m.CursorTrack++
 				currentTrack := m.Tracks[m.CursorTrack]
 				cmd = func() tea.Msg {
-					return ui.TrackChanged{Synth: currentTrack.Synth}
+					return ui.TrackChanged{
+						Synth:         currentTrack.Synth,
+						PatchName:     currentTrack.PatchName,
+						PatchCategory: currentTrack.PatchCategory,
+						PatchTags:     append([]string(nil), currentTrack.PatchTags...),
+					}
 				}
 			}
 		case "up":

@@ -103,8 +103,15 @@ func (d *SynthPatchBankDialog) updateBrowse(msg tea.KeyPressMsg) (tea.Model, tea
 			return d, cmd
 		}
 		patch := d.view.Patches[d.view.SelectedPatch]
+		tags := append([]string(nil), patch.Tags...)
 		return d, func() tea.Msg {
-			return ui.CloseDialogMsg{Payload: ui.SynthUpdated{Synth: patch.Synth}}
+			return ui.CloseDialogMsg{Payload: ui.SynthUpdated{
+				Synth:         patch.Synth,
+				PatchName:     patch.Name,
+				PatchCategory: patch.Category,
+				PatchTags:     tags,
+				HasPatchMeta:  true,
+			}}
 		}
 	case "up", "down", "left", "right":
 		// All navigation is handled by the view.

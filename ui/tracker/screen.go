@@ -123,7 +123,13 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 		return t, cmd
 
 	case ui.SynthUpdated:
-		t.Tracker.Tracks[t.Tracker.CursorTrack].Synth = msg.Synth
+		track := &t.Tracker.Tracks[t.Tracker.CursorTrack]
+		track.Synth = msg.Synth
+		if msg.HasPatchMeta {
+			track.PatchName = msg.PatchName
+			track.PatchCategory = msg.PatchCategory
+			track.PatchTags = append([]string(nil), msg.PatchTags...)
+		}
 		return t, nil
 	}
 	return t, nil
@@ -145,8 +151,8 @@ func (t *TrackerScreen) View() string {
 		fmt.Sprintf("     %3d", t.Tracker.BPM)
 	settingsContent := volumeRow + "\n" + bpmRow
 
-	currentSynth := t.Tracker.Tracks[t.Tracker.CursorTrack].Synth
-	synthInfoContent := renderSynthInfo(currentSynth)
+	currentTrack := t.Tracker.Tracks[t.Tracker.CursorTrack]
+	synthInfoContent := renderSynthInfo(currentTrack.Synth, currentTrack.PatchName, currentTrack.PatchCategory, currentTrack.PatchTags)
 
 	trackerPanel := ui.RenderPanel("Tracker", common.ColorAccentPrimary, t.Tracker.View(), t.activePanel == 0)
 	settingsPanel := ui.RenderPanel("Settings", common.ColorAccentModulation, settingsContent, t.activePanel == 1)
@@ -169,16 +175,17 @@ func (t *TrackerScreen) Help() []ui.HelpSection {
 		{
 			Title: "Tracker",
 			Entries: []ui.HelpEntry{
-				{"↑↓←→", "Navigate rows / tracks"},
-				{"Home / End", "First / last row"},
-				{"1–7", "Enter note (C D E F G A B)"},
-				{"Shift+1–6", "Enter sharp note"},
-				{"Delete", "Clear current cell"},
-				{"+/-", "Octave up / down"},
-				{"E", "Row effects dialog (arp, fx)"},
-				{"Tab / Shift+Tab", "Switch tracker / settings panel"},
-				{"p", "Play / Pause from row 0"},
-				{"P", "Loop to current row"},
+				{Key: "↑↓←→", Desc: "Navigate rows / tracks"},
+				{Key: "Home / End", Desc: "First / last row"},
+				{Key: "1-7", Desc: "Enter note (C D E F G A B)"},
+				{Key: "Shift+1-6", Desc: "Enter sharp note"},
+				{Key: "Delete", Desc: "Clear current cell"},
+				{Key: "+/-", Desc: "Octave up / down"},
+				{Key: "E", Desc: "Row effects dialog (arp, fx)"},
+				{Key: "Tab / Shift+Tab", Desc: "Switch tracker / settings panel"},
+				{Key: "p", Desc: "Play / Pause from row 0"},
+				{Key: "P", Desc: "Loop to current row"},
+				{Key: "l", Desc: "Load dialog (includes quickstart)"},
 			},
 		},
 	}

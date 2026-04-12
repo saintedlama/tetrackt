@@ -18,11 +18,24 @@ func lbl(s string) string { return synthInfoLabelStyle.Render(s) }
 
 // renderSynthInfo returns a compact multi-line summary of the synth patch
 // assigned to the current track.
-func renderSynthInfo(synth *audio.Synth) string {
+func renderSynthInfo(synth *audio.Synth, patchName, patchCategory string, patchTags []string) string {
 	if synth == nil {
 		return "(no synth)"
 	}
 	var sb strings.Builder
+	if patchName != "" {
+		sb.WriteString(fmt.Sprintf("%s %s", lbl("Patch:"), patchName))
+		sb.WriteString("\n")
+		if patchCategory != "" {
+			sb.WriteString(fmt.Sprintf("%s %s", lbl("Category:"), patchCategory))
+			sb.WriteString("\n")
+		}
+		if len(patchTags) > 0 {
+			sb.WriteString(fmt.Sprintf("%s %s", lbl("Tags:"), strings.Join(patchTags, ", ")))
+			sb.WriteString("\n")
+		}
+		sb.WriteString("\n")
+	}
 	sb.WriteString(renderOscLine("Osc1", synth.Oscillator1))
 	sb.WriteString("\n")
 	sb.WriteString(renderOscLine("Osc2", synth.Oscillator2))

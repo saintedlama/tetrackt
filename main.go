@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"strings"
@@ -69,6 +70,12 @@ type tickMsg time.Time
 type previewTickMsg time.Time
 
 var noteKeyToName = ui.NoteKeys
+
+//go:embed modules/quickstart.json
+var embeddedQuickstart []byte
+
+//go:embed modules/chiptune-demo.json
+var embeddedDemo []byte
 
 func (m model) Init() tea.Cmd {
 	// Initialize speaker with sample rate
@@ -256,14 +263,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case ui.ModeLoad:
 			// Load module
-			mod, err := persistence.LoadFromFile(filename)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Load failed: %v\n", err)
-			} else {
-				// Update existing tracker model instead of creating new one
-				persistence.ModuleToTracks(mod, m.trackerModel())
-				m.currentFilename = filename
-				m.dirty = false
+			switch filename {
+			case ui.EmbeddedQuickstartToken:
+				if err := m.loadEmbeddedQuickstart(); err != nil {
+					fmt.Fprintf(os.Stderr, "Load quickstart failed: %v\n", err)
+				}
+			case ui.EmbeddedDemoToken:
+				if err := m.loadEmbeddedDemo(); err != nil {
+					fmt.Fprintf(os.Stderr, "Load demo song failed: %v\n", err)
+				}
+			default:
+				mod, err := persistence.LoadFromFile(filename)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Load failed: %v\n", err)
+				} else {
+					// Update existing tracker model instead of creating new one
+					persistence.ModuleToTracks(mod, m.trackerModel())
+					m.currentFilename = filename
+					m.dirty = false
+				}
 			}
 		}
 		return m, nil
@@ -410,6 +428,30 @@ func (m *model) playNote(note audio.Note) {
 		patch,
 		m.globalVolume,
 	)
+}
+
+// loadEmbeddedQuickstart restores the built-in quickstart module from the
+// executable and applies it to the current tracker model.
+func (m *model) loadEmbeddedQuickstart() error {
+	mod, err := persistence.LoadFromBytes(embeddedQuickstart)
+	if err != nil {
+		return err
+	}
+	persistence.ModuleToTracks(mod, m.trackerModel())
+	m.currentFilename = "quickstart (embedded)"
+	m.dirty = false
+	return nil
+}
+
+func (m *model) loadEmbeddedDemo() error {
+	mod, err := persistence.LoadFromBytes(embeddedDemo)
+	if err != nil {
+		return err
+	}
+	persistence.ModuleToTracks(mod, m.trackerModel())
+	m.currentFilename = "demo song (embedded)"
+	m.dirty = false
+	return nil
 }
 
 // View renders the UI
