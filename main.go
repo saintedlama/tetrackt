@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -441,6 +442,18 @@ func (m model) View() tea.View {
 }
 
 func main() {
+	mcpMode := flag.Bool("mcp", false, "start MCP server")
+	mcpAddress := flag.String("mcp-address", "127.0.0.1:8347", "MCP bind address")
+	flag.Parse()
+
+	if *mcpMode {
+		if err := runMCPServer(*mcpAddress); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	// Initialize synthesizer
 	sampleRate := audio.SampleRate(44100)
 
