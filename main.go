@@ -345,6 +345,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screens[trackerScreenIdx], cmd2 = m.screens[trackerScreenIdx].Update(msg)
 		m.dirty = true
 		return m, tea.Batch(cmd1, cmd2)
+
+	case mcpRequestMsg:
+		result, err := msg.apply(&m)
+		msg.reply <- mcpResponse{result: result, err: err}
+		return m, nil
 	}
 
 	return m, nil
@@ -446,14 +451,6 @@ func main() {
 	mcpAddress := flag.String("mcp-address", "127.0.0.1:8347", "MCP bind address")
 	flag.Parse()
 
-	if *mcpMode {
-		go func(address string) {
-			if err := runMCPServer(address); err != nil {
-				fmt.Fprintf(os.Stderr, "MCP server error: %v\n", err)
-			}
-		}(*mcpAddress)
-	}
-
 	// Initialize synthesizer
 	sampleRate := audio.SampleRate(44100)
 
@@ -464,6 +461,14 @@ func main() {
 	p := tea.NewProgram(
 		newModel(sampleRate, trackerModel, track),
 	)
+
+	if *mcpMode {
+		go func(address string) {
+			if err := runMCPServer(address, newMCPUIBridge(p)); err != nil {
+				fmt.Fprintf(os.Stderr, "MCP server error: %v\n", err)
+			}
+		}(*mcpAddress)
+	}
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)

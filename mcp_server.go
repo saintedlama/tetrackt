@@ -9,21 +9,18 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/tetrackt/tetrackt/audio"
 	"github.com/tetrackt/tetrackt/persistence"
+	"github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/synth"
 	"github.com/tetrackt/tetrackt/ui/tracker"
 )
 
-type mcpAppState struct {
-	mu            sync.Mutex
-	trackerModel  *tracker.TrackerModel
-	patchBank     *synth.SynthPatchBankView
-	customPatches []synth.SynthPatch
+type mcpServer struct {
+	bridge *mcpUIBridge
 }
 
 type setNotesArgs struct {
@@ -82,23 +79,23 @@ var noteBaseLookup = map[string]audio.Base{
 	"B":  audio.BaseB,
 }
 
-func runMCPServer(address string) error {
-	state := newMCPAppState()
+func runMCPServer(address string, bridge *mcpUIBridge) error {
+	impl := &mcpServer{bridge: bridge}
 
 	s := server.NewMCPServer(
 		"tetrackt",
 		"0.1.0",
 		server.WithToolCapabilities(false),
-		server.WithInstructions("Controls an in-memory TeTrackT tracker state. This MCP server does not load or save song modules."),
+		server.WithInstructions("Controls the live TeTrackT UI session. MCP operations and user edits mutate the same in-memory tracker state. This server does not load or save song modules."),
 	)
 
-	s.AddTool(mcpToolTrackerInfo(), state.handleTrackerInfo)
-	s.AddTool(mcpToolSetNotes(), state.handleSetNotes)
-	s.AddTool(mcpToolCreatePatch(), state.handleCreatePatch)
-	s.AddTool(mcpToolListPatches(), state.handleListPatches)
-	s.AddTool(mcpToolAssignPatch(), state.handleAssignPatch)
-	s.AddTool(mcpToolSelectBuiltinPatch(), state.handleSelectBuiltinPatch)
-	s.AddTool(mcpToolApplyCellEffect(), state.handleApplyCellEffect)
+	s.AddTool(mcpToolTrackerInfo(), impl.handleTrackerInfo)
+	s.AddTool(mcpToolSetNotes(), impl.handleSetNotes)
+	s.AddTool(mcpToolCreatePatch(), impl.handleCreatePatch)
+	s.AddTool(mcpToolListPatches(), impl.handleListPatches)
+	s.AddTool(mcpToolAssignPatch(), impl.handleAssignPatch)
+	s.AddTool(mcpToolSelectBuiltinPatch(), impl.handleSelectBuiltinPatch)
+	s.AddTool(mcpToolApplyCellEffect(), impl.handleApplyCellEffect)
 
 	httpServer := server.NewStreamableHTTPServer(s, server.WithEndpointPath("/mcp"))
 
@@ -106,50 +103,23 @@ func runMCPServer(address string) error {
 	return httpServer.Start(address)
 }
 
-func newMCPAppState() *mcpAppState {
-	state := &mcpAppState{
-		trackerModel: tracker.NewTracker(8, 64, 0, 0),
-		patchBank:    synth.NewSynthPatchBankView(),
-	}
-
-	bank, err := persistence.LoadPatchBank()
+func (s *mcpServer) handleTrackerInfo(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	result, err := s.bridge.apply(ctx, func(m *model) (any, error) {
+		tm := m.trackerModel()
+		return map[string]any{
+			"num_tracks": tm.NumTracks,
+			"num_rows":   tm.NumRows,
+			"bpm":        tm.BPM,
+			"speed":      tm.Speed,
+		}, nil
+	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not load patch bank for MCP: %v\n", err)
-		return state
+		return mcp.NewToolResultErrorFromErr("tracker_info failed", err), nil
 	}
-
-	if len(bank.SynthPatches) == 0 {
-		return state
-	}
-
-	userPatches := make([]synth.SynthPatch, len(bank.SynthPatches))
-	for i, p := range bank.SynthPatches {
-		userPatches[i] = synth.SynthPatch{
-			Name:     p.Name,
-			Category: p.Category,
-			Tags:     append([]string(nil), p.Tags...),
-			Synth:    persistence.SynthFromSavedPatch(p),
-		}
-	}
-
-	state.customPatches = userPatches
-	state.patchBank.SetUserPatches(userPatches)
-	return state
+	return mcp.NewToolResultStructuredOnly(result), nil
 }
 
-func (s *mcpAppState) handleTrackerInfo(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return mcp.NewToolResultStructuredOnly(map[string]any{
-		"num_tracks": s.trackerModel.NumTracks,
-		"num_rows":   s.trackerModel.NumRows,
-		"bpm":        s.trackerModel.BPM,
-		"speed":      s.trackerModel.Speed,
-	}), nil
-}
-
-func (s *mcpAppState) handleSetNotes(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *mcpServer) handleSetNotes(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args setNotesArgs
 	if err := request.BindArguments(&args); err != nil {
 		return mcp.NewToolResultErrorFromErr("invalid arguments", err), nil
@@ -159,36 +129,41 @@ func (s *mcpAppState) handleSetNotes(_ context.Context, request mcp.CallToolRequ
 		return mcp.NewToolResultError("notes cannot be empty"), nil
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	result, err := s.bridge.apply(ctx, func(m *model) (any, error) {
+		tm := m.trackerModel()
 
-	for _, change := range args.Notes {
-		if err := s.validateTrackRow(change.Track, change.Row); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-
-		note, err := parseTrackerNote(change.Note)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-
-		cell := &s.trackerModel.Tracks[change.Track].Rows[change.Row]
-		cell.Note = note
-
-		if change.Volume != nil {
-			if *change.Volume < 0 || *change.Volume > 64 {
-				return mcp.NewToolResultError("volume must be in range 0..64"), nil
+		for _, change := range args.Notes {
+			if err := validateTrackRow(tm, change.Track, change.Row); err != nil {
+				return nil, err
 			}
-			cell.Volume = *change.Volume
+
+			note, err := parseTrackerNote(change.Note)
+			if err != nil {
+				return nil, err
+			}
+
+			cell := &tm.Tracks[change.Track].Rows[change.Row]
+			cell.Note = note
+
+			if change.Volume != nil {
+				if *change.Volume < 0 || *change.Volume > 64 {
+					return nil, fmt.Errorf("volume must be in range 0..64")
+				}
+				cell.Volume = *change.Volume
+			}
 		}
+
+		m.dirty = true
+		return map[string]any{"updated": len(args.Notes)}, nil
+	})
+	if err != nil {
+		return mcp.NewToolResultErrorFromErr("tracker_set_notes failed", err), nil
 	}
 
-	return mcp.NewToolResultStructuredOnly(map[string]any{
-		"updated": len(args.Notes),
-	}), nil
+	return mcp.NewToolResultStructuredOnly(result), nil
 }
 
-func (s *mcpAppState) handleCreatePatch(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *mcpServer) handleCreatePatch(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args createPatchArgs
 	if err := request.BindArguments(&args); err != nil {
 		return mcp.NewToolResultErrorFromErr("invalid arguments", err), nil
@@ -201,114 +176,146 @@ func (s *mcpAppState) handleCreatePatch(_ context.Context, request mcp.CallToolR
 		return mcp.NewToolResultError("synth payload is required"), nil
 	}
 
-	var saved persistence.SavedSynth
-	if err := json.Unmarshal(args.Synth, &saved); err != nil {
+	var synthPayload persistence.SavedSynth
+	if err := json.Unmarshal(args.Synth, &synthPayload); err != nil {
 		return mcp.NewToolResultErrorFromErr("invalid synth payload", err), nil
 	}
 
-	patch := synth.SynthPatch{
-		Name:     strings.TrimSpace(args.Name),
-		Category: strings.TrimSpace(args.Category),
-		Tags:     ensureCustomTag(args.Tags),
-		Synth:    persistence.SynthFromSavedPatch(persistence.SavedPatch{Synth: saved}),
+	result, err := s.bridge.apply(ctx, func(m *model) (any, error) {
+		patch := persistence.SavedPatch{
+			Name:     strings.TrimSpace(args.Name),
+			Category: strings.TrimSpace(args.Category),
+			Tags:     ensureCustomTag(args.Tags),
+			Synth:    synthPayload,
+		}
+
+		replaced := false
+		for i := range m.bank.SynthPatches {
+			if strings.EqualFold(m.bank.SynthPatches[i].Name, patch.Name) {
+				m.bank.SynthPatches[i] = patch
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			m.bank.SynthPatches = append(m.bank.SynthPatches, patch)
+		}
+
+		if err := m.bank.Save(); err != nil {
+			fmt.Fprintf(os.Stderr, "patch bank save failed: %v\n", err)
+		}
+
+		m.synth().SetUserPatches(bankToPatches(m.bank))
+		m.dirty = true
+
+		return map[string]any{
+			"name":      patch.Name,
+			"category":  patch.Category,
+			"tags":      patch.Tags,
+			"is_custom": true,
+		}, nil
+	})
+	if err != nil {
+		return mcp.NewToolResultErrorFromErr("synth_create_patch failed", err), nil
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.upsertCustomPatch(patch)
-	s.patchBank.SetUserPatches(s.customPatches)
-
-	return mcp.NewToolResultStructuredOnly(map[string]any{
-		"name":      patch.Name,
-		"category":  patch.Category,
-		"tags":      patch.Tags,
-		"is_custom": true,
-	}), nil
+	return mcp.NewToolResultStructuredOnly(result), nil
 }
 
-func (s *mcpAppState) handleListPatches(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *mcpServer) handleListPatches(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args listPatchesArgs
 	if err := request.BindArguments(&args); err != nil {
 		return mcp.NewToolResultErrorFromErr("invalid arguments", err), nil
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	result, err := s.bridge.apply(ctx, func(m *model) (any, error) {
+		all := m.synth().PatchBankView().Patches
+		patches := make([]map[string]any, 0, len(all))
+		for _, p := range all {
+			if args.BuiltinOnly && p.IsCustom() {
+				continue
+			}
 
-	patches := make([]map[string]any, 0, len(s.patchBank.Patches))
-	for _, p := range s.patchBank.Patches {
-		if args.BuiltinOnly && p.IsCustom() {
-			continue
+			patches = append(patches, map[string]any{
+				"name":      p.Name,
+				"category":  p.Category,
+				"tags":      p.Tags,
+				"is_custom": p.IsCustom(),
+			})
 		}
 
-		patches = append(patches, map[string]any{
-			"name":      p.Name,
-			"category":  p.Category,
-			"tags":      p.Tags,
-			"is_custom": p.IsCustom(),
-		})
+		return map[string]any{"patches": patches, "count": len(patches)}, nil
+	})
+	if err != nil {
+		return mcp.NewToolResultErrorFromErr("patchbank_list_patches failed", err), nil
 	}
 
-	return mcp.NewToolResultStructuredOnly(map[string]any{
-		"patches": patches,
-		"count":   len(patches),
-	}), nil
+	return mcp.NewToolResultStructuredOnly(result), nil
 }
 
-func (s *mcpAppState) handleAssignPatch(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *mcpServer) handleAssignPatch(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args assignPatchArgs
 	if err := request.BindArguments(&args); err != nil {
 		return mcp.NewToolResultErrorFromErr("invalid arguments", err), nil
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	result, err := s.bridge.apply(ctx, func(m *model) (any, error) {
+		patch, err := findPatchByName(m.synth().PatchBankView().Patches, args.PatchName, false)
+		if err != nil {
+			return nil, err
+		}
 
-	patch, err := s.findPatchByName(args.PatchName, false)
+		if err := assignPatchToTrack(m, args.Track, patch); err != nil {
+			return nil, err
+		}
+
+		m.dirty = true
+		return map[string]any{
+			"track":      args.Track,
+			"patch_name": patch.Name,
+			"category":   patch.Category,
+			"tags":       patch.Tags,
+		}, nil
+	})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return mcp.NewToolResultErrorFromErr("track_assign_patch failed", err), nil
 	}
 
-	if err := s.assignPatchToTrack(args.Track, patch); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	return mcp.NewToolResultStructuredOnly(map[string]any{
-		"track":      args.Track,
-		"patch_name": patch.Name,
-		"category":   patch.Category,
-		"tags":       patch.Tags,
-	}), nil
+	return mcp.NewToolResultStructuredOnly(result), nil
 }
 
-func (s *mcpAppState) handleSelectBuiltinPatch(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *mcpServer) handleSelectBuiltinPatch(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args assignPatchArgs
 	if err := request.BindArguments(&args); err != nil {
 		return mcp.NewToolResultErrorFromErr("invalid arguments", err), nil
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	result, err := s.bridge.apply(ctx, func(m *model) (any, error) {
+		patch, err := findPatchByName(m.synth().PatchBankView().Patches, args.PatchName, true)
+		if err != nil {
+			return nil, err
+		}
 
-	patch, err := s.findPatchByName(args.PatchName, true)
+		if err := assignPatchToTrack(m, args.Track, patch); err != nil {
+			return nil, err
+		}
+
+		m.dirty = true
+		return map[string]any{
+			"track":      args.Track,
+			"patch_name": patch.Name,
+			"category":   patch.Category,
+			"tags":       patch.Tags,
+		}, nil
+	})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return mcp.NewToolResultErrorFromErr("track_select_builtin_patch failed", err), nil
 	}
 
-	if err := s.assignPatchToTrack(args.Track, patch); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	return mcp.NewToolResultStructuredOnly(map[string]any{
-		"track":      args.Track,
-		"patch_name": patch.Name,
-		"category":   patch.Category,
-		"tags":       patch.Tags,
-	}), nil
+	return mcp.NewToolResultStructuredOnly(result), nil
 }
 
-func (s *mcpAppState) handleApplyCellEffect(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *mcpServer) handleApplyCellEffect(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args applyCellEffectArgs
 	if err := request.BindArguments(&args); err != nil {
 		return mcp.NewToolResultErrorFromErr("invalid arguments", err), nil
@@ -319,62 +326,81 @@ func (s *mcpAppState) handleApplyCellEffect(_ context.Context, request mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if err := s.validateTrackRow(args.Track, args.Row); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	row := &s.trackerModel.Tracks[args.Track].Rows[args.Row]
-
-	if args.Ticks != nil {
-		if *args.Ticks < 1 || *args.Ticks > 32 {
-			return mcp.NewToolResultError("ticks must be in range 1..32"), nil
+	result, err := s.bridge.apply(ctx, func(m *model) (any, error) {
+		tm := m.trackerModel()
+		if err := validateTrackRow(tm, args.Track, args.Row); err != nil {
+			return nil, err
 		}
-		row.Ticks = *args.Ticks
-	}
 
-	if args.Continuous != nil {
-		row.Continuous = *args.Continuous
-	}
+		row := &tm.Tracks[args.Track].Rows[args.Row]
 
-	if args.ArpeggioOffsets != nil {
-		row.Arpeggio = audio.ArpeggioEffect{Offsets: append([]int(nil), args.ArpeggioOffsets...)}
-	}
+		if args.Ticks != nil {
+			if *args.Ticks < 1 || *args.Ticks > 32 {
+				return nil, fmt.Errorf("ticks must be in range 1..32")
+			}
+			row.Ticks = *args.Ticks
+		}
 
-	effectParam, err := buildEffectParam(effectType, args)
+		if args.Continuous != nil {
+			row.Continuous = *args.Continuous
+		}
+
+		if args.ArpeggioOffsets != nil {
+			row.Arpeggio = audio.ArpeggioEffect{Offsets: append([]int(nil), args.ArpeggioOffsets...)}
+		}
+
+		effectParam, err := buildEffectParam(effectType, args)
+		if err != nil {
+			return nil, err
+		}
+
+		row.Effect = tracker.TrackerEffect{Type: effectType, Param: effectParam}
+		m.dirty = true
+
+		return map[string]any{
+			"track":        args.Track,
+			"row":          args.Row,
+			"effect":       args.Effect,
+			"effect_param": effectParam,
+		}, nil
+	})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return mcp.NewToolResultErrorFromErr("tracker_apply_cell_effect failed", err), nil
 	}
 
-	row.Effect = tracker.TrackerEffect{Type: effectType, Param: effectParam}
-
-	return mcp.NewToolResultStructuredOnly(map[string]any{
-		"track":        args.Track,
-		"row":          args.Row,
-		"effect":       args.Effect,
-		"effect_param": effectParam,
-	}), nil
+	return mcp.NewToolResultStructuredOnly(result), nil
 }
 
-func (s *mcpAppState) validateTrackRow(trackIdx, rowIdx int) error {
-	if trackIdx < 0 || trackIdx >= s.trackerModel.NumTracks {
-		return fmt.Errorf("track must be in range 0..%d", s.trackerModel.NumTracks-1)
+func validateTrackRow(tm *tracker.TrackerModel, trackIdx, rowIdx int) error {
+	if trackIdx < 0 || trackIdx >= tm.NumTracks {
+		return fmt.Errorf("track must be in range 0..%d", tm.NumTracks-1)
 	}
-	if rowIdx < 0 || rowIdx >= s.trackerModel.NumRows {
-		return fmt.Errorf("row must be in range 0..%d", s.trackerModel.NumRows-1)
+	if rowIdx < 0 || rowIdx >= tm.NumRows {
+		return fmt.Errorf("row must be in range 0..%d", tm.NumRows-1)
 	}
 	return nil
 }
 
-func (s *mcpAppState) findPatchByName(name string, builtinOnly bool) (synth.SynthPatch, error) {
+func assignPatchToTrack(m *model, trackIdx int, patch synth.SynthPatch) error {
+	tm := m.trackerModel()
+	if trackIdx < 0 || trackIdx >= tm.NumTracks {
+		return fmt.Errorf("track must be in range 0..%d", tm.NumTracks-1)
+	}
+
+	tm.Tracks[trackIdx].Synth = cloneSynth(patch.Synth)
+	if trackIdx == tm.CursorTrack {
+		m.synth().ApplyTrackChange(ui.TrackChanged{Synth: tm.Tracks[trackIdx].Synth})
+	}
+	return nil
+}
+
+func findPatchByName(patches []synth.SynthPatch, name string, builtinOnly bool) (synth.SynthPatch, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return synth.SynthPatch{}, fmt.Errorf("patch_name is required")
 	}
 
-	for _, p := range s.patchBank.Patches {
+	for _, p := range patches {
 		if !strings.EqualFold(p.Name, name) {
 			continue
 		}
@@ -388,26 +414,6 @@ func (s *mcpAppState) findPatchByName(name string, builtinOnly bool) (synth.Synt
 		return synth.SynthPatch{}, fmt.Errorf("builtin patch %q not found", name)
 	}
 	return synth.SynthPatch{}, fmt.Errorf("patch %q not found", name)
-}
-
-func (s *mcpAppState) assignPatchToTrack(trackIdx int, patch synth.SynthPatch) error {
-	if trackIdx < 0 || trackIdx >= s.trackerModel.NumTracks {
-		return fmt.Errorf("track must be in range 0..%d", s.trackerModel.NumTracks-1)
-	}
-
-	trackModel := &s.trackerModel.Tracks[trackIdx]
-	trackModel.Synth = cloneSynth(patch.Synth)
-	return nil
-}
-
-func (s *mcpAppState) upsertCustomPatch(patch synth.SynthPatch) {
-	for i := range s.customPatches {
-		if strings.EqualFold(s.customPatches[i].Name, patch.Name) {
-			s.customPatches[i] = patch
-			return
-		}
-	}
-	s.customPatches = append(s.customPatches, patch)
 }
 
 func ensureCustomTag(tags []string) []string {
@@ -502,6 +508,7 @@ func buildEffectParam(effectType tracker.EffectType, args applyCellEffectArgs) (
 		}
 
 		return (speed << 4) | (depth & 0xF), nil
+
 	case tracker.EffectVolumeSlide:
 		param := 0
 		if args.Param != nil {
@@ -511,6 +518,7 @@ func buildEffectParam(effectType tracker.EffectType, args applyCellEffectArgs) (
 			return 0, fmt.Errorf("param for volume_slide must be in range -16..16")
 		}
 		return param, nil
+
 	case tracker.EffectNoteCut, tracker.EffectNoteDelay:
 		param := 0
 		if args.Param != nil {
@@ -520,6 +528,7 @@ func buildEffectParam(effectType tracker.EffectType, args applyCellEffectArgs) (
 			return 0, fmt.Errorf("param for %s must be in range 0..31", strings.ToLower(strings.TrimSpace(args.Effect)))
 		}
 		return param, nil
+
 	default:
 		return 0, fmt.Errorf("unsupported effect type")
 	}
@@ -530,21 +539,21 @@ func cloneSynth(src *audio.Synth) *audio.Synth {
 		return nil
 	}
 
-	copy := persistence.ToSavedSynth(src)
-	return persistence.SynthFromSavedPatch(persistence.SavedPatch{Synth: copy})
+	saved := persistence.ToSavedSynth(src)
+	return persistence.SynthFromSavedPatch(persistence.SavedPatch{Synth: saved})
 }
 
 func mcpToolTrackerInfo() mcp.Tool {
 	return mcp.NewTool(
 		"tracker_info",
-		mcp.WithDescription("Get tracker dimensions and playback settings"),
+		mcp.WithDescription("Get tracker dimensions and playback settings from the live UI state"),
 	)
 }
 
 func mcpToolSetNotes() mcp.Tool {
 	return mcp.NewTool(
 		"tracker_set_notes",
-		mcp.WithDescription("Set notes (and optional volume) for one or more tracker cells"),
+		mcp.WithDescription("Set notes (and optional volume) for one or more tracker cells in the live session"),
 		mcp.WithArray(
 			"notes",
 			mcp.Required(),
@@ -567,7 +576,7 @@ func mcpToolSetNotes() mcp.Tool {
 func mcpToolCreatePatch() mcp.Tool {
 	return mcp.NewTool(
 		"synth_create_patch",
-		mcp.WithDescription("Create or replace a custom synth patch in the in-memory patch bank"),
+		mcp.WithDescription("Create or replace a custom synth patch in the current UI session patch bank"),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Patch name")),
 		mcp.WithString("category", mcp.Description("Optional patch category")),
 		mcp.WithArray("tags", mcp.WithStringItems(), mcp.Description("Optional tags")),
@@ -578,7 +587,7 @@ func mcpToolCreatePatch() mcp.Tool {
 func mcpToolListPatches() mcp.Tool {
 	return mcp.NewTool(
 		"patchbank_list_patches",
-		mcp.WithDescription("List patch names with category and tags"),
+		mcp.WithDescription("List available patches from the current patch bank view"),
 		mcp.WithBoolean("builtin_only", mcp.Description("Only include built-in patches")),
 	)
 }
@@ -586,7 +595,7 @@ func mcpToolListPatches() mcp.Tool {
 func mcpToolAssignPatch() mcp.Tool {
 	return mcp.NewTool(
 		"track_assign_patch",
-		mcp.WithDescription("Assign a built-in or custom patch to a track"),
+		mcp.WithDescription("Assign a built-in or custom patch to a track in the live tracker"),
 		mcp.WithNumber("track", mcp.Required(), mcp.Description("0-based track index"), mcp.Min(0)),
 		mcp.WithString("patch_name", mcp.Required(), mcp.Description("Patch name")),
 	)
@@ -604,7 +613,7 @@ func mcpToolSelectBuiltinPatch() mcp.Tool {
 func mcpToolApplyCellEffect() mcp.Tool {
 	return mcp.NewTool(
 		"tracker_apply_cell_effect",
-		mcp.WithDescription("Apply tracker effects to a single cell, with optional row timing and arpeggio settings"),
+		mcp.WithDescription("Apply tracker effects to a single cell in the live session"),
 		mcp.WithNumber("track", mcp.Required(), mcp.Description("0-based track index"), mcp.Min(0)),
 		mcp.WithNumber("row", mcp.Required(), mcp.Description("0-based row index"), mcp.Min(0)),
 		mcp.WithString("effect", mcp.Required(), mcp.Enum("none", "vibrato", "volume_slide", "note_cut", "note_delay")),
