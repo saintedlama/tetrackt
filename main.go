@@ -447,11 +447,11 @@ func main() {
 	flag.Parse()
 
 	if *mcpMode {
-		if err := runMCPServer(*mcpAddress); err != nil {
-			fmt.Printf("Error: %v\n", err)
-			os.Exit(1)
-		}
-		return
+		go func(address string) {
+			if err := runMCPServer(address); err != nil {
+				fmt.Fprintf(os.Stderr, "MCP server error: %v\n", err)
+			}
+		}(*mcpAddress)
 	}
 
 	// Initialize synthesizer
