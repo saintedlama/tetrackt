@@ -30,13 +30,11 @@ var (
 				Foreground(common.ColorAccentPlay).
 				Bold(true)
 
-	cellStyle = lipgloss.NewStyle().
-			Padding(0, 1)
+	cellStyle = lipgloss.NewStyle()
 
 	cursorCellStyle = lipgloss.NewStyle().
 			Background(common.ColorSurface).
-			Foreground(common.ColorAccentPrimary).
-			Padding(0, 1)
+			Foreground(common.ColorAccentPrimary)
 )
 
 type Viewport struct {
@@ -246,7 +244,7 @@ func (m *TrackerModel) View() string {
 	// Render visible rows
 	for row := m.viewportRow; row < endRow; row++ {
 		// Row number with playback indicator
-		rowNumStr := fmt.Sprintf("%02d ", row)
+		rowNumStr := fmt.Sprintf("%02d  ", row)
 		if row == m.PlaybackRow && m.IsPlaying {
 			tracks.WriteString(playbackRowStyle.Render(rowNumStr))
 		} else if row == m.CursorRow {

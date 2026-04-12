@@ -35,15 +35,16 @@ var GlobalHelpSections = []HelpSection{
 		Title: "Global",
 		Entries: []HelpEntry{
 			{"?", "Open this help"},
-			{"t", "Toggle Tracker / Synth screen"},
+			{"Ctrl+t", "Toggle Tracker / Synth screen"},
 			{"p", "Play / Pause from row 0"},
 			{"P", "Loop current row"},
-			{"s", "Save module"},
-			{"l", "Load module"},
+			{"Ctrl+s", "Save module"},
+			{"Ctrl+l", "Load module"},
 			{"+/-", "Octave up / down"},
 			{"Ctrl+↑↓←→", "Panel navigation (Synth, Tracker panels)"},
-			{"Z-M / Q-U + 2,3,5,6,7", "Keyboard-piano note keys"},
-			{"q / ctrl+c", "Quit"},
+			{"Input profile", "QWERTY default, QWERTZ via .tetrackt file"},
+			{"Ctrl+e", "Row effects dialog (NAV mode)"},
+			{"Ctrl+c", "Quit"},
 		},
 	},
 }
@@ -51,6 +52,8 @@ var GlobalHelpSections = []HelpSection{
 // HelpDialog renders global and current-screen keyboard shortcuts.
 type HelpDialog struct {
 	sections []HelpSection
+	width    int
+	height   int
 }
 
 // NewHelpDialog creates a HelpDialog combining the global sections with the
@@ -59,12 +62,18 @@ func NewHelpDialog(screenSections []HelpSection) *HelpDialog {
 	all := make([]HelpSection, 0, len(GlobalHelpSections)+len(screenSections))
 	all = append(all, GlobalHelpSections...)
 	all = append(all, screenSections...)
-	return &HelpDialog{sections: all}
+	return &HelpDialog{sections: all, width: 120, height: 32}
 }
 
 func (d *HelpDialog) Init() tea.Cmd { return nil }
 
 func (d *HelpDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if msg, ok := msg.(tea.WindowSizeMsg); ok {
+		d.width = msg.Width
+		d.height = msg.Height
+		return d, nil
+	}
+
 	if msg, ok := msg.(tea.KeyPressMsg); ok {
 		switch msg.String() {
 		case "esc", "?", "q", "enter":
@@ -75,20 +84,40 @@ func (d *HelpDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (d *HelpDialog) View() tea.View {
-	var b strings.Builder
-	fmt.Fprintln(&b, helpTitleStyle.Render("Keyboard Shortcuts"))
-	fmt.Fprintln(&b)
-
-	for _, section := range d.sections {
-		fmt.Fprintln(&b, helpSectionStyle.Render(section.Title))
+	renderSection := func(section HelpSection) string {
+		var sb strings.Builder
+		fmt.Fprintln(&sb, helpSectionStyle.Render(section.Title))
 		for _, e := range section.Entries {
-			fmt.Fprintf(&b, "  %-18s %s\n",
+			fmt.Fprintf(&sb, "  %-18s %s\n",
 				helpKeyStyle.Render(e.Key),
 				helpDescStyle.Render(e.Desc),
 			)
 		}
-		fmt.Fprintln(&b)
+		return strings.TrimRight(sb.String(), "\n")
 	}
+
+	leftCol := ""
+	rightBlocks := make([]string, 0, len(d.sections))
+	for i, section := range d.sections {
+		block := renderSection(section)
+		if i == 0 {
+			leftCol = block
+			continue
+		}
+		rightBlocks = append(rightBlocks, block)
+	}
+
+	body := leftCol
+	if len(rightBlocks) > 0 {
+		rightCol := strings.Join(rightBlocks, "\n\n")
+		body = lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "    ", rightCol)
+	}
+
+	var b strings.Builder
+	fmt.Fprintln(&b, helpTitleStyle.Render("Keyboard Shortcuts"))
+	fmt.Fprintln(&b)
+	b.WriteString(body)
+	b.WriteString("\n\n")
 
 	b.WriteString(common.StyleHelp.Render("[Esc / ? / Enter: Close]"))
 	return tea.NewView(b.String())

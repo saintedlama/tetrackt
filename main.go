@@ -69,8 +69,6 @@ type tickMsg time.Time
 // previewTickMsg is sent to advance arp preview one sub-tick
 type previewTickMsg time.Time
 
-var noteKeyToName = ui.NoteKeys
-
 //go:embed modules/quickstart.json
 var embeddedQuickstart []byte
 
@@ -93,7 +91,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			help := ui.NewHelpDialog(m.screens[m.activeScreen].Help())
 			return ui.NewDialogModel(help, m, m.width, m.height), nil
-		case "s":
+		case "ctrl+s":
 			// Open save dialog
 			prefill := "module"
 			if m.currentFilename != "" {
@@ -101,17 +99,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeSave, prefill), m, m.width, m.height)
 			return d, d.Init()
-		case "l":
+		case "ctrl+l":
 			// Open load dialog
 			d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeLoad, ""), m, m.width, m.height)
 			return d, d.Init()
-		case "e":
+		case "ctrl+e":
 			if m.activeScreen == trackerScreenIdx {
 				tm := m.trackerModel()
 				row := tm.Tracks[tm.CursorTrack].Rows[tm.CursorRow]
 				return ui.NewDialogModel(tracker.NewRowEffectsDialog(row, tm.CursorTrack, tm.CursorRow), m, m.width, m.height), nil
 			}
-		case "t":
+		case "ctrl+t":
 			m.activeScreen = (m.activeScreen + 1) % len(m.screens)
 			return m, nil
 		case "+":
@@ -151,7 +149,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				//speaker.Clear()
 			}
-		case "ctrl+c", "q":
+		case "ctrl+c":
 			if m.dirty {
 				return ui.NewDialogModel(ui.NewQuitDialog(), m, m.width, m.height), nil
 			}
@@ -160,7 +158,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Global note playing for synth screen.
-		if base, ok := noteKeyToName[msg.String()]; ok && m.activeScreen != trackerScreenIdx {
+		if base, ok := ui.NoteKeys[msg.String()]; ok && m.activeScreen != trackerScreenIdx {
 			note := audio.Note{Base: base, Octave: audio.Octave(m.octave)}
 
 			m.playNote(note)
@@ -190,8 +188,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
+		// Keep enough vertical budget for:
+		// - header/tab area (3)
+		// - tracker panel border+padding chrome (4)
+		viewportHeight := m.height - 7
+		if viewportHeight < 1 {
+			viewportHeight = 1
+		}
+
 		m.trackerModel().Viewport = tracker.Viewport{
-			Height: m.height - 7, // tab bar (1) + blank line (1) + newline (1) + footer padding+text (2) + panel border (2)
+			Height: viewportHeight,
 			Width:  m.width,
 		}
 
@@ -452,17 +458,19 @@ func (m model) View() tea.View {
 	}
 	tabBar := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
 
-	logoStr := ui.Logo()
-	spacerWidth := m.width - lipgloss.Width(tabBar) - lipgloss.Width(logoStr)
+	helpHint := lipgloss.NewStyle().
+		Foreground(common.ColorTextDisabled).
+		Render("? - Help")
+	right := lipgloss.JoinHorizontal(lipgloss.Top, helpHint, "  ", ui.Logo())
+	spacerWidth := m.width - lipgloss.Width(tabBar) - lipgloss.Width(right)
 	if spacerWidth < 0 {
 		spacerWidth = 0
 	}
-	header := tabBar + strings.Repeat(" ", spacerWidth) + logoStr + "\n\n"
+	header := tabBar + strings.Repeat(" ", spacerWidth) + right + "\n\n"
 
 	body := m.screens[m.activeScreen].View()
-	footer := common.StyleHelp.Render(m.screens[m.activeScreen].Footer())
 
-	v := tea.NewView(header + body + "\n" + footer)
+	v := tea.NewView(header + body)
 	v.AltScreen = true
 	return v
 }
@@ -494,6 +502,13 @@ func newModel(sampleRate audio.SampleRate, trackerModel *tracker.TrackerModel, t
 		fmt.Fprintf(os.Stderr, "warning: could not load patch bank: %v\n", err)
 		bank = &persistence.PatchBank{Version: 1}
 	}
+
+	if bank.InputProfile != "" {
+		ui.SetInputProfileFromString(bank.InputProfile)
+	} else {
+		ui.SetInputProfile(ui.InputProfileQWERTY)
+	}
+	bank.InputProfile = string(ui.CurrentInputProfile())
 
 	synthScreen := synth.NewSynthScreen(track.Synth)
 	if len(bank.SynthPatches) > 0 {

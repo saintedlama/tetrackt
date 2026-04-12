@@ -19,10 +19,10 @@ go build .
 
 Built-in songs included:
 
-- Press `l` to open the load dialog, then press `Enter` on "Quickstart" or "Demo Song".
+- Press `Ctrl+l` to open the load dialog, then press `Enter` on "Quickstart" or "Demo Song".
 - Optional file-based module: `modules/quickstart.json`
 - Full chiptune demo module: `modules/chiptune-demo.json`
-- You can also press `l` to open the load dialog and select a `.json` module.
+- You can also press `Ctrl+l` to open the load dialog and select a `.json` module.
 
 ## Features
 
@@ -48,6 +48,23 @@ Built-in songs included:
 ## Using The Tracker
 
 The tracker now has a modern two-mode workflow.
+
+Input profile:
+
+- Default profile is `QWERTY`.
+- To use `QWERTZ` mapping, set `inputProfile: qwertz` in `~/.tetrackt`.
+
+Default QWERTY note layout for upper and lower rows:
+
+```mermaid
+flowchart LR
+  Q[Q: C] --> K2[2: C#] --> W[W: D] --> K3[3: D#] --> E[E: E] --> R[R: F] --> K5[5: F#] --> T[T: G] --> K6[6: G#] --> Y[Y: A] --> K7[7: A#] --> U[U: B]
+```
+
+```mermaid
+flowchart LR
+  Z[Z: C] --> S[S: C#] --> X[X: D] --> D[D: D#] --> C[C: E] --> V[V: F] --> G[G: F#] --> B[B: G] --> H[H: G#] --> N[N: A] --> J[J: A#] --> M[M: B]
+```
 
 - `Space`: toggle between `NAV` (navigate) and `EDIT` (write values).
 - `Ctrl+Left` / `Ctrl+Right`: switch between Tracker and Settings panels.
@@ -80,9 +97,10 @@ Playback and utilities:
 
 - `p`: play/pause from row 0.
 - `P`: loop to current row.
-- `e`: open row effects dialog.
-- `l`: open load dialog.
-- `s`: open save dialog.
+- `Ctrl+e`: open row effects dialog.
+- `Ctrl+t`: toggle between Tracker and Synth screen.
+- `Ctrl+l`: open load dialog.
+- `Ctrl+s`: open save dialog.
 - `?`: open in-app keyboard help.
 
 ## Contributing

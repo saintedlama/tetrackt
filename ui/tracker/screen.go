@@ -3,6 +3,7 @@ package tracker
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -165,11 +166,14 @@ func (t *TrackerScreen) Footer() string {
 	if t.Tracker.Mode == EditMode {
 		mode = "EDIT"
 	}
-	return fmt.Sprintf("%s | Space: Mode | Tab: Column | Ctrl+←→: Panel | E: Row effects | p: Play | T: Synth | ?: Help", mode)
+	return fmt.Sprintf("%s | Space: Mode | Tab: Column | Ctrl+←→: Panel | Ctrl+E: Effects | p: Play | Ctrl+T: Synth | ?: Help", mode)
 }
 
 // Help returns screen-specific keyboard shortcut sections for the help dialog.
 func (t *TrackerScreen) Help() []ui.HelpSection {
+	profile := ui.CurrentInputProfile()
+	lower, upper, naturals, sharps := ui.NoteMappingRows(profile)
+
 	return []ui.HelpSection{
 		{
 			Title: "Tracker",
@@ -194,19 +198,19 @@ func (t *TrackerScreen) Help() []ui.HelpSection {
 				{Key: "Shift+F8 / Shift+F7", Desc: "Transpose notes +/- 1 octave"},
 				{Key: "Insert / Shift+Insert", Desc: "Insert track / global row space"},
 				{Key: "+/-", Desc: "Octave up / down"},
-				{Key: "E", Desc: "Row effects dialog (arp, fx)"},
-				{Key: "p", Desc: "Play / Pause from row 0"},
+				{Key: "Ctrl+E", Desc: "Row effects dialog (arp, fx)"},
+				{Key: "Ctrl+T", Desc: "Switch to Synth screen"},
 				{Key: "P", Desc: "Loop to current row"},
-				{Key: "l", Desc: "Load dialog (includes quickstart)"},
+				{Key: "Ctrl+L", Desc: "Load dialog (includes quickstart)"},
 			},
 		},
 		{
-			Title: "Note Mapping",
+			Title: fmt.Sprintf("Note Mapping (%s)", strings.ToUpper(string(profile))),
 			Entries: []ui.HelpEntry{
-				{Key: "Lower row", Desc: "Z S X D C V G B H N J M"},
-				{Key: "Upper row", Desc: "Q 2 W 3 E R 5 T 6 Y 7 U"},
-				{Key: "Naturals", Desc: "Z X C V B N M and Q W E R T Y U"},
-				{Key: "Sharps", Desc: "S D G H J and 2 3 5 6 7"},
+				{Key: "Lower row", Desc: lower},
+				{Key: "Upper row", Desc: upper},
+				{Key: "Naturals", Desc: naturals},
+				{Key: "Sharps", Desc: sharps},
 				{Key: "+ / -", Desc: "Octave up / down"},
 			},
 		},
