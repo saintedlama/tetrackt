@@ -51,7 +51,8 @@ type model struct {
 	// quitAfterSave signals that the app should quit once the next save completes.
 	quitAfterSave bool
 
-	player player.Player
+	player    player.Player
+	mcpActive bool
 }
 
 // synth returns the SynthScreen (always screens[synthScreenIdx]).
@@ -469,7 +470,11 @@ func (m model) View() tea.View {
 	helpHint := lipgloss.NewStyle().
 		Foreground(common.ColorTextDisabled).
 		Render("? - Help")
-	right := lipgloss.JoinHorizontal(lipgloss.Top, helpHint, "  ", ui.Logo())
+	var mcpIndicator string
+	if m.mcpActive {
+		mcpIndicator = lipgloss.NewStyle().Foreground(common.ColorCyan).Render("● MCP") + "  "
+	}
+	right := lipgloss.JoinHorizontal(lipgloss.Top, mcpIndicator, helpHint, "  ", ui.Logo())
 	spacerWidth := m.width - lipgloss.Width(tabBar) - lipgloss.Width(right)
 	if spacerWidth < 0 {
 		spacerWidth = 0
@@ -496,7 +501,7 @@ func main() {
 	track := trackerModel.CurrentTrack()
 
 	p := tea.NewProgram(
-		newModel(sampleRate, trackerModel, track),
+		newModel(sampleRate, trackerModel, track, *mcpMode),
 	)
 
 	if *mcpMode {
@@ -514,7 +519,7 @@ func main() {
 }
 
 // newModel constructs the application model, loading the user patch bank from disk.
-func newModel(sampleRate audio.SampleRate, trackerModel *tracker.TrackerModel, track tracker.Track) model {
+func newModel(sampleRate audio.SampleRate, trackerModel *tracker.TrackerModel, track tracker.Track, mcpActive bool) model {
 	trackerModel.Octave = 4
 
 	bank, err := persistence.LoadPatchBank()
@@ -545,5 +550,6 @@ func newModel(sampleRate audio.SampleRate, trackerModel *tracker.TrackerModel, t
 		bank:         bank,
 		octave:       4,
 		globalVolume: 1.0,
+		mcpActive:    mcpActive,
 	}
 }
