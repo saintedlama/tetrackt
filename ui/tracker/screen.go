@@ -21,6 +21,13 @@ type BPMChanged struct {
 	BPM int
 }
 
+// OpenRowEffectsMsg asks main to open the row effects dialog for a cell.
+type OpenRowEffectsMsg struct {
+	TrackIdx int
+	RowIdx   int
+	Row      TrackRow
+}
+
 // TrackerScreen is the pattern editor screen.
 // It wraps TrackerModel and exposes the Tracker field for main to access
 // playback state and perform audio-related mutations.
@@ -53,13 +60,9 @@ func (t *TrackerScreen) SetGlobalVolume(v float64) {
 func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "ctrl+right":
-			t.activePanel = (t.activePanel + 1) % trackerPanelCount
-			return t, nil
-		case "ctrl+left":
-			t.activePanel = (t.activePanel - 1 + trackerPanelCount) % trackerPanelCount
-			return t, nil
+		handled, cmd := ui.DispatchShortcutSections(msg, t.shortcuts())
+		if handled {
+			return t, cmd
 		}
 
 		if t.activePanel == 1 {
@@ -115,7 +118,7 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 		}
 
 		// Tracker panel is active
-		_, cmd := t.Tracker.Update(msg)
+		_, cmd = t.Tracker.Update(msg)
 		return t, cmd
 
 	case ui.SynthUpdated:
@@ -171,44 +174,81 @@ func (t *TrackerScreen) Footer() string {
 
 // Help returns screen-specific keyboard shortcut sections for the help dialog.
 func (t *TrackerScreen) Help() []ui.HelpSection {
+	sections := append([]ui.ShortcutSection(nil), t.shortcuts()...)
 	profile := ui.CurrentInputProfile()
 	lower, upper := ui.NoteMappingRows(profile)
 
-	return []ui.HelpSection{
-		{
-			Title: "Tracker",
-			Entries: []ui.HelpEntry{
-				{Key: "Space", Desc: "Toggle Navigate / Edit mode"},
-				{Key: "↑↓←→", Desc: "Navigate rows / tracks"},
-				{Key: "Tab / Shift+Tab", Desc: "Move subcolumn focus"},
-				{Key: "", Desc: ""},
-
-				{Key: "PgUp / PgDn", Desc: "Jump by viewport height"},
-				{Key: "Home / End", Desc: "First / last row"},
-				{Key: "", Desc: ""},
-				{Key: "0-9 / A-F", Desc: "Hex entry for volume/fx columns"},
-				{Key: "FX cmd (0..7)", Desc: "0 none, 1 vib, 2 volslide, 3 cut, 4 delay, 5 ticks, 6 cont, 7 arp"},
-				{Key: "FX aliases", Desc: "V S C D T O A in Effect column"},
-				{Key: "FX param", Desc: "2 hex nibbles in Param column"},
-				{Key: "Ctrl+E", Desc: "Advanced row effects editor"},
-				{Key: "Delete", Desc: "Clear focused subcolumn"},
-				{Key: "", Desc: ""},
-				{Key: "Shift+Arrows", Desc: "Rectangular selection"},
-				{Key: "Ctrl+A", Desc: "Select full pattern"},
-				{Key: "Alt+C / Alt+X / Alt+V", Desc: "Copy / cut / paste block"},
-				{Key: "Alt+Shift+V", Desc: "Paste effects only (keep note)"},
-				{Key: "", Desc: ""},
-				{Key: "Alt+↑/F8 / Alt+↓/F7", Desc: "Transpose notes +/- 1 semitone"},
-				{Key: "Alt+Shift+↑/Shift+F8 / Alt+Shift+↓/Shift+F7", Desc: "Transpose notes +/- 1 octave"},
-				{Key: "", Desc: ""},
-				{Key: "Insert / Shift+Insert", Desc: "Insert track / global row space"},
-			},
+	sections = append(sections, ui.ShortcutSection{
+		Title: "Tracker",
+		Shortcuts: []ui.Shortcut{
+			{KeyLabel: "Space", Description: "Toggle Navigate / Edit mode"},
+			{KeyLabel: "↑↓←→", Description: "Navigate rows / tracks"},
+			{KeyLabel: "Tab / Shift+Tab", Description: "Move subcolumn focus"},
+			{},
+			{KeyLabel: "PgUp / PgDn", Description: "Jump by viewport height"},
+			{KeyLabel: "Home / End", Description: "First / last row"},
+			{},
+			{KeyLabel: "0-9 / A-F", Description: "Hex entry for volume/fx columns"},
+			{KeyLabel: "FX cmd (0..7)", Description: "0 none, 1 vib, 2 volslide, 3 cut, 4 delay, 5 ticks, 6 cont, 7 arp"},
+			{KeyLabel: "FX aliases", Description: "V S C D T O A in Effect column"},
+			{KeyLabel: "FX param", Description: "2 hex nibbles in Param column"},
+			{KeyLabel: "Delete", Description: "Clear focused subcolumn"},
+			{},
+			{KeyLabel: "Shift+Arrows", Description: "Rectangular selection"},
+			{KeyLabel: "Ctrl+A", Description: "Select full pattern"},
+			{KeyLabel: "Alt+C / Alt+X / Alt+V", Description: "Copy / cut / paste block"},
+			{KeyLabel: "Alt+Shift+V", Description: "Paste effects only (keep note)"},
+			{},
+			{KeyLabel: "Alt+↑/F8 / Alt+↓/F7", Description: "Transpose notes +/- 1 semitone"},
+			{KeyLabel: "Alt+Shift+↑/Shift+F8 / Alt+Shift+↓/Shift+F7", Description: "Transpose notes +/- 1 octave"},
+			{},
+			{KeyLabel: "Insert / Shift+Insert", Description: "Insert track / global row space"},
 		},
+	})
+
+	help := ui.HelpSectionsFromShortcutSections(sections)
+	help = append(help, ui.HelpSection{
+		Title: fmt.Sprintf("Note Mapping (%s)", strings.ToUpper(string(profile))),
+		Entries: []ui.HelpEntry{
+			{Key: "Lower row", Desc: lower},
+			{Key: "Upper row", Desc: upper},
+		},
+	},
+	)
+
+	return help
+}
+
+func (t *TrackerScreen) shortcuts() []ui.ShortcutSection {
+	return []ui.ShortcutSection{
 		{
-			Title: fmt.Sprintf("Note Mapping (%s)", strings.ToUpper(string(profile))),
-			Entries: []ui.HelpEntry{
-				{Key: "Lower row", Desc: lower},
-				{Key: "Upper row", Desc: upper},
+			Title: "Tracker Panels",
+			Shortcuts: []ui.Shortcut{
+				{
+					Keys:        []string{"ctrl+right"},
+					Description: "Focus next tracker panel",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						t.activePanel = (t.activePanel + 1) % trackerPanelCount
+						return true, nil
+					},
+				},
+				{
+					Keys:        []string{"ctrl+e"},
+					Description: "Open advanced row effects editor",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						row := t.Tracker.Tracks[t.Tracker.CursorTrack].Rows[t.Tracker.CursorRow]
+						msg := OpenRowEffectsMsg{TrackIdx: t.Tracker.CursorTrack, RowIdx: t.Tracker.CursorRow, Row: row}
+						return true, func() tea.Msg { return msg }
+					},
+				},
+				{
+					Keys:        []string{"ctrl+left"},
+					Description: "Focus previous tracker panel",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						t.activePanel = (t.activePanel - 1 + trackerPanelCount) % trackerPanelCount
+						return true, nil
+					},
+				},
 			},
 		},
 	}

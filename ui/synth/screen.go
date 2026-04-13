@@ -58,19 +58,9 @@ func (s *SynthScreen) SetUserPatches(patches []SynthPatch) {
 func (s *SynthScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "ctrl+right":
-			s.navigateGrid(0, 1)
-			return s, nil
-		case "ctrl+left":
-			s.navigateGrid(0, -1)
-			return s, nil
-		case "ctrl+down":
-			s.navigateGrid(1, 0)
-			return s, nil
-		case "ctrl+up":
-			s.navigateGrid(-1, 0)
-			return s, nil
+		handled, shortcutCmd := ui.DispatchShortcutSections(msg, s.shortcuts())
+		if handled {
+			return s, shortcutCmd
 		}
 
 		// Forward to active panel; convert any component update into SynthUpdated.
@@ -228,16 +218,56 @@ func (s *SynthScreen) Footer() string {
 
 // Help returns screen-specific keyboard shortcut sections for the help dialog.
 func (s *SynthScreen) Help() []ui.HelpSection {
-	return []ui.HelpSection{
+	sections := append([]ui.ShortcutSection(nil), s.shortcuts()...)
+	sections = append(sections, ui.ShortcutSection{
+		Title: "Synth",
+		Shortcuts: []ui.Shortcut{
+			{KeyLabel: "↑↓", Description: "Select parameter"},
+			{KeyLabel: "←→", Description: "Adjust parameter value"},
+			{KeyLabel: "Shift+←→", Description: "Large adjustment"},
+		},
+	})
+
+	return ui.HelpSectionsFromShortcutSections(sections)
+}
+
+func (s *SynthScreen) shortcuts() []ui.ShortcutSection {
+	return []ui.ShortcutSection{
 		{
-			Title: "Synth",
-			Entries: []ui.HelpEntry{
-				{Key: "↑↓", Desc: "Select parameter"},
-				{Key: "←→", Desc: "Adjust parameter value"},
-				{Key: "Shift+←→", Desc: "Large adjustment"},
-				{Key: "", Desc: ""},
-				{Key: "b / B", Desc: "Open patch bank"},
-				{Key: "Z-M / Q-U + black keys", Desc: "Preview note"},
+			Title: "Synth Navigation",
+			Shortcuts: []ui.Shortcut{
+				{
+					Keys:        []string{"ctrl+right"},
+					Description: "Move focus right",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						s.navigateGrid(0, 1)
+						return true, nil
+					},
+				},
+				{
+					Keys:        []string{"ctrl+left"},
+					Description: "Move focus left",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						s.navigateGrid(0, -1)
+						return true, nil
+					},
+				},
+				{
+					Keys:        []string{"ctrl+down"},
+					Description: "Move focus down",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						s.navigateGrid(1, 0)
+						return true, nil
+					},
+				},
+				{
+					Keys:        []string{"ctrl+up"},
+					Description: "Move focus up",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						s.navigateGrid(-1, 0)
+						return true, nil
+					},
+				},
 			},
 		},
 	}

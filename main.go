@@ -71,6 +71,12 @@ type tickMsg time.Time
 // previewTickMsg is sent to advance arp preview one sub-tick
 type previewTickMsg time.Time
 
+type openHelpMsg struct{}
+type openSaveDialogMsg struct{}
+type openLoadDialogMsg struct{}
+type openPatchBankDialogMsg struct{}
+type requestQuitMsg struct{}
+
 //go:embed modules/quickstart.json
 var embeddedQuickstart []byte
 
@@ -88,77 +94,9 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		// Global mode switching
-		switch keyStr := msg.String(); keyStr {
-		case "?":
-			help := ui.NewHelpDialog(m.screens[m.activeScreen].Help())
-			return ui.NewDialogModel(help, m, m.width, m.height), nil
-		case "ctrl+s":
-			// Open save dialog
-			prefill := "module"
-			if m.currentFilename != "" {
-				prefill = m.currentFilename
-			}
-			d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeSave, prefill), m, m.width, m.height)
-			return d, d.Init()
-		case "ctrl+l":
-			// Open load dialog
-			d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeLoad, ""), m, m.width, m.height)
-			return d, d.Init()
-		case "ctrl+e":
-			if m.activeScreen == trackerScreenIdx {
-				tm := m.trackerModel()
-				row := tm.Tracks[tm.CursorTrack].Rows[tm.CursorRow]
-				d := tracker.NewRowEffectsDialog(row, tm.CursorTrack, tm.CursorRow)
-				d.FocusForEffect(row.Effect)
-				return ui.NewDialogModel(d, m, m.width, m.height), nil
-			}
-		case "ctrl+t":
-			m.activeScreen = (m.activeScreen + 1) % len(m.screens)
-			return m, nil
-		case "+":
-			if m.octave < maxOctave {
-				m.octave++
-				m.trackerModel().Octave = m.octave
-			}
-			return m, nil
-		case "-":
-			if m.octave > minOctave {
-				m.octave--
-				m.trackerModel().Octave = m.octave
-			}
-			return m, nil
-		case "b", "B":
-			// On the synth screen b/B opens the patch bank.
-			if m.activeScreen == synthScreenIdx {
-				return ui.NewDialogModel(synth.NewSynthPatchBankDialog(m.synth().PatchBankView(), m.octave, m.synth().GetSynth()), m, m.width, m.height), nil
-			}
-		case "p", "P":
-			// Toggle play/pause
-			tracker := m.trackerModel()
-			tracker.IsPlaying = !tracker.IsPlaying
-			tracker.LoopToRow = false // normal play toggles off loop mode
-			if tracker.IsPlaying {
-				tracker.PlaybackRow = 0
-				m.player.Reset()
-
-				// TODO: Loop to row is just a special play mode, that does not use 0..numRows range
-				if "P" == keyStr {
-					tracker.LoopToRow = true
-					tracker.LoopEndRow = tracker.CursorRow
-				}
-
-				// TODO: Refactor to have a play command returned from tracker.Update
-				return m, m.tick()
-			} else {
-				//speaker.Clear()
-			}
-		case "ctrl+c":
-			if m.dirty {
-				return ui.NewDialogModel(ui.NewQuitDialog(), m, m.width, m.height), nil
-			}
-			m.player.Clear()
-			return m, tea.Quit
+		handled, globalCmd := ui.DispatchShortcutSections(msg, (&m).globalShortcutSections())
+		if handled {
+			return m, globalCmd
 		}
 
 		// Global note playing for synth screen.
@@ -170,9 +108,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Forward remaining key events to the active screen
-		var cmd tea.Cmd
-		m.screens[m.activeScreen], cmd = m.screens[m.activeScreen].Update(msg)
-		return m, cmd
+		var screenCmd tea.Cmd
+		m.screens[m.activeScreen], screenCmd = m.screens[m.activeScreen].Update(msg)
+		return m, screenCmd
+
+	case openHelpMsg:
+		help := ui.NewHelpDialog(m.helpSections())
+		return ui.NewDialogModel(help, m, m.width, m.height), nil
+
+	case openSaveDialogMsg:
+		prefill := "module"
+		if m.currentFilename != "" {
+			prefill = m.currentFilename
+		}
+		d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeSave, prefill), m, m.width, m.height)
+		return d, d.Init()
+
+	case openLoadDialogMsg:
+		d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeLoad, ""), m, m.width, m.height)
+		return d, d.Init()
+
+	case openPatchBankDialogMsg:
+		if m.activeScreen == synthScreenIdx {
+			return ui.NewDialogModel(synth.NewSynthPatchBankDialog(m.synth().PatchBankView(), m.octave, m.synth().GetSynth()), m, m.width, m.height), nil
+		}
+		return m, nil
+
+	case requestQuitMsg:
+		if m.dirty {
+			return ui.NewDialogModel(ui.NewQuitDialog(), m, m.width, m.height), nil
+		}
+		m.player.Clear()
+		return m, tea.Quit
 
 	case previewTickMsg:
 		if m.player.TickPreview() {
@@ -210,6 +177,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ui.TrackChanged:
 		// Sync synth panels with the newly selected track
 		m.synth().ApplyTrackChange(msg)
+
+	case tracker.OpenRowEffectsMsg:
+		if m.activeScreen == trackerScreenIdx {
+			d := tracker.NewRowEffectsDialog(msg.Row, msg.TrackIdx, msg.RowIdx)
+			d.FocusForEffect(msg.Row.Effect)
+			return ui.NewDialogModel(d, m, m.width, m.height), nil
+		}
 
 	case tracker.RowEffectsApplied:
 		tm := m.trackerModel()
@@ -365,6 +339,116 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m *model) globalShortcutSections() []ui.ShortcutSection {
+	return []ui.ShortcutSection{
+		{
+			Title: "Global",
+			Shortcuts: []ui.Shortcut{
+				{
+					Keys:        []string{"?"},
+					Description: "Open help",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						return true, func() tea.Msg { return openHelpMsg{} }
+					},
+				},
+				{
+					Keys:        []string{"ctrl+t"},
+					Description: "Toggle Tracker / Synth screen",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						m.activeScreen = (m.activeScreen + 1) % len(m.screens)
+						return true, nil
+					},
+				},
+				{},
+				{
+					Keys:        []string{"p", "P"},
+					KeyLabel:    "p / P",
+					Description: "Play / Pause from row 0, Shifted loops to current row",
+					Action: func(k tea.KeyPressMsg) (bool, tea.Cmd) {
+						tm := m.trackerModel()
+						tm.IsPlaying = !tm.IsPlaying
+						tm.LoopToRow = false
+						if tm.IsPlaying {
+							tm.PlaybackRow = 0
+							m.player.Reset()
+							if k.String() == "P" {
+								tm.LoopToRow = true
+								tm.LoopEndRow = tm.CursorRow
+							}
+							return true, m.tick()
+						}
+						return true, nil
+					},
+				},
+				{},
+				{
+					Keys:        []string{"ctrl+s"},
+					Description: "Save module",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						return true, func() tea.Msg { return openSaveDialogMsg{} }
+					},
+				},
+				{
+					Keys:        []string{"ctrl+l"},
+					Description: "Load module",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						return true, func() tea.Msg { return openLoadDialogMsg{} }
+					},
+				},
+				{},
+				{
+					Keys:        []string{"+"},
+					Description: "Octave up",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						if m.octave < maxOctave {
+							m.octave++
+							m.trackerModel().Octave = m.octave
+						}
+						return true, nil
+					},
+				},
+				{
+					Keys:        []string{"-"},
+					Description: "Octave down",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						if m.octave > minOctave {
+							m.octave--
+							m.trackerModel().Octave = m.octave
+						}
+						return true, nil
+					},
+				},
+				{
+					Keys:        []string{"b", "B"},
+					KeyLabel:    "b / B",
+					Description: "Open patch bank on Synth screen",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						if m.activeScreen != synthScreenIdx {
+							return false, nil
+						}
+						return true, func() tea.Msg { return openPatchBankDialogMsg{} }
+					},
+				},
+				{KeyLabel: "Input profile", Description: "QWERTY default, QWERTZ via .tetrackt file"},
+				{},
+				{
+					Keys:        []string{"ctrl+c"},
+					Description: "Quit",
+					Action: func(_ tea.KeyPressMsg) (bool, tea.Cmd) {
+						return true, func() tea.Msg { return requestQuitMsg{} }
+					},
+				},
+			},
+		},
+	}
+}
+
+func (m *model) helpSections() []ui.HelpSection {
+	sections := ui.HelpSectionsFromShortcutSections(m.globalShortcutSections())
+	sections = append(sections, m.screens[m.activeScreen].Help()...)
+	return sections
 }
 
 // previewTick returns a command that sends a previewTickMsg after one sub-tick delay.
@@ -527,13 +611,6 @@ func newModel(sampleRate audio.SampleRate, trackerModel *tracker.TrackerModel, t
 		fmt.Fprintf(os.Stderr, "warning: could not load patch bank: %v\n", err)
 		bank = &persistence.PatchBank{Version: 1}
 	}
-
-	if bank.InputProfile != "" {
-		ui.SetInputProfileFromString(bank.InputProfile)
-	} else {
-		ui.SetInputProfile(ui.InputProfileQWERTY)
-	}
-	bank.InputProfile = string(ui.CurrentInputProfile())
 
 	synthScreen := synth.NewSynthScreen(track.Synth)
 	if len(bank.SynthPatches) > 0 {

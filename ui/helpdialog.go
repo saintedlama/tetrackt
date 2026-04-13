@@ -28,43 +28,17 @@ var (
 	helpDescStyle    = lipgloss.NewStyle().Foreground(common.ColorText)
 )
 
-// GlobalHelpSections lists shortcuts that are always available regardless of
-// the active screen.
-var GlobalHelpSections = []HelpSection{
-	{
-		Title: "Global",
-		Entries: []HelpEntry{
-			{"?", "Open this help"},
-			{"Ctrl+t", "Toggle Tracker / Synth screen"},
-			{"", ""},
-			{"p", "Play / Pause from row 0"},
-			{"P", "Loop current row"},
-			{"", ""},
-			{"Ctrl+s", "Save module"},
-			{"Ctrl+l", "Load module"},
-			{"", ""},
-			{"+/-", "Octave up / down"},
-			{"Ctrl+←→ / Ctrl+↑↓←→", "Panel navigation (Tracker / Synth)"},
-			{"Input profile", "QWERTY default, QWERTZ via .tetrackt file"},
-			{"", ""},
-			{"Ctrl+c", "Quit"},
-		},
-	},
-}
-
-// HelpDialog renders global and current-screen keyboard shortcuts.
+// HelpDialog renders keyboard shortcuts.
 type HelpDialog struct {
 	sections []HelpSection
 	width    int
 	height   int
 }
 
-// NewHelpDialog creates a HelpDialog combining the global sections with the
-// screen-specific sections provided by the caller.
-func NewHelpDialog(screenSections []HelpSection) *HelpDialog {
-	all := make([]HelpSection, 0, len(GlobalHelpSections)+len(screenSections))
-	all = append(all, GlobalHelpSections...)
-	all = append(all, screenSections...)
+// NewHelpDialog creates a HelpDialog from pre-built help sections.
+func NewHelpDialog(sections []HelpSection) *HelpDialog {
+	all := make([]HelpSection, len(sections))
+	copy(all, sections)
 	return &HelpDialog{sections: all, width: 120, height: 32}
 }
 
