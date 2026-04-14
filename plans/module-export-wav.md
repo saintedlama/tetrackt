@@ -1,6 +1,6 @@
 # Plan: Export Module to WAV
 
-Status: Proposed
+Status: Done
 
 ## Feature Description
 

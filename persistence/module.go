@@ -377,12 +377,15 @@ func ModuleToTracks(mod *SavedModule, tracker *utracker.TrackerModel) {
 	}
 
 	// Reset cursor to safe position
-	if tracker.CursorTrack >= tracker.NumTracks {
-		tracker.CursorTrack = 0
+	cursorRow := 0
+	cursorTrack := 0
+	if tracker.NumTracks > 0 && cursorTrack >= tracker.NumTracks {
+		cursorTrack = 0
 	}
-	if tracker.CursorRow >= tracker.NumRows {
-		tracker.CursorRow = 0
+	if tracker.NumRows > 0 && cursorRow >= tracker.NumRows {
+		cursorRow = 0
 	}
+	tracker.SetCursorPosition(cursorRow, cursorTrack)
 }
 
 // SaveToFile writes a SavedModule to a JSON file

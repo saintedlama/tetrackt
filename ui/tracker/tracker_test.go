@@ -9,21 +9,21 @@ import (
 
 func TestSpaceTogglesEditMode(t *testing.T) {
 	m := NewTracker(2, 8, 80, 24)
-	if m.Mode != NavigateMode {
+	if m.Mode != navigateMode {
 		t.Fatalf("expected default navigate mode, got %v", m.Mode)
 	}
 
 	_, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
-	if m.Mode != EditMode {
+	if m.Mode != editMode {
 		t.Fatalf("expected edit mode after space, got %v", m.Mode)
 	}
 }
 
 func TestNoteEntryInEditModeEmitsPreviewMessage(t *testing.T) {
 	m := NewTracker(2, 8, 80, 24)
-	m.Mode = EditMode
+	m.Mode = editMode
 	m.Octave = 4
-	m.CursorCol = ColumnNote
+	m.CursorCol = columnNote
 
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'z', Text: "z"})
 	if cmd == nil {
@@ -44,33 +44,32 @@ func TestNoteEntryInEditModeEmitsPreviewMessage(t *testing.T) {
 
 func TestEditStepAdvancesCursor(t *testing.T) {
 	m := NewTracker(2, 16, 80, 24)
-	m.Mode = EditMode
+	m.Mode = editMode
 	m.Octave = 4
 	m.EditStep = 2
-	m.CursorCol = ColumnNote
+	m.CursorCol = columnNote
 
 	_, _ = m.Update(tea.KeyPressMsg{Code: 'z', Text: "z"})
-	if m.CursorRow != 2 {
-		t.Fatalf("expected cursor row 2, got %d", m.CursorRow)
+	if m.nav.CursorRow() != 2 {
+		t.Fatalf("expected cursor row 2, got %d", m.nav.CursorRow())
 	}
 }
 
 func TestTabMovesToNextSubcolumn(t *testing.T) {
 	m := NewTracker(2, 8, 80, 24)
-	if m.CursorCol != ColumnNote {
+	if m.CursorCol != columnNote {
 		t.Fatalf("expected initial note column, got %v", m.CursorCol)
 	}
 
 	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	if m.CursorCol != ColumnVolume {
+	if m.CursorCol != columnVolume {
 		t.Fatalf("expected volume column after tab, got %v", m.CursorCol)
 	}
 }
 
 func TestInsertTrackSpaceShiftsRowsDown(t *testing.T) {
 	m := NewTracker(1, 4, 80, 24)
-	m.CursorTrack = 0
-	m.CursorRow = 1
+	m.nav.SetCursorPosition(0, 1)
 	m.Tracks[0].Rows[1].Note = audio.Note{Base: audio.Base("C"), Octave: 4}
 	m.Tracks[0].Rows[2].Note = audio.Note{Base: audio.Base("D"), Octave: 4}
 
@@ -89,8 +88,7 @@ func TestInsertTrackSpaceShiftsRowsDown(t *testing.T) {
 
 func TestTransposeCurrentStoredNoteSemitone(t *testing.T) {
 	m := NewTracker(1, 4, 80, 24)
-	m.CursorTrack = 0
-	m.CursorRow = 0
+	m.nav.SetCursorPosition(0, 0)
 	m.Tracks[0].Rows[0].Note = audio.Note{Base: audio.BaseC, Octave: 4}
 
 	edited := m.handleGlobalEditingKey("alt+up")
@@ -109,13 +107,9 @@ func TestTransposeSelectedNotesOctave(t *testing.T) {
 	m.Tracks[0].Rows[0].Note = audio.Note{Base: audio.BaseC, Octave: 4}
 	m.Tracks[1].Rows[1].Note = audio.Note{Base: audio.BaseE, Octave: 4}
 
-	m.selection = trackerSelection{
-		Active:      true,
-		AnchorRow:   0,
-		AnchorTrack: 0,
-		EndRow:      1,
-		EndTrack:    1,
-	}
+	// Use navigation grid to set up selection
+	m.nav.SetCursorPosition(0, 0)
+	m.nav.MoveExtending(1, 1)
 
 	edited := m.handleGlobalEditingKey("alt+shift+up")
 	if !edited {
@@ -169,15 +163,15 @@ func TestParseEffectCommandKeyAliases(t *testing.T) {
 
 func TestInlineRowTicksCommand(t *testing.T) {
 	m := NewTracker(1, 8, 80, 24)
-	m.Mode = EditMode
-	m.CursorCol = ColumnEffect
+	m.Mode = editMode
+	m.CursorCol = columnEffect
 
 	_, _ = m.Update(tea.KeyPressMsg{Text: "5"})
 	if got := m.Tracks[0].Rows[0].Effect.Type; got != EffectRowTicks {
 		t.Fatalf("expected EffectRowTicks, got %v", got)
 	}
 
-	m.CursorCol = ColumnParam
+	m.CursorCol = columnParam
 	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
 	_, _ = m.Update(tea.KeyPressMsg{Text: "C"})
 
@@ -192,11 +186,11 @@ func TestInlineRowTicksCommand(t *testing.T) {
 
 func TestInlineContinuousCommandToggle(t *testing.T) {
 	m := NewTracker(1, 8, 80, 24)
-	m.Mode = EditMode
-	m.CursorCol = ColumnEffect
+	m.Mode = editMode
+	m.CursorCol = columnEffect
 
 	_, _ = m.Update(tea.KeyPressMsg{Text: "6"})
-	m.CursorCol = ColumnParam
+	m.CursorCol = columnParam
 	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
 	_, _ = m.Update(tea.KeyPressMsg{Text: "1"})
 
@@ -204,10 +198,10 @@ func TestInlineContinuousCommandToggle(t *testing.T) {
 		t.Fatal("expected continuous to be enabled")
 	}
 
-	m.CursorRow = 1
-	m.CursorCol = ColumnEffect
+	m.nav.Move(0, 1)
+	m.CursorCol = columnEffect
 	_, _ = m.Update(tea.KeyPressMsg{Text: "6"})
-	m.CursorCol = ColumnParam
+	m.CursorCol = columnParam
 	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
 	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
 
@@ -218,11 +212,11 @@ func TestInlineContinuousCommandToggle(t *testing.T) {
 
 func TestInlineArpPresetCommand(t *testing.T) {
 	m := NewTracker(1, 8, 80, 24)
-	m.Mode = EditMode
-	m.CursorCol = ColumnEffect
+	m.Mode = editMode
+	m.CursorCol = columnEffect
 	_, _ = m.Update(tea.KeyPressMsg{Text: "7"})
 
-	m.CursorCol = ColumnParam
+	m.CursorCol = columnParam
 	_, _ = m.Update(tea.KeyPressMsg{Text: "1"})
 	_, _ = m.Update(tea.KeyPressMsg{Text: "4"})
 
@@ -240,8 +234,7 @@ func TestInlineArpPresetCommand(t *testing.T) {
 
 func TestTransposeAltShiftOrderVariants(t *testing.T) {
 	m := NewTracker(1, 4, 80, 24)
-	m.CursorTrack = 0
-	m.CursorRow = 0
+	m.nav.SetCursorPosition(0, 0)
 	m.Tracks[0].Rows[0].Note = audio.Note{Base: audio.BaseC, Octave: 4}
 
 	edited := m.handleGlobalEditingKey("shift+alt+up")
@@ -279,15 +272,13 @@ func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 	}
 
 	// Copy source cell.
-	m.CursorTrack = 0
-	m.CursorRow = 0
-	m.selection = trackerSelection{}
+	m.nav.SetCursorPosition(0, 0)
+	m.nav.ClearSelection()
 	m.handleGlobalEditingKey("alt+c")
 
 	// Destination has a different note that should be preserved.
 	m.Tracks[1].Rows[1] = TrackRow{Note: audio.Note{Base: audio.BaseA, Octave: 5}}
-	m.CursorTrack = 1
-	m.CursorRow = 1
+	m.nav.SetCursorPosition(1, 1)
 
 	edited := m.handleGlobalEditingKey("alt+shift+v")
 	if !edited {

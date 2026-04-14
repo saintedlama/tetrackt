@@ -19,15 +19,15 @@ func loadWorkspace(t *testing.T) *archscout.Workspace {
 }
 
 // TestArch_AudioIsPure enforces that the synthesis engine has no dependency
-// on any UI, persistence, or player package — keeping it a pure audio domain.
+// on any UI, persistence, or render package — keeping it a pure audio domain.
 func TestArch_AudioIsPure(t *testing.T) {
 	ws := loadWorkspace(t)
 
-	archscout.Rule("audio must not depend on ui, persistence, or player").
+	archscout.Rule("audio must not depend on ui, persistence, or render").
 		Dependencies().
 		InPackage(module.Pkg("audio/...")).
 		IsNotTest().
-		DependOn(module.Pkgs("ui/...", "persistence/...", "player/...")...).
+		DependOn(module.Pkgs("ui/...", "persistence/...", "render/...")...).
 		Test(t, ws)
 }
 
@@ -40,20 +40,7 @@ func TestArch_UICommonIsALeaf(t *testing.T) {
 		Dependencies().
 		InPackage(module.Pkg("ui/common/...")).
 		IsNotTest().
-		DependOn(module.Pkgs("audio/...", "persistence/...", "player/...", "ui/synth/...", "ui/tracker/...")...).
-		Test(t, ws)
-}
-
-// TestArch_PlayerDoesNotDependOnUISynth enforces that the playback engine
-// only knows about the tracker model — not about synth panel internals.
-func TestArch_PlayerDoesNotDependOnUISynth(t *testing.T) {
-	ws := loadWorkspace(t)
-
-	archscout.Rule("player must not depend on ui/synth").
-		Dependencies().
-		InPackage(module.Pkg("player/...")).
-		IsNotTest().
-		DependOn(module.Pkg("ui/synth/...")).
+		DependOn(module.Pkgs("audio/...", "persistence/...", "render/...", "ui/synth/...", "ui/tracker/...")...).
 		Test(t, ws)
 }
 
@@ -87,17 +74,17 @@ func TestArch_NoPanicInProductionCode(t *testing.T) {
 		Test(t, ws)
 }
 
-// TestArch_OnlyAudioOrPlayerDependsOnBeep enforces that beep sub-packages
-// (speaker, effects, generators, …) are only imported by audio or player.
-// audio owns synthesis; player owns hardware playback scheduling.
+// TestArch_OnlyAudioOrRenderDependsOnBeep enforces that beep sub-packages
+// (speaker, effects, generators, …) are only imported by audio or render.
+// audio owns synthesis; render owns sinks and playback scheduling.
 // main.go and all other packages must stay beep-free.
 func TestArch_OnlyAudioDependsOnBeepCore(t *testing.T) {
 	ws := loadWorkspace(t)
 
-	archscout.Rule("only audio and player may depend on beep packages").
+	archscout.Rule("only audio and render may depend on beep packages").
 		Dependencies().
 		InPackage(module.Pkg("...")).
-		NotInPackage(module.Pkg("audio/..."), module.Pkg("player/...")).
+		NotInPackage(module.Pkg("audio/..."), module.Pkg("render/...")).
 		IsNotTest().
 		DependOn("github.com/gopxl/beep/v2/...").
 		Test(t, ws)

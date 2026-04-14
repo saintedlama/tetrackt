@@ -106,10 +106,10 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 			case "shift+right":
 				t.Tracker.BPM += 10
 			}
-			if t.Tracker.BPM < MinBPM {
-				t.Tracker.BPM = MinBPM
-			} else if t.Tracker.BPM > MaxBPM {
-				t.Tracker.BPM = MaxBPM
+			if t.Tracker.BPM < minBPM {
+				t.Tracker.BPM = minBPM
+			} else if t.Tracker.BPM > maxBPM {
+				t.Tracker.BPM = maxBPM
 			}
 			return t, func() tea.Msg { return BPMChanged{BPM: t.Tracker.BPM} }
 		}
@@ -119,7 +119,7 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 		return t, cmd
 
 	case ui.SynthUpdated:
-		track := &t.Tracker.Tracks[t.Tracker.CursorTrack]
+		track := &t.Tracker.Tracks[t.Tracker.nav.CursorTrack()]
 		track.Synth = msg.Synth
 		if msg.HasPatchMeta {
 			track.PatchName = msg.PatchName
@@ -147,7 +147,7 @@ func (t *TrackerScreen) View() string {
 		fmt.Sprintf("     %3d", t.Tracker.BPM)
 	settingsContent := volumeRow + "\n" + bpmRow
 
-	currentTrack := t.Tracker.Tracks[t.Tracker.CursorTrack]
+	currentTrack := t.Tracker.Tracks[t.Tracker.nav.CursorTrack()]
 	synthInfoContent := renderSynthInfo(currentTrack.Synth, currentTrack.PatchName, currentTrack.PatchCategory, currentTrack.PatchTags)
 
 	trackerPanel := ui.RenderPanel("Tracker", common.ColorAccentPrimary, t.Tracker.View(), t.activePanel == 0)
@@ -163,7 +163,7 @@ func (t *TrackerScreen) Title() string { return "Tracker" }
 // Footer returns the help text shown in the footer bar on the Tracker screen.
 func (t *TrackerScreen) Footer() string {
 	mode := "NAV"
-	if t.Tracker.Mode == EditMode {
+	if t.Tracker.Mode == editMode {
 		mode = "EDIT"
 	}
 	return fmt.Sprintf("%s | Space: Mode | Tab: Column | Ctrl+←→: Panel | Ctrl+E: Effects | p: Play | Ctrl+T: Synth | ?: Help", mode)

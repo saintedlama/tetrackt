@@ -2,6 +2,7 @@ package ui
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/filepicker"
@@ -30,8 +31,11 @@ const EmbeddedDemoToken = "__embedded_demo__"
 
 // FileDialogConfirmed is the result payload when the user confirms the file dialog.
 type FileDialogConfirmed struct {
-	Filename string
-	Mode     FileDialogMode
+	Filename      string
+	Mode          FileDialogMode
+	WavSampleRate int
+	WavLoopCount  int
+	WavExportGain float64
 }
 
 var (
@@ -54,7 +58,10 @@ type FileDialogModel struct {
 	ErrMsg           string
 	fp               filepicker.Model
 	input            textinput.Model // save mode only
-	focusPane        int             // 0=filepicker, 1=textinput; save mode only
+	wavSampleRate    textinput.Model // save mode only
+	wavLoopCount     textinput.Model // save mode only
+	wavExportGain    textinput.Model // save mode only
+	focusPane        int             // save mode only: 0=filepicker, 1=filename, 2=sample rate, 3=loops, 4=gain
 	loadPane         int             // load mode only: built-in tab or files tab
 	loadBuiltinFocus int             // load mode only: 0=Quickstart, 1=Demo
 }
@@ -113,6 +120,21 @@ func NewFileDialog(mode FileDialogMode, prefill string) *FileDialogModel {
 			ti.SetValue(prefill)
 		}
 		m.input = ti
+
+		sr := textinput.New()
+		sr.CharLimit = 5
+		sr.SetValue("44100")
+		m.wavSampleRate = sr
+
+		loops := textinput.New()
+		loops.CharLimit = 2
+		loops.SetValue("1")
+		m.wavLoopCount = loops
+
+		gain := textinput.New()
+		gain.CharLimit = 4
+		gain.SetValue("1.0")
+		m.wavExportGain = gain
 	}
 
 	return m
@@ -152,6 +174,9 @@ func (m *FileDialogModel) Update(rawMsg tea.Msg) (tea.Model, tea.Cmd) {
 			inputWidth = 10
 		}
 		m.input.SetWidth(inputWidth)
+		m.wavSampleRate.SetWidth(8)
+		m.wavLoopCount.SetWidth(4)
+		m.wavExportGain.SetWidth(6)
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -201,12 +226,16 @@ func (m *FileDialogModel) Update(rawMsg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return CloseDialogMsg{} }
 		case "tab":
 			if m.Mode == ModeSave {
-				m.focusPane = (m.focusPane + 1) % 2
-				if m.focusPane == 1 {
-					m.input.Focus()
-				} else {
-					m.input.Blur()
+				m.focusSavePane((m.focusPane + 1) % m.saveFocusCount())
+				return m, nil
+			}
+		case "shift+tab":
+			if m.Mode == ModeSave {
+				nextPane := m.focusPane - 1
+				if nextPane < 0 {
+					nextPane = m.saveFocusCount() - 1
 				}
+				m.focusSavePane(nextPane)
 				return m, nil
 			}
 		case "enter":
@@ -222,7 +251,7 @@ func (m *FileDialogModel) Update(rawMsg tea.Msg) (tea.Model, tea.Cmd) {
 					return CloseDialogMsg{Payload: FileDialogConfirmed{Filename: EmbeddedDemoToken, Mode: mode}}
 				}
 			}
-			if m.Mode == ModeSave && m.focusPane == 1 {
+			if m.Mode == ModeSave && m.focusPane > 0 {
 				return m, m.confirmSave()
 			}
 			// else: fall through to filepicker (navigates dirs / selects file)
@@ -232,8 +261,17 @@ func (m *FileDialogModel) Update(rawMsg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	// Textinput focused (save mode) — forward all messages to it.
-	if m.Mode == ModeSave && m.focusPane == 1 {
-		m.input, cmd = m.input.Update(rawMsg)
+	if m.Mode == ModeSave && m.focusPane > 0 {
+		switch m.focusPane {
+		case 1:
+			m.input, cmd = m.input.Update(rawMsg)
+		case 2:
+			m.wavSampleRate, cmd = m.wavSampleRate.Update(rawMsg)
+		case 3:
+			m.wavLoopCount, cmd = m.wavLoopCount.Update(rawMsg)
+		case 4:
+			m.wavExportGain, cmd = m.wavExportGain.Update(rawMsg)
+		}
 		return m, cmd
 	}
 
@@ -252,8 +290,7 @@ func (m *FileDialogModel) Update(rawMsg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Save mode: prefill textinput with the selected filename and focus it.
 		m.input.SetValue(filepath.Base(path))
-		m.focusPane = 1
-		m.input.Focus()
+		m.focusSavePane(1)
 		return m, cmd
 	}
 
@@ -270,19 +307,90 @@ func (m *FileDialogModel) confirmSave() tea.Cmd {
 		m.ErrMsg = "Filename cannot be empty"
 		return nil
 	}
-	if !strings.HasSuffix(filename, ".json") {
+	lowerFilename := strings.ToLower(filename)
+	if !strings.HasSuffix(lowerFilename, ".json") && !strings.HasSuffix(lowerFilename, ".wav") {
 		filename += ".json"
+		lowerFilename = strings.ToLower(filename)
 	}
-	fullPath := filepath.Join(m.fp.CurrentDirectory, filename)
-	mode := m.Mode
+
+	confirmed := FileDialogConfirmed{Filename: filepath.Join(m.fp.CurrentDirectory, filename), Mode: m.Mode}
+	if strings.HasSuffix(lowerFilename, ".wav") {
+		sampleRate, loopCount, exportGain, errMsg := m.wavOptions()
+		if errMsg != "" {
+			m.ErrMsg = errMsg
+			return nil
+		}
+		confirmed.WavSampleRate = sampleRate
+		confirmed.WavLoopCount = loopCount
+		confirmed.WavExportGain = exportGain
+	}
+
 	return func() tea.Msg {
-		return CloseDialogMsg{Payload: FileDialogConfirmed{Filename: fullPath, Mode: mode}}
+		return CloseDialogMsg{Payload: confirmed}
 	}
+}
+
+func (m *FileDialogModel) isWAVTarget() bool {
+	if m.Mode != ModeSave {
+		return false
+	}
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(m.input.Value())), ".wav")
+}
+
+func (m *FileDialogModel) saveFocusCount() int {
+	if m.isWAVTarget() {
+		return 5
+	}
+	return 2
+}
+
+func (m *FileDialogModel) focusSavePane(pane int) {
+	m.focusPane = pane
+	m.input.Blur()
+	m.wavSampleRate.Blur()
+	m.wavLoopCount.Blur()
+	m.wavExportGain.Blur()
+	switch pane {
+	case 1:
+		m.input.Focus()
+	case 2:
+		m.wavSampleRate.Focus()
+	case 3:
+		m.wavLoopCount.Focus()
+	case 4:
+		m.wavExportGain.Focus()
+	}
+}
+
+func (m *FileDialogModel) wavOptions() (int, int, float64, string) {
+	sampleRateText := strings.TrimSpace(m.wavSampleRate.Value())
+	loopCountText := strings.TrimSpace(m.wavLoopCount.Value())
+	exportGainText := strings.TrimSpace(m.wavExportGain.Value())
+
+	sampleRate, err := strconv.Atoi(sampleRateText)
+	if err != nil || (sampleRate != 22050 && sampleRate != 44100 && sampleRate != 48000) {
+		return 0, 0, 0, "Sample rate must be 22050, 44100, or 48000"
+	}
+	loopCount, err := strconv.Atoi(loopCountText)
+	if err != nil || loopCount < 1 || loopCount > 64 {
+		return 0, 0, 0, "Loop count must be between 1 and 64"
+	}
+	exportGain, err := strconv.ParseFloat(exportGainText, 64)
+	if err != nil || exportGain < 0 || exportGain > 1.5 {
+		return 0, 0, 0, "Export gain must be between 0.0 and 1.5"
+	}
+	return sampleRate, loopCount, exportGain, ""
 }
 
 // View renders the file browser dialog content (border is added by dialogModel).
 func (m *FileDialogModel) View() tea.View {
 	var sb strings.Builder
+	renderSaveLabel := func(label string, active bool) string {
+		if active {
+			return fdTitleStyle.Render(label)
+		}
+		return fdLabelStyle.Render(label)
+	}
 
 	// Title
 	title := "Load Module"
@@ -327,10 +435,23 @@ func (m *FileDialogModel) View() tea.View {
 	// Save mode: filename input row below the picker
 	if m.Mode == ModeSave {
 		sb.WriteString("\n")
-		sb.WriteString(fdLabelStyle.Render("Filename: "))
+		sb.WriteString(renderSaveLabel("Filename: ", m.focusPane == 1))
 		sb.WriteString(m.input.View())
-		if m.ErrMsg != "" {
+		if m.isWAVTarget() {
+			sb.WriteString("\n\n")
+			sb.WriteString(fdLabelStyle.Render("WAV export options"))
+			sb.WriteString("\n")
+			sb.WriteString(renderSaveLabel("Sample rate: ", m.focusPane == 2))
+			sb.WriteString(m.wavSampleRate.View())
 			sb.WriteString("  ")
+			sb.WriteString(renderSaveLabel("Loops: ", m.focusPane == 3))
+			sb.WriteString(m.wavLoopCount.View())
+			sb.WriteString("  ")
+			sb.WriteString(renderSaveLabel("Gain: ", m.focusPane == 4))
+			sb.WriteString(m.wavExportGain.View())
+		}
+		if m.ErrMsg != "" {
+			sb.WriteString("\n")
 			sb.WriteString(fdErrStyle.Render(m.ErrMsg))
 		}
 	} else if m.ErrMsg != "" {
@@ -342,10 +463,10 @@ func (m *FileDialogModel) View() tea.View {
 	sb.WriteString("\n\n")
 	var help string
 	switch {
-	case m.Mode == ModeSave && m.focusPane == 1:
-		help = "Enter: save  Tab: browse files  Esc: cancel"
+	case m.Mode == ModeSave && m.focusPane > 0:
+		help = "Enter: save  Tab: next field  Shift+Tab: previous field  Esc: cancel"
 	case m.Mode == ModeSave:
-		help = "Tab: edit filename  ↑↓: navigate  Enter: open/select  Esc: cancel"
+		help = "Tab: edit fields  ↑↓: navigate  Enter: open/select  Esc: cancel"
 	case m.Mode == ModeLoad && m.loadPane == loadPaneBuiltIn:
 		help = "Tab: files  ↑↓: choose song  Enter: load song  Esc: cancel"
 	default:

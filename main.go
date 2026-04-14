@@ -10,7 +10,7 @@ import (
 
 	"github.com/tetrackt/tetrackt/audio"
 	"github.com/tetrackt/tetrackt/persistence"
-	"github.com/tetrackt/tetrackt/player"
+	"github.com/tetrackt/tetrackt/render"
 	"github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 	"github.com/tetrackt/tetrackt/ui/synth"
@@ -51,7 +51,9 @@ type model struct {
 	// quitAfterSave signals that the app should quit once the next save completes.
 	quitAfterSave bool
 
-	player    player.Player
+	playback  *render.RenderEngine
+	speaker   *render.SpeakerSink
+	preview   render.PreviewPlayer
 	mcpActive bool
 }
 
@@ -78,9 +80,6 @@ var embeddedQuickstart []byte
 var embeddedDemo []byte
 
 func (m model) Init() tea.Cmd {
-	// Initialize speaker with sample rate
-	player.Init(m.sampleRate)
-
 	return nil
 }
 
@@ -108,8 +107,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+e":
 			if m.activeScreen == trackerScreenIdx {
 				tm := m.trackerModel()
-				row := tm.Tracks[tm.CursorTrack].Rows[tm.CursorRow]
-				d := tracker.NewRowEffectsDialog(row, tm.CursorTrack, tm.CursorRow)
+				cursorTrack := tm.CursorTrack()
+				cursorRow := tm.CursorRow()
+				row := tm.Tracks[cursorTrack].Rows[cursorRow]
+				d := tracker.NewRowEffectsDialog(row, cursorTrack, cursorRow)
 				d.FocusForEffect(row.Effect)
 				return ui.NewDialogModel(d, m, m.width, m.height), nil
 			}
@@ -140,24 +141,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tracker.LoopToRow = false // normal play toggles off loop mode
 			if tracker.IsPlaying {
 				tracker.PlaybackRow = 0
-				m.player.Reset()
+				m.speaker.Clear()
+				m.preview.Reset()
+				m.playback = render.NewRenderEngine(tracker, render.RenderConfig{SampleRate: m.sampleRate, GlobalVolume: m.globalVolume, LoopCount: 1})
 
 				// TODO: Loop to row is just a special play mode, that does not use 0..numRows range
 				if "P" == keyStr {
 					tracker.LoopToRow = true
-					tracker.LoopEndRow = tracker.CursorRow
+					tracker.LoopEndRow = tracker.CursorRow()
+				}
+				if err := m.playback.StartLive(m.speaker); err != nil {
+					fmt.Fprintf(os.Stderr, "Playback start failed: %v\n", err)
+					tracker.IsPlaying = false
+					m.playback = nil
+					return m, nil
 				}
 
 				// TODO: Refactor to have a play command returned from tracker.Update
 				return m, m.tick()
 			} else {
-				//speaker.Clear()
+				m.speaker.Clear()
+				if m.playback != nil {
+					_ = m.playback.StopLive(m.speaker)
+					m.playback = nil
+				}
 			}
 		case "ctrl+c":
 			if m.dirty {
 				return ui.NewDialogModel(ui.NewQuitDialog(), m, m.width, m.height), nil
 			}
-			m.player.Clear()
+			m.speaker.Clear()
 			return m, tea.Quit
 		}
 
@@ -175,17 +188,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case previewTickMsg:
-		if m.player.TickPreview() {
+		if m.preview.Tick() {
 			return m, m.previewTick()
 		}
 		return m, nil
 
 	case tickMsg:
 		tr := m.trackerModel()
-		if !tr.IsPlaying {
+		if !tr.IsPlaying || m.playback == nil {
 			return m, nil
 		}
-		m.player.Tick(tr, m.sampleRate, m.globalVolume)
+		if err := m.playback.TickLive(m.speaker, m.globalVolume); err != nil {
+			fmt.Fprintf(os.Stderr, "Playback failed: %v\n", err)
+			tr.IsPlaying = false
+			m.speaker.Clear()
+			m.playback = nil
+			return m, nil
+		}
 		return m, m.tick()
 
 	case tea.WindowSizeMsg:
@@ -227,16 +246,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		filename := msg.Filename
 		switch msg.Mode {
 		case ui.ModeSave:
-			// Save module
-			mod := persistence.TracksToModule(m.trackerModel())
-			err := persistence.SaveToFile(filename, mod)
+			var err error
+			if strings.HasSuffix(strings.ToLower(filename), ".wav") {
+				err = render.ExportWAVFromTracks(m.trackerModel(), filename, render.WavExportOptions{
+					SampleRate:   audio.SampleRate(msg.WavSampleRate),
+					GlobalVolume: msg.WavExportGain,
+					LoopCount:    msg.WavLoopCount,
+				})
+			} else {
+				mod := persistence.TracksToModule(m.trackerModel())
+				err = persistence.SaveToFile(filename, mod)
+			}
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Save failed: %v\n", err)
 			} else {
-				m.currentFilename = filename
+				if !strings.HasSuffix(strings.ToLower(filename), ".wav") {
+					m.currentFilename = filename
+				}
 				m.dirty = false
 				if m.quitAfterSave {
-					m.player.Clear()
+					m.speaker.Clear()
 					return m, tea.Quit
 				}
 			}
@@ -283,7 +312,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if speed <= 0 {
 			speed = tracker.DefaultSpeed
 		}
-		if m.player.StartPreview(msg.Note, msg.Row.Arpeggio, msg.Synth,
+		if m.preview.Start(msg.Note, msg.Row.Arpeggio, msg.Synth,
 			m.trackerModel().BPMDuration(), m.sampleRate, m.globalVolume, speed) {
 			return m, m.previewTick()
 		}
@@ -339,7 +368,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ui.QuitDiscardMsg:
-		m.player.Clear()
+		m.speaker.Clear()
 		return m, tea.Quit
 
 	case ui.QuitSaveMsg:
@@ -398,7 +427,7 @@ func (m *model) playNoteWithSynthPatch(note audio.Note, patch synth.SynthPatch) 
 	duration := m.trackerModel().BPMDuration()
 	noteSamples := m.sampleRate.N(duration)
 	audioPatch := patch.Synth.NewPatch(m.sampleRate, note.Frequency(), noteSamples)
-	m.player.Play(
+	m.speaker.Play(
 		audioPatch,
 		m.globalVolume,
 	)
@@ -424,7 +453,7 @@ func (m *model) playNote(note audio.Note) {
 	synth := m.synth().GetSynth()
 	noteSamples := m.sampleRate.N(duration)
 	patch := synth.NewPatch(m.sampleRate, note.Frequency(), noteSamples)
-	m.player.Play(
+	m.speaker.Play(
 		patch,
 		m.globalVolume,
 	)
@@ -498,7 +527,7 @@ func main() {
 
 	// Create pattern with 8 tracks and 64 rows
 	trackerModel := tracker.NewTracker(8, 64, 0, 0)
-	track := trackerModel.CurrentTrack()
+	track := trackerModel.Tracks[0]
 
 	p := tea.NewProgram(
 		newModel(sampleRate, trackerModel, track, *mcpMode),
@@ -539,9 +568,12 @@ func newModel(sampleRate audio.SampleRate, trackerModel *tracker.TrackerModel, t
 	if len(bank.SynthPatches) > 0 {
 		synthScreen.SetUserPatches(bankToPatches(bank))
 	}
+	speakerSink := render.NewSpeakerSink(sampleRate)
 
 	return model{
 		sampleRate: sampleRate,
+		speaker:    speakerSink,
+		preview:    render.NewPreviewPlayer(speakerSink),
 		screens: []ui.Screen{
 			tracker.NewTrackerScreen(trackerModel),
 			synthScreen,

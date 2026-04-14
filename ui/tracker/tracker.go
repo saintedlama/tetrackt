@@ -10,6 +10,7 @@ import (
 	"github.com/tetrackt/tetrackt/audio"
 	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
+	"github.com/tetrackt/tetrackt/ui/tracker/navigation"
 )
 
 var (
@@ -42,28 +43,28 @@ type Viewport struct {
 }
 
 const DefaultBPM = 160
-const MinBPM = 40
-const MaxBPM = 300
+const minBPM = 40
+const maxBPM = 300
 const DefaultSpeed = 6 // sub-ticks per row
-const DefaultEditStep = 1
+const defaultEditStep = 1
 
-// TrackerEditMode controls whether typing edits cells or only navigates.
-type TrackerEditMode int
+// trackerEditMode controls whether typing edits cells or only navigates.
+type trackerEditMode int
 
 const (
-	NavigateMode TrackerEditMode = iota
-	EditMode
+	navigateMode trackerEditMode = iota
+	editMode
 )
 
-// TrackerColumn identifies the currently focused in-grid subcolumn.
-type TrackerColumn int
+// trackerColumn identifies the currently focused in-grid subcolumn.
+type trackerColumn int
 
 const (
-	ColumnNote TrackerColumn = iota
-	ColumnVolume
-	ColumnArpeggio
-	ColumnEffect
-	ColumnParam
+	columnNote trackerColumn = iota
+	columnVolume
+	columnArpeggio
+	columnEffect
+	columnParam
 	trackerColumnCount
 )
 
@@ -76,14 +77,6 @@ type TrackerNoteEntered struct {
 	Row   TrackRow
 	Synth *audio.Synth
 	Speed int
-}
-
-type trackerSelection struct {
-	Active      bool
-	AnchorRow   int
-	AnchorTrack int
-	EndRow      int
-	EndTrack    int
 }
 
 type trackerClipboard struct {
@@ -119,24 +112,25 @@ type InlineEffectEdit struct {
 
 // TrackerModel represents the state of the tracker pattern editor
 type TrackerModel struct {
-	Tracks      []Track
-	NumRows     int
-	NumTracks   int
-	CursorTrack int
-	CursorRow   int
+	Tracks    []Track
+	NumRows   int
+	NumTracks int
+
+	// Navigation grid (manages cursor, viewport, selection)
+	// Navigation grid (manages cursor, viewport, selection)
+	nav *navigation.Grid
+
 	IsPlaying   bool
 	LoopToRow   bool
 	LoopEndRow  int
 	PlaybackRow int
-	viewportRow int
 	Viewport    Viewport
 	BPM         int
 	Speed       int // sub-ticks per row; 0 treated as DefaultSpeed
 	Octave      int
-	Mode        TrackerEditMode
-	CursorCol   TrackerColumn
+	Mode        trackerEditMode
+	CursorCol   trackerColumn
 	EditStep    int
-	selection   trackerSelection
 	clipboard   trackerClipboard
 	nibbleHi    *int
 }
@@ -197,23 +191,26 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 			}
 		}
 	}
+
+	// Calculate visible rows (subtract chrome: header + separator + padding + status)
+	chromeRows := 4
+	visibleRows := viewportHeight - chromeRows
+
 	return &TrackerModel{
 		Tracks:      tracks,
 		NumRows:     numRows,
 		NumTracks:   numTracks,
-		CursorTrack: 0,
+		nav:         navigation.New(numRows, numTracks, visibleRows),
 		IsPlaying:   false,
 		LoopToRow:   false,
 		PlaybackRow: 0,
-		CursorRow:   0,
-		viewportRow: 0,
 		Viewport:    Viewport{Width: viewportWidth, Height: viewportHeight},
 		BPM:         DefaultBPM,
 		Speed:       DefaultSpeed,
 		Octave:      4,
-		Mode:        NavigateMode,
-		CursorCol:   ColumnNote,
-		EditStep:    DefaultEditStep,
+		Mode:        navigateMode,
+		CursorCol:   columnNote,
+		EditStep:    defaultEditStep,
 	}
 }
 
@@ -229,7 +226,7 @@ func (m *TrackerModel) View() string {
 	tracks.WriteString("    ") // Row number space
 	for i := 0; i < m.NumTracks; i++ {
 		trackHeader := fmt.Sprintf("Track %d", i+1)
-		if i == m.CursorTrack {
+		if i == m.nav.CursorTrack() {
 			trackHeader = headerStyle.Render(trackHeader)
 		} else {
 			trackHeader = headerStyle.Foreground(common.ColorGray).Render(trackHeader)
@@ -247,15 +244,16 @@ func (m *TrackerModel) View() string {
 	}
 	tracks.WriteString("\n")
 
-	endRow := min(m.viewportRow+m.visibleRows(), m.NumRows)
+	viewportRow := m.nav.ViewportRow()
+	endRow := min(viewportRow+m.visibleRows(), m.NumRows)
 
 	// Render visible rows
-	for row := m.viewportRow; row < endRow; row++ {
+	for row := viewportRow; row < endRow; row++ {
 		// Row number with playback indicator
 		rowNumStr := fmt.Sprintf("%02d  ", row)
 		if row == m.PlaybackRow && m.IsPlaying {
 			tracks.WriteString(playbackRowStyle.Render(rowNumStr))
-		} else if row == m.CursorRow {
+		} else if row == m.nav.CursorRow() {
 			tracks.WriteString(cursorRowStyle.Render(rowNumStr))
 		} else {
 			tracks.WriteString(rowNumStyle.Render(rowNumStr))
@@ -278,7 +276,7 @@ func (m *TrackerModel) View() string {
 				if selected {
 					styled = common.StyleSelected.Render(part)
 				}
-				if row == m.CursorRow && trackIdx == m.CursorTrack && TrackerColumn(colIdx) == m.CursorCol {
+				if row == m.nav.CursorRow() && trackIdx == m.nav.CursorTrack() && trackerColumn(colIdx) == m.CursorCol {
 					styled = cursorCellStyle.Render(part)
 				}
 				tracks.WriteString(styled)
@@ -292,7 +290,7 @@ func (m *TrackerModel) View() string {
 	}
 
 	mode := "NAV"
-	if m.Mode == EditMode {
+	if m.Mode == editMode {
 		mode = "EDIT"
 	}
 	tracks.WriteString("\n")
@@ -330,99 +328,61 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			m.clearNibbleBuffer()
 			return m, nil
 		case "left":
-			// Move cursor left (previous track)
-			m.clearSelection()
+			result := m.nav.Move(-1, 0)
 			m.clearNibbleBuffer()
-			if m.CursorTrack > 0 {
-				m.CursorTrack--
+			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "right":
-			// Move cursor right (next track)
-			m.clearSelection()
+			result := m.nav.Move(1, 0)
 			m.clearNibbleBuffer()
-			if m.CursorTrack < m.NumTracks-1 {
-				m.CursorTrack++
+			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "up":
-			// Move cursor up (previous row)
-			m.clearSelection()
+			m.nav.Move(0, -1)
 			m.clearNibbleBuffer()
-			if m.CursorRow > 0 {
-				m.CursorRow--
-				// Adjust viewport if needed
-				if m.CursorRow < m.viewportRow {
-					m.viewportRow = m.CursorRow
-				}
-			}
 		case "down":
-			// Move cursor down (next row)
-			m.clearSelection()
+			m.nav.Move(0, 1)
 			m.clearNibbleBuffer()
-			m.MoveCursorDown()
 		case "shift+up":
-			m.startSelection()
+			result := m.nav.MoveExtending(0, -1)
 			m.clearNibbleBuffer()
-			if m.CursorRow > 0 {
-				m.CursorRow--
-				if m.CursorRow < m.viewportRow {
-					m.viewportRow = m.CursorRow
-				}
+			if result.TrackChanged {
+				trackChanged = true
 			}
-			m.extendSelection()
 		case "shift+down":
-			m.startSelection()
+			result := m.nav.MoveExtending(0, 1)
 			m.clearNibbleBuffer()
-			m.MoveCursorDown()
-			m.extendSelection()
+			if result.TrackChanged {
+				trackChanged = true
+			}
 		case "shift+left":
-			m.startSelection()
+			result := m.nav.MoveExtending(-1, 0)
 			m.clearNibbleBuffer()
-			if m.CursorTrack > 0 {
-				m.CursorTrack--
+			if result.TrackChanged {
 				trackChanged = true
 			}
-			m.extendSelection()
 		case "shift+right":
-			m.startSelection()
+			result := m.nav.MoveExtending(1, 0)
 			m.clearNibbleBuffer()
-			if m.CursorTrack < m.NumTracks-1 {
-				m.CursorTrack++
+			if result.TrackChanged {
 				trackChanged = true
 			}
-			m.extendSelection()
 		case "home":
-			// Jump to first row
-			m.clearSelection()
+			m.nav.Move(0, -m.NumRows)
 			m.clearNibbleBuffer()
-			m.CursorRow = 0
-			m.viewportRow = 0
 		case "end":
-			// Jump to last row
-			m.clearSelection()
+			m.nav.Move(0, m.NumRows)
 			m.clearNibbleBuffer()
-			m.CursorRow = m.NumRows - 1
-			visibleRows := m.visibleRows()
-			m.viewportRow = max(m.NumRows-visibleRows, 0)
 		case "pgup":
-			m.clearSelection()
+			m.nav.Move(0, -m.nav.ViewportHeight())
 			m.clearNibbleBuffer()
-			jump := max(1, m.visibleRows())
-			m.CursorRow = max(0, m.CursorRow-jump)
-			if m.CursorRow < m.viewportRow {
-				m.viewportRow = m.CursorRow
-			}
 		case "pgdown":
-			m.clearSelection()
+			m.nav.Move(0, m.nav.ViewportHeight())
 			m.clearNibbleBuffer()
-			jump := max(1, m.visibleRows())
-			m.CursorRow = min(m.NumRows-1, m.CursorRow+jump)
-			if m.CursorRow >= m.viewportRow+m.visibleRows() {
-				m.viewportRow = max(0, m.CursorRow-m.visibleRows()+1)
-			}
 		default:
-			if m.Mode == EditMode {
+			if m.Mode == editMode {
 				if msg, didEdit := m.handleEditInput(keyStr); didEdit {
 					edited = true
 					noteEntered = msg
@@ -434,7 +394,7 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			return m, func() tea.Msg { return *noteEntered }
 		}
 		if trackChanged {
-			currentTrack := m.Tracks[m.CursorTrack]
+			currentTrack := m.Tracks[m.nav.CursorTrack()]
 			cmd = func() tea.Msg {
 				return ui.TrackChanged{
 					Synth:         currentTrack.Synth,
@@ -456,23 +416,17 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 }
 
 func (m *TrackerModel) toggleMode() {
-	if m.Mode == EditMode {
-		m.Mode = NavigateMode
+	if m.Mode == editMode {
+		m.Mode = navigateMode
 		return
 	}
-	m.Mode = EditMode
+	m.Mode = editMode
 }
 
 func (m *TrackerModel) handleGlobalEditingKey(key string) bool {
 	switch key {
 	case "ctrl+a":
-		m.selection = trackerSelection{
-			Active:      true,
-			AnchorRow:   0,
-			AnchorTrack: 0,
-			EndRow:      m.NumRows - 1,
-			EndTrack:    m.NumTracks - 1,
-		}
+		m.nav.SelectAll()
 		m.clearNibbleBuffer()
 		return false
 	case "alt+c":
@@ -527,18 +481,20 @@ func (m *TrackerModel) handleGlobalEditingKey(key string) bool {
 }
 
 func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
-	row := &m.Tracks[m.CursorTrack].Rows[m.CursorRow]
+	cursorTrack := m.nav.CursorTrack()
+	cursorRow := m.nav.CursorRow()
+	row := &m.Tracks[cursorTrack].Rows[cursorRow]
 	switch m.CursorCol {
-	case ColumnNote:
+	case columnNote:
 		if base, ok := ui.NoteKeys[key]; ok {
 			note := audio.Note{Base: base, Octave: audio.Octave(m.Octave)}
 			row.Note = note
-			entered := &TrackerNoteEntered{Note: note, Row: *row, Synth: m.Tracks[m.CursorTrack].Synth, Speed: m.Speed}
+			entered := &TrackerNoteEntered{Note: note, Row: *row, Synth: m.Tracks[cursorTrack].Synth, Speed: m.Speed}
 			m.advanceByEditStep()
 			m.clearNibbleBuffer()
 			return entered, true
 		}
-	case ColumnVolume:
+	case columnVolume:
 		if v, ok := parseHexNibble(key); ok {
 			val := m.pushNibble(v)
 			if val != nil {
@@ -547,7 +503,7 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 				return nil, true
 			}
 		}
-	case ColumnArpeggio:
+	case columnArpeggio:
 		if v, ok := parseHexNibble(key); ok {
 			val := m.pushNibble(v)
 			if val != nil {
@@ -559,13 +515,13 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 				return nil, true
 			}
 		}
-	case ColumnEffect:
+	case columnEffect:
 		if effectType, ok := parseEffectCommandKey(key); ok {
 			row.Effect.Type = effectType
 			m.clearNibbleBuffer()
 			return nil, true
 		}
-	case ColumnParam:
+	case columnParam:
 		if v, ok := parseHexNibble(key); ok {
 			val := m.pushNibble(v)
 			if val != nil {
@@ -590,14 +546,14 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 
 func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 	switch m.CursorCol {
-	case ColumnNote:
+	case columnNote:
 		row.Note = audio.Off()
-	case ColumnVolume:
+	case columnVolume:
 		row.Volume = 0
-	case ColumnArpeggio:
+	case columnArpeggio:
 		row.Arpeggio = audio.ArpeggioEffect{}
 		row.Continuous = false
-	case ColumnEffect:
+	case columnEffect:
 		switch row.Effect.Type {
 		case EffectRowTicks:
 			row.Ticks = 0
@@ -609,7 +565,7 @@ func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 		}
 		row.Effect.Type = EffectNone
 		row.Effect.Param = 0
-	case ColumnParam:
+	case columnParam:
 		_ = applyInlineEffect(row, row.Effect.Type, 0)
 	}
 }
@@ -617,15 +573,15 @@ func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 func (m *TrackerModel) advanceByEditStep() {
 	step := m.EditStep
 	if step <= 0 {
-		step = DefaultEditStep
+		step = defaultEditStep
 	}
 	for range step {
-		m.MoveCursorDown()
+		m.moveCursorDown()
 	}
 }
 
 func (m *TrackerModel) moveSubcolumn(delta int) {
-	idx := m.CursorTrack*int(trackerColumnCount) + int(m.CursorCol)
+	idx := m.nav.CursorTrack()*int(trackerColumnCount) + int(m.CursorCol)
 	idx += delta
 	if idx < 0 {
 		idx = 0
@@ -634,59 +590,37 @@ func (m *TrackerModel) moveSubcolumn(delta int) {
 	if idx > maxIdx {
 		idx = maxIdx
 	}
-	m.CursorTrack = idx / int(trackerColumnCount)
-	m.CursorCol = TrackerColumn(idx % int(trackerColumnCount))
+	newTrack := idx / int(trackerColumnCount)
+	m.CursorCol = trackerColumn(idx % int(trackerColumnCount))
+
+	// Update navigation grid if track changed
+	if newTrack != m.nav.CursorTrack() {
+		m.nav.SetCursorPosition(m.nav.CursorRow(), newTrack)
+	}
 }
 
 func (m *TrackerModel) clearSelection() {
-	m.selection.Active = false
+	m.nav.ClearSelection()
 }
 
 func (m *TrackerModel) startSelection() {
-	if m.selection.Active {
-		return
-	}
-	m.selection = trackerSelection{
-		Active:      true,
-		AnchorRow:   m.CursorRow,
-		AnchorTrack: m.CursorTrack,
-		EndRow:      m.CursorRow,
-		EndTrack:    m.CursorTrack,
-	}
+	// Navigation grid handles this automatically in MoveExtending
 }
 
 func (m *TrackerModel) extendSelection() {
-	if !m.selection.Active {
-		return
-	}
-	m.selection.EndRow = m.CursorRow
-	m.selection.EndTrack = m.CursorTrack
+	// Navigation grid handles this automatically in MoveExtending
 }
 
 func (m *TrackerModel) selectionBounds() (int, int, int, int, bool) {
-	if !m.selection.Active {
-		return m.CursorRow, m.CursorRow, m.CursorTrack, m.CursorTrack, false
-	}
-	r0 := min(m.selection.AnchorRow, m.selection.EndRow)
-	r1 := max(m.selection.AnchorRow, m.selection.EndRow)
-	t0 := min(m.selection.AnchorTrack, m.selection.EndTrack)
-	t1 := max(m.selection.AnchorTrack, m.selection.EndTrack)
-	return r0, r1, t0, t1, true
+	return m.nav.SelectionBounds()
 }
 
 func (m *TrackerModel) isSelected(row, track int) bool {
-	r0, r1, t0, t1, ok := m.selectionBounds()
-	if !ok {
-		return false
-	}
-	return row >= r0 && row <= r1 && track >= t0 && track <= t1
+	return m.nav.IsSelected(row, track)
 }
 
 func (m *TrackerModel) copySelectionToClipboard() {
-	r0, r1, t0, t1, ok := m.selectionBounds()
-	if !ok {
-		r0, r1, t0, t1 = m.CursorRow, m.CursorRow, m.CursorTrack, m.CursorTrack
-	}
+	r0, r1, t0, t1, _ := m.selectionBounds()
 
 	height := r1 - r0 + 1
 	width := t1 - t0 + 1
@@ -701,10 +635,7 @@ func (m *TrackerModel) copySelectionToClipboard() {
 }
 
 func (m *TrackerModel) clearSelectedCells() {
-	r0, r1, t0, t1, ok := m.selectionBounds()
-	if !ok {
-		r0, r1, t0, t1 = m.CursorRow, m.CursorRow, m.CursorTrack, m.CursorTrack
-	}
+	r0, r1, t0, t1, _ := m.selectionBounds()
 	for r := r0; r <= r1; r++ {
 		for t := t0; t <= t1; t++ {
 			m.Tracks[t].Rows[r] = TrackRow{Note: audio.Off()}
@@ -716,13 +647,15 @@ func (m *TrackerModel) pasteClipboard() bool {
 	if !m.clipboard.HasData || len(m.clipboard.Cells) == 0 {
 		return false
 	}
+	cursorRow := m.nav.CursorRow()
+	cursorTrack := m.nav.CursorTrack()
 	for r := range len(m.clipboard.Cells) {
-		dstRow := m.CursorRow + r
+		dstRow := cursorRow + r
 		if dstRow >= m.NumRows {
 			break
 		}
 		for t := range len(m.clipboard.Cells[r]) {
-			dstTrack := m.CursorTrack + t
+			dstTrack := cursorTrack + t
 			if dstTrack >= m.NumTracks {
 				break
 			}
@@ -736,13 +669,15 @@ func (m *TrackerModel) pasteClipboardEffectsOnly() bool {
 	if !m.clipboard.HasData || len(m.clipboard.Cells) == 0 {
 		return false
 	}
+	cursorRow := m.nav.CursorRow()
+	cursorTrack := m.nav.CursorTrack()
 	for r := range len(m.clipboard.Cells) {
-		dstRow := m.CursorRow + r
+		dstRow := cursorRow + r
 		if dstRow >= m.NumRows {
 			break
 		}
 		for t := range len(m.clipboard.Cells[r]) {
-			dstTrack := m.CursorTrack + t
+			dstTrack := cursorTrack + t
 			if dstTrack >= m.NumTracks {
 				break
 			}
@@ -761,7 +696,7 @@ func (m *TrackerModel) pasteClipboardEffectsOnly() bool {
 func (m *TrackerModel) transposeSelection(semitones int) bool {
 	r0, r1, t0, t1, hasSelection := m.selectionBounds()
 	if !hasSelection {
-		r0, r1, t0, t1 = m.CursorRow, m.CursorRow, m.CursorTrack, m.CursorTrack
+		r0, r1, t0, t1 = m.nav.CursorRow(), m.nav.CursorRow(), m.nav.CursorTrack(), m.nav.CursorTrack()
 	}
 
 	edited := false
@@ -782,19 +717,21 @@ func (m *TrackerModel) transposeSelection(semitones int) bool {
 }
 
 func (m *TrackerModel) insertTrackSpace() {
-	t := m.CursorTrack
-	for row := m.NumRows - 1; row > m.CursorRow; row-- {
+	t := m.nav.CursorTrack()
+	cursorRow := m.nav.CursorRow()
+	for row := m.NumRows - 1; row > cursorRow; row-- {
 		m.Tracks[t].Rows[row] = m.Tracks[t].Rows[row-1]
 	}
-	m.Tracks[t].Rows[m.CursorRow] = TrackRow{Note: audio.Off()}
+	m.Tracks[t].Rows[cursorRow] = TrackRow{Note: audio.Off()}
 }
 
 func (m *TrackerModel) insertGlobalRowSpace() {
+	cursorRow := m.nav.CursorRow()
 	for t := 0; t < m.NumTracks; t++ {
-		for row := m.NumRows - 1; row > m.CursorRow; row-- {
+		for row := m.NumRows - 1; row > cursorRow; row-- {
 			m.Tracks[t].Rows[row] = m.Tracks[t].Rows[row-1]
 		}
-		m.Tracks[t].Rows[m.CursorRow] = TrackRow{Note: audio.Off()}
+		m.Tracks[t].Rows[cursorRow] = TrackRow{Note: audio.Off()}
 	}
 }
 
@@ -885,18 +822,24 @@ func (m Track) CurrentRow() TrackRow {
 	return m.Rows[m.number]
 }
 
-func (m *TrackerModel) CurrentTrack() Track {
-	return m.Tracks[m.CursorTrack]
+// moveCursorDown advances the cursor one row, clamping at the last row
+// and scrolling the viewport if necessary.
+func (m *TrackerModel) moveCursorDown() {
+	m.nav.Move(0, 1)
 }
 
-// MoveCursorDown advances the cursor one row, clamping at the last row
-// and scrolling the viewport if necessary.
-func (m *TrackerModel) MoveCursorDown() {
-	if m.CursorRow < m.NumRows-1 {
-		m.CursorRow++
-		visibleRows := m.visibleRows()
-		if m.CursorRow >= m.viewportRow+visibleRows {
-			m.viewportRow = m.CursorRow - visibleRows + 1
-		}
-	}
+// SetCursorPosition sets the cursor to the specified row and track,
+// clamping to valid ranges and adjusting the viewport if necessary.
+func (m *TrackerModel) SetCursorPosition(row, track int) {
+	m.nav.SetCursorPosition(row, track)
+}
+
+// CursorRow returns the current cursor row position.
+func (m *TrackerModel) CursorRow() int {
+	return m.nav.CursorRow()
+}
+
+// CursorTrack returns the current cursor track position.
+func (m *TrackerModel) CursorTrack() int {
+	return m.nav.CursorTrack()
 }

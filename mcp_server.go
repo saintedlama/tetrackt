@@ -388,7 +388,7 @@ func assignPatchToTrack(m *model, trackIdx int, patch synth.SynthPatch) error {
 	}
 
 	tm.Tracks[trackIdx].Synth = cloneSynth(patch.Synth)
-	if trackIdx == tm.CursorTrack {
+	if trackIdx == tm.CursorTrack() {
 		m.synth().ApplyTrackChange(ui.TrackChanged{Synth: tm.Tracks[trackIdx].Synth})
 	}
 	return nil
