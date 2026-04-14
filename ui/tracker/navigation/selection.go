@@ -1,7 +1,13 @@
 package navigation
 
-// Selection represents a rectangular selection in a 2D grid.
-type Selection struct {
+// Cell holds a row/track position in the grid.
+type Cell struct {
+	Row   int
+	Track int
+}
+
+// selection represents a rectangular selection in a 2D grid.
+type selection struct {
 	active      bool
 	anchorRow   int
 	anchorTrack int
@@ -9,20 +15,20 @@ type Selection struct {
 	endTrack    int
 }
 
-// NewSelection creates an inactive selection.
-func NewSelection() *Selection {
-	return &Selection{
+// newSelection creates an inactive selection.
+func newSelection() *selection {
+	return &selection{
 		active: false,
 	}
 }
 
-// IsActive returns true if the selection is active.
-func (s *Selection) IsActive() bool {
+// isActive returns true if the selection is active.
+func (s *selection) isActive() bool {
 	return s.active
 }
 
-// Start begins a new selection anchored at the given position.
-func (s *Selection) Start(row, track int) {
+// start begins a new selection anchored at the given position.
+func (s *selection) start(row, track int) {
 	s.active = true
 	s.anchorRow = row
 	s.anchorTrack = track
@@ -30,8 +36,8 @@ func (s *Selection) Start(row, track int) {
 	s.endTrack = track
 }
 
-// Extend updates the selection end point to the given position.
-func (s *Selection) Extend(row, track int) {
+// extend updates the selection end point to the given position.
+func (s *selection) extend(row, track int) {
 	if !s.active {
 		return
 	}
@@ -39,14 +45,14 @@ func (s *Selection) Extend(row, track int) {
 	s.endTrack = track
 }
 
-// Clear deactivates the selection.
-func (s *Selection) Clear() {
+// clear deactivates the selection.
+func (s *selection) clear() {
 	s.active = false
 }
 
-// Bounds returns the normalized selection bounds (minRow, maxRow, minTrack, maxTrack).
+// bounds returns the normalized selection bounds (minRow, maxRow, minTrack, maxTrack).
 // If selection is not active, returns the anchor position as both min and max.
-func (s *Selection) Bounds() (minRow, maxRow, minTrack, maxTrack int) {
+func (s *selection) bounds() (minRow, maxRow, minTrack, maxTrack int) {
 	if !s.active {
 		return s.anchorRow, s.anchorRow, s.anchorTrack, s.anchorTrack
 	}
@@ -58,12 +64,30 @@ func (s *Selection) Bounds() (minRow, maxRow, minTrack, maxTrack int) {
 	return
 }
 
-// Contains returns true if the given position is within the selection bounds.
-func (s *Selection) Contains(row, track int) bool {
+// contains returns true if the given position is within the selection bounds.
+func (s *selection) contains(row, track int) bool {
 	if !s.active {
 		return false
 	}
 
-	minRow, maxRow, minTrack, maxTrack := s.Bounds()
+	minRow, maxRow, minTrack, maxTrack := s.bounds()
 	return row >= minRow && row <= maxRow && track >= minTrack && track <= maxTrack
+}
+
+// cells returns all (row, track) positions in the selection.
+// Returns nil if the selection is not active.
+// Order: rows from min to max, tracks from min to max (outer loop: rows, inner loop: tracks).
+func (s *selection) cells() []Cell {
+	if !s.active {
+		return nil
+	}
+
+	minRow, maxRow, minTrack, maxTrack := s.bounds()
+	result := make([]Cell, 0, (maxRow-minRow+1)*(maxTrack-minTrack+1))
+	for row := minRow; row <= maxRow; row++ {
+		for track := minTrack; track <= maxTrack; track++ {
+			result = append(result, Cell{Row: row, Track: track})
+		}
+	}
+	return result
 }

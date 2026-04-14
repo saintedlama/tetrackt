@@ -109,7 +109,7 @@ func (s *mcpServer) handleTrackerInfo(ctx context.Context, _ mcp.CallToolRequest
 		return map[string]any{
 			"num_tracks": tm.NumTracks,
 			"num_rows":   tm.NumRows,
-			"bpm":        tm.BPM,
+			"bpm":        tm.BPM.Value(),
 			"speed":      tm.Speed,
 		}, nil
 	})

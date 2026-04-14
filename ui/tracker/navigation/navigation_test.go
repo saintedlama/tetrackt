@@ -4,7 +4,7 @@ import "testing"
 
 func TestNew_InitializesCursorAtOrigin(t *testing.T) {
 	g := New(10, 4, 5)
-	if row, track := g.CursorPosition(); row != 0 || track != 0 {
+	if row, track := g.cursorPosition(); row != 0 || track != 0 {
 		t.Fatalf("expected cursor at (0,0), got (%d,%d)", row, track)
 	}
 }
@@ -254,7 +254,7 @@ func TestSelectionBounds_NoSelection_ReturnsCursor(t *testing.T) {
 
 func TestViewportBounds_ReturnsCorrectRange(t *testing.T) {
 	g := New(20, 4, 5)
-	first, last := g.ViewportBounds()
+	first, last := g.viewportBounds()
 	if first != 0 || last != 4 {
 		t.Fatalf("expected (0,4), got (%d,%d)", first, last)
 	}
@@ -263,7 +263,7 @@ func TestViewportBounds_ReturnsCorrectRange(t *testing.T) {
 func TestIsCursorVisible_TrueWhenInViewport(t *testing.T) {
 	g := New(20, 4, 5)
 	g.SetCursorPosition(2, 0)
-	if !g.IsCursorVisible() {
+	if !g.isCursorVisible() {
 		t.Fatal("expected cursor to be visible")
 	}
 }
@@ -275,22 +275,22 @@ func TestIsCursorVisible_FalseWhenOutsideViewport(t *testing.T) {
 	// Viewport should now be at row 11 (15 - viewportHeight + 1)
 	// Now test if row 0 would be visible (it shouldn't be)
 	g.cursorRow = 0 // directly set without adjusting viewport
-	if g.IsCursorVisible() {
+	if g.isCursorVisible() {
 		t.Fatal("expected cursor to not be visible")
 	}
 }
 
 func TestNumRows_ReturnsCorrectValue(t *testing.T) {
 	g := New(10, 4, 5)
-	if g.NumRows() != 10 {
-		t.Fatalf("expected 10 rows, got %d", g.NumRows())
+	if g.numRows != 10 {
+		t.Fatalf("expected 10 rows, got %d", g.numRows)
 	}
 }
 
 func TestNumTracks_ReturnsCorrectValue(t *testing.T) {
 	g := New(10, 4, 5)
-	if g.NumTracks() != 4 {
-		t.Fatalf("expected 4 tracks, got %d", g.NumTracks())
+	if g.numTracks != 4 {
+		t.Fatalf("expected 4 tracks, got %d", g.numTracks)
 	}
 }
 
@@ -344,5 +344,60 @@ func TestEdgeCase_SingleTrackGrid(t *testing.T) {
 	g.Move(1, 0)
 	if g.CursorTrack() != 0 {
 		t.Fatalf("expected cursor to stay at 0, got %d", g.CursorTrack())
+	}
+}
+
+func TestSelectedCells_WithSelection_ReturnsAllCells(t *testing.T) {
+	g := New(10, 4, 5)
+	g.SetCursorPosition(2, 1)
+	g.MoveExtending(1, 2) // move by deltaTrack=1, deltaRow=2 -> cursor moves to (4,2)
+
+	cells := g.SelectedCells()
+
+	expected := 6 // 3 rows * 2 tracks
+	if len(cells) != expected {
+		t.Fatalf("expected %d cells, got %d", expected, len(cells))
+	}
+
+	// Verify iteration order: rows outer, tracks inner
+	expectedCells := []Cell{
+		{2, 1}, {2, 2},
+		{3, 1}, {3, 2},
+		{4, 1}, {4, 2},
+	}
+	for i, c := range expectedCells {
+		if cells[i].Row != c.Row || cells[i].Track != c.Track {
+			t.Fatalf("cell %d: expected (%d,%d), got (%d,%d)",
+				i, c.Row, c.Track, cells[i].Row, cells[i].Track)
+		}
+	}
+}
+
+func TestSelectedCells_NoSelection_ReturnsCursorOnly(t *testing.T) {
+	g := New(10, 4, 5)
+	g.SetCursorPosition(3, 2)
+
+	cells := g.SelectedCells()
+
+	if len(cells) != 1 {
+		t.Fatalf("expected 1 cell, got %d", len(cells))
+	}
+	if cells[0].Row != 3 || cells[0].Track != 2 {
+		t.Fatalf("expected (3,2), got (%d,%d)", cells[0].Row, cells[0].Track)
+	}
+}
+
+func TestSelectedCells_SingleCellSelection_ReturnsOne(t *testing.T) {
+	g := New(10, 4, 5)
+	g.SetCursorPosition(5, 1)
+	g.MoveExtending(0, 0) // start selection at current position
+
+	cells := g.SelectedCells()
+
+	if len(cells) != 1 {
+		t.Fatalf("expected 1 cell, got %d", len(cells))
+	}
+	if cells[0].Row != 5 || cells[0].Track != 1 {
+		t.Fatalf("expected (5,1), got (%d,%d)", cells[0].Row, cells[0].Track)
 	}
 }

@@ -2,20 +2,22 @@ package tracker
 
 import (
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/ui/tracker/effects"
 )
 
 func TestSpaceTogglesEditMode(t *testing.T) {
 	m := NewTracker(2, 8, 80, 24)
-	if m.Mode != navigateMode {
-		t.Fatalf("expected default navigate mode, got %v", m.Mode)
+	if m.Mode != editMode {
+		t.Fatalf("expected default edit mode, got %v", m.Mode)
 	}
 
 	_, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
-	if m.Mode != editMode {
-		t.Fatalf("expected edit mode after space, got %v", m.Mode)
+	if m.Mode != navigateMode {
+		t.Fatalf("expected navigate mode after space, got %v", m.Mode)
 	}
 }
 
@@ -128,7 +130,7 @@ func TestTransposeSelectedNotesOctave(t *testing.T) {
 
 func TestParseEffectCommandNibbleSupportsInlineExtensions(t *testing.T) {
 	for i := 0; i <= int(EffectArpPreset); i++ {
-		typ, ok := parseEffectCommandNibble(i)
+		typ, ok := effects.ParseNibble(i)
 		if !ok {
 			t.Fatalf("expected nibble %d to be valid", i)
 		}
@@ -137,7 +139,7 @@ func TestParseEffectCommandNibbleSupportsInlineExtensions(t *testing.T) {
 		}
 	}
 
-	if _, ok := parseEffectCommandNibble(8); ok {
+	if _, ok := effects.ParseNibble(8); ok {
 		t.Fatal("expected nibble 8 to be invalid")
 	}
 }
@@ -154,8 +156,8 @@ func TestParseEffectCommandKeyAliases(t *testing.T) {
 	}
 
 	for key, want := range cases {
-		got, ok := parseEffectCommandKey(key)
-		if !ok || got != want {
+		got, ok := effects.ParseKey(key)
+		if !ok || EffectType(got) != want {
 			t.Fatalf("key %q expected %v, got %v (ok=%v)", key, want, got, ok)
 		}
 	}
@@ -294,5 +296,66 @@ func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 	}
 	if !got.Arpeggio.IsActive() || got.Effect.Type != EffectVibrato || got.Effect.Param != 0x24 {
 		t.Fatalf("expected arp/effect copied, got row %+v", got)
+	}
+}
+
+func TestNewBPM_ClampsToValidRange(t *testing.T) {
+	tests := []struct {
+		input    int
+		expected int
+	}{
+		{160, 160},       // Normal value
+		{20, minBPM},     // Below minimum
+		{500, maxBPM},    // Above maximum
+		{minBPM, minBPM}, // Exactly minimum
+		{maxBPM, maxBPM}, // Exactly maximum
+	}
+
+	for _, tt := range tests {
+		bpm := NewBPM(tt.input)
+		if bpm.Value() != tt.expected {
+			t.Errorf("NewBPM(%d).Value() = %d, want %d", tt.input, bpm.Value(), tt.expected)
+		}
+	}
+}
+
+func TestBPM_Duration(t *testing.T) {
+	bpm := NewBPM(120)
+	duration := bpm.Duration()
+	expected := 500 * time.Millisecond // 60000ms / 120 BPM = 500ms per beat
+	if duration != expected {
+		t.Errorf("BPM(120).Duration() = %v, want %v", duration, expected)
+	}
+
+	// Test edge case: zero BPM should fall back to DefaultBPM
+	zeroBPM := BPM{value: 0}
+	duration = zeroBPM.Duration()
+	expected = time.Duration(60000/DefaultBPM) * time.Millisecond
+	if duration != expected {
+		t.Errorf("BPM(0).Duration() = %v, want %v (DefaultBPM fallback)", duration, expected)
+	}
+}
+
+func TestBPM_Adjust(t *testing.T) {
+	tests := []struct {
+		initial  int
+		delta    int
+		expected int
+	}{
+		{120, 10, 130},        // Normal adjustment
+		{120, -10, 110},       // Negative adjustment
+		{minBPM, -10, minBPM}, // Clamp to minimum
+		{maxBPM, 10, maxBPM},  // Clamp to maximum
+		{100, 250, maxBPM},    // Large positive adjustment
+		{100, -100, minBPM},   // Large negative adjustment
+	}
+
+	for _, tt := range tests {
+		bpm := NewBPM(tt.initial)
+		adjusted := bpm.Adjust(tt.delta)
+		if adjusted.Value() != tt.expected {
+			t.Errorf("BPM(%d).Adjust(%d).Value() = %d, want %d",
+				tt.initial, tt.delta, adjusted.Value(), tt.expected)
+		}
 	}
 }

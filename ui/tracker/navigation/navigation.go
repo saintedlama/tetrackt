@@ -27,7 +27,7 @@ type Grid struct {
 	viewportHeight int // number of visible rows
 
 	// Selection
-	selection *Selection
+	selection *selection
 }
 
 // New creates a grid with the given dimensions and viewport height.
@@ -39,14 +39,14 @@ func New(numRows, numTracks, viewportHeight int) *Grid {
 		cursorRow:      0,
 		cursorTrack:    0,
 		viewportRow:    0,
-		selection:      NewSelection(),
+		selection:      newSelection(),
 	}
 	g.clampAll()
 	return g
 }
 
 // CursorPosition returns the current cursor position (row, track).
-func (g *Grid) CursorPosition() (row, track int) {
+func (g *Grid) cursorPosition() (row, track int) {
 	return g.cursorRow, g.cursorTrack
 }
 
@@ -73,7 +73,7 @@ func (g *Grid) Move(deltaTrack, deltaRow int) MoveResult {
 	g.cursorTrack += deltaTrack
 	g.clampCursor()
 	g.adjustViewportToCursor()
-	g.selection.Clear()
+	g.selection.clear()
 
 	return MoveResult{
 		RowChanged:   g.cursorRow != oldRow,
@@ -82,8 +82,8 @@ func (g *Grid) Move(deltaTrack, deltaRow int) MoveResult {
 }
 
 func (g *Grid) MoveExtending(deltaTrack, deltaRow int) MoveResult {
-	if !g.selection.IsActive() {
-		g.selection.Start(g.cursorRow, g.cursorTrack)
+	if !g.selection.isActive() {
+		g.selection.start(g.cursorRow, g.cursorTrack)
 	}
 
 	oldRow := g.cursorRow
@@ -100,7 +100,7 @@ func (g *Grid) MoveExtending(deltaTrack, deltaRow int) MoveResult {
 	}
 
 	if result.Changed() {
-		g.selection.Extend(g.cursorRow, g.cursorTrack)
+		g.selection.extend(g.cursorRow, g.cursorTrack)
 	}
 	return result
 }
@@ -109,53 +109,59 @@ func (g *Grid) ViewportHeight() int {
 	return g.viewportHeight
 }
 
+func (g *Grid) SetViewportHeight(h int) {
+	g.viewportHeight = h
+	g.clampAll()
+}
+
 func (g *Grid) ViewportRow() int {
 	return g.viewportRow
 }
 
-func (g *Grid) ViewportBounds() (firstRow, lastRow int) {
+func (g *Grid) viewportBounds() (firstRow, lastRow int) {
 	firstRow = g.viewportRow
 	lastRow = min(g.viewportRow+g.viewportHeight-1, g.numRows-1)
 	return
 }
 
-func (g *Grid) IsCursorVisible() bool {
+func (g *Grid) isCursorVisible() bool {
 	return g.cursorRow >= g.viewportRow && g.cursorRow < g.viewportRow+g.viewportHeight
 }
 
 func (g *Grid) HasSelection() bool {
-	return g.selection.IsActive()
+	return g.selection.isActive()
 }
 
 func (g *Grid) ClearSelection() {
-	g.selection.Clear()
+	g.selection.clear()
 }
 
 func (g *Grid) SelectAll() {
 	if g.numRows > 0 && g.numTracks > 0 {
-		g.selection.Start(0, 0)
-		g.selection.Extend(g.numRows-1, g.numTracks-1)
+		g.selection.start(0, 0)
+		g.selection.extend(g.numRows-1, g.numTracks-1)
 	}
 }
 
 func (g *Grid) SelectionBounds() (minRow, maxRow, minTrack, maxTrack int, hasSelection bool) {
-	if !g.selection.IsActive() {
+	if !g.selection.isActive() {
 		return g.cursorRow, g.cursorRow, g.cursorTrack, g.cursorTrack, false
 	}
-	minRow, maxRow, minTrack, maxTrack = g.selection.Bounds()
+	minRow, maxRow, minTrack, maxTrack = g.selection.bounds()
 	return minRow, maxRow, minTrack, maxTrack, true
 }
 
 func (g *Grid) IsSelected(row, track int) bool {
-	return g.selection.Contains(row, track)
+	return g.selection.contains(row, track)
 }
 
-func (g *Grid) NumRows() int {
-	return g.numRows
-}
-
-func (g *Grid) NumTracks() int {
-	return g.numTracks
+// SelectedCells returns all selected (row, track) positions.
+// If no selection is active, returns a single-element slice with the cursor position.
+func (g *Grid) SelectedCells() []Cell {
+	if !g.selection.isActive() {
+		return []Cell{{Row: g.cursorRow, Track: g.cursorTrack}}
+	}
+	return g.selection.cells()
 }
 
 func (g *Grid) clampCursor() {

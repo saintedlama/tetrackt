@@ -281,7 +281,7 @@ func TracksToModule(tracker *utracker.TrackerModel) *SavedModule {
 	saved := &SavedModule{
 		NumRows:   tracker.NumRows,
 		NumTracks: tracker.NumTracks,
-		BPM:       tracker.BPM,
+		BPM:       tracker.BPM.Value(),
 		Speed:     tracker.Speed,
 		Tracks:    make([]SavedTrack, tracker.NumTracks),
 	}
@@ -328,9 +328,9 @@ func ModuleToTracks(mod *SavedModule, tracker *utracker.TrackerModel) {
 
 	// Restore BPM; fall back to default for old saves that omit it
 	if mod.BPM > 0 {
-		tracker.BPM = mod.BPM
+		tracker.BPM = utracker.NewBPM(mod.BPM)
 	} else {
-		tracker.BPM = utracker.DefaultBPM
+		tracker.BPM = utracker.NewBPM(utracker.DefaultBPM)
 	}
 
 	// Restore Speed; fall back to default for old saves that omit it

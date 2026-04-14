@@ -98,20 +98,15 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 			// BPM row focused
 			switch msg.String() {
 			case "left":
-				t.Tracker.BPM--
+				t.Tracker.BPM = t.Tracker.BPM.Adjust(-1)
 			case "shift+left":
-				t.Tracker.BPM -= 10
+				t.Tracker.BPM = t.Tracker.BPM.Adjust(-10)
 			case "right":
-				t.Tracker.BPM++
+				t.Tracker.BPM = t.Tracker.BPM.Adjust(1)
 			case "shift+right":
-				t.Tracker.BPM += 10
+				t.Tracker.BPM = t.Tracker.BPM.Adjust(10)
 			}
-			if t.Tracker.BPM < minBPM {
-				t.Tracker.BPM = minBPM
-			} else if t.Tracker.BPM > maxBPM {
-				t.Tracker.BPM = maxBPM
-			}
-			return t, func() tea.Msg { return BPMChanged{BPM: t.Tracker.BPM} }
+			return t, func() tea.Msg { return BPMChanged{BPM: t.Tracker.BPM.Value()} }
 		}
 
 		// Tracker panel is active
@@ -144,7 +139,7 @@ func (t *TrackerScreen) View() string {
 	volumeRow := render(settingsPanelActive && t.settingsFocus == 0, "Volume") +
 		fmt.Sprintf("  %s  %3d%%", t.volumeBar.View(), int(t.GlobalVolume*100))
 	bpmRow := render(settingsPanelActive && t.settingsFocus == 1, "BPM") +
-		fmt.Sprintf("     %3d", t.Tracker.BPM)
+		fmt.Sprintf("     %3d", t.Tracker.BPM.Value())
 	settingsContent := volumeRow + "\n" + bpmRow
 
 	currentTrack := t.Tracker.Tracks[t.Tracker.nav.CursorTrack()]

@@ -214,15 +214,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Keep enough vertical budget for:
 		// - header/tab area (3)
 		// - tracker panel border+padding chrome (4)
-		viewportHeight := m.height - 7
-		if viewportHeight < 1 {
-			viewportHeight = 1
-		}
+		viewportHeight := max(m.height-7, 1)
 
-		m.trackerModel().Viewport = tracker.Viewport{
-			Height: viewportHeight,
-			Width:  m.width,
-		}
+		m.trackerModel().SetViewport(m.width, viewportHeight)
 
 		return m, nil
 

@@ -10,6 +10,7 @@ import (
 	"github.com/tetrackt/tetrackt/audio"
 	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
+	"github.com/tetrackt/tetrackt/ui/tracker/effects"
 	"github.com/tetrackt/tetrackt/ui/tracker/navigation"
 )
 
@@ -48,6 +49,41 @@ const maxBPM = 300
 const DefaultSpeed = 6 // sub-ticks per row
 const defaultEditStep = 1
 
+// BPM represents beats per minute with validation and duration calculation.
+type BPM struct {
+	value int
+}
+
+// NewBPM creates a new BPM value, clamping to valid range [minBPM, maxBPM].
+func NewBPM(bpm int) BPM {
+	if bpm < minBPM {
+		bpm = minBPM
+	}
+	if bpm > maxBPM {
+		bpm = maxBPM
+	}
+	return BPM{value: bpm}
+}
+
+// Value returns the BPM as an integer.
+func (b BPM) Value() int {
+	return b.value
+}
+
+// Duration returns the duration of one row at this BPM.
+func (b BPM) Duration() time.Duration {
+	bpm := b.value
+	if bpm <= 0 {
+		bpm = DefaultBPM
+	}
+	return time.Duration(60000/bpm) * time.Millisecond
+}
+
+// Adjust returns a new BPM with the given delta applied, clamped to valid range.
+func (b BPM) Adjust(delta int) BPM {
+	return NewBPM(b.value + delta)
+}
+
 // trackerEditMode controls whether typing edits cells or only navigates.
 type trackerEditMode int
 
@@ -84,26 +120,6 @@ type trackerClipboard struct {
 	Cells   [][]TrackRow
 }
 
-// EffectType identifies the per-row playback effect evaluated each sub-tick.
-type EffectType int
-
-const (
-	EffectNone        EffectType = iota
-	EffectVibrato                // Param hi-nibble: speed (1-15 ticks/cycle); lo-nibble: depth (semitones*4, 0-15)
-	EffectVolumeSlide            // Param: volume delta per tick in 1/64 units; positive = louder
-	EffectNoteCut                // Param: sub-tick at which to silence the note
-	EffectNoteDelay              // Param: sub-tick at which to trigger NoteOn
-	EffectRowTicks               // Param: 00 clears row tick override; 01..20 sets per-row sub-ticks
-	EffectContinuous             // Param: 00 = off, 01 = on
-	EffectArpPreset              // Param: high nibble preset, low nibble step bucket
-)
-
-// TrackerEffect is a per-row effect command evaluated every sub-tick during playback.
-type TrackerEffect struct {
-	Type  EffectType
-	Param int
-}
-
 // InlineEffectEdit represents an effect command + parameter pair typed inline.
 type InlineEffectEdit struct {
 	Type  EffectType
@@ -125,7 +141,7 @@ type TrackerModel struct {
 	LoopEndRow  int
 	PlaybackRow int
 	Viewport    Viewport
-	BPM         int
+	BPM         BPM
 	Speed       int // sub-ticks per row; 0 treated as DefaultSpeed
 	Octave      int
 	Mode        trackerEditMode
@@ -137,11 +153,7 @@ type TrackerModel struct {
 
 // BPMDuration returns the duration of one row at the current BPM.
 func (m *TrackerModel) BPMDuration() time.Duration {
-	bpm := m.BPM
-	if bpm <= 0 {
-		bpm = DefaultBPM
-	}
-	return time.Duration(60000/bpm) * time.Millisecond
+	return m.BPM.Duration()
 }
 
 // Track represents a single track in the pattern
@@ -205,10 +217,10 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 		LoopToRow:   false,
 		PlaybackRow: 0,
 		Viewport:    Viewport{Width: viewportWidth, Height: viewportHeight},
-		BPM:         DefaultBPM,
+		BPM:         NewBPM(DefaultBPM),
 		Speed:       DefaultSpeed,
 		Octave:      4,
-		Mode:        navigateMode,
+		Mode:        editMode,
 		CursorCol:   columnNote,
 		EditStep:    defaultEditStep,
 	}
@@ -265,12 +277,12 @@ func (m *TrackerModel) View() string {
 			parts := []string{
 				fmt.Sprintf("%-3s", formatNote(trackRow.Note)),
 				formatVolume(trackRow.Volume),
-				formatArpeggio(trackRow.Arpeggio),
-				formatEffectType(trackRow.Effect.Type),
-				formatEffectParam(trackRow.Effect.Type, trackRow.Effect.Param),
+				effects.FormatArpeggio(trackRow.Arpeggio),
+				effects.Type(trackRow.Effect.Type).Format(),
+				effects.Type(trackRow.Effect.Type).FormatParam(trackRow.Effect.Param),
 			}
 
-			selected := m.isSelected(row, trackIdx)
+			selected := m.nav.IsSelected(row, trackIdx)
 			for colIdx, part := range parts {
 				styled := cellStyle.Render(part)
 				if selected {
@@ -516,8 +528,8 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 			}
 		}
 	case columnEffect:
-		if effectType, ok := parseEffectCommandKey(key); ok {
-			row.Effect.Type = effectType
+		if typ, ok := effects.ParseKey(key); ok {
+			row.Effect.Type = EffectType(typ)
 			m.clearNibbleBuffer()
 			return nil, true
 		}
@@ -576,7 +588,7 @@ func (m *TrackerModel) advanceByEditStep() {
 		step = defaultEditStep
 	}
 	for range step {
-		m.moveCursorDown()
+		m.nav.Move(0, 1)
 	}
 }
 
@@ -599,47 +611,26 @@ func (m *TrackerModel) moveSubcolumn(delta int) {
 	}
 }
 
-func (m *TrackerModel) clearSelection() {
-	m.nav.ClearSelection()
-}
-
-func (m *TrackerModel) startSelection() {
-	// Navigation grid handles this automatically in MoveExtending
-}
-
-func (m *TrackerModel) extendSelection() {
-	// Navigation grid handles this automatically in MoveExtending
-}
-
-func (m *TrackerModel) selectionBounds() (int, int, int, int, bool) {
-	return m.nav.SelectionBounds()
-}
-
-func (m *TrackerModel) isSelected(row, track int) bool {
-	return m.nav.IsSelected(row, track)
-}
-
 func (m *TrackerModel) copySelectionToClipboard() {
-	r0, r1, t0, t1, _ := m.selectionBounds()
+	r0, r1, t0, t1, _ := m.nav.SelectionBounds()
 
 	height := r1 - r0 + 1
 	width := t1 - t0 + 1
 	buf := make([][]TrackRow, height)
 	for r := range height {
 		buf[r] = make([]TrackRow, width)
-		for t := range width {
-			buf[r][t] = m.Tracks[t0+t].Rows[r0+r]
-		}
 	}
+
+	for _, c := range m.nav.SelectedCells() {
+		buf[c.Row-r0][c.Track-t0] = m.Tracks[c.Track].Rows[c.Row]
+	}
+
 	m.clipboard = trackerClipboard{HasData: true, Cells: buf}
 }
 
 func (m *TrackerModel) clearSelectedCells() {
-	r0, r1, t0, t1, _ := m.selectionBounds()
-	for r := r0; r <= r1; r++ {
-		for t := t0; t <= t1; t++ {
-			m.Tracks[t].Rows[r] = TrackRow{Note: audio.Off()}
-		}
+	for _, c := range m.nav.SelectedCells() {
+		m.Tracks[c.Track].Rows[c.Row] = TrackRow{Note: audio.Off()}
 	}
 }
 
@@ -694,25 +685,17 @@ func (m *TrackerModel) pasteClipboardEffectsOnly() bool {
 }
 
 func (m *TrackerModel) transposeSelection(semitones int) bool {
-	r0, r1, t0, t1, hasSelection := m.selectionBounds()
-	if !hasSelection {
-		r0, r1, t0, t1 = m.nav.CursorRow(), m.nav.CursorRow(), m.nav.CursorTrack(), m.nav.CursorTrack()
-	}
-
 	edited := false
-	for r := r0; r <= r1; r++ {
-		for t := t0; t <= t1; t++ {
-			row := &m.Tracks[t].Rows[r]
-			if row.Note.Base == audio.BaseOff {
-				continue
-			}
-			if n, ok := row.Note.Transpose(semitones); ok {
-				row.Note = n
-				edited = true
-			}
+	for _, c := range m.nav.SelectedCells() {
+		r := &m.Tracks[c.Track].Rows[c.Row]
+		if r.Note.Base == audio.BaseOff {
+			continue
+		}
+		if n, ok := r.Note.Transpose(semitones); ok {
+			r.Note = n
+			edited = true
 		}
 	}
-
 	return edited
 }
 
@@ -756,82 +739,45 @@ func (m *TrackerModel) visibleRows() int {
 }
 
 func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {
-	decoded, ok := decodeEffectParam(effectType, param)
+	result, ok := effects.Apply(effects.Type(effectType), param, row.Ticks, DefaultSpeed)
 	if !ok {
 		return false
 	}
 
-	switch effectType {
-	case EffectNone:
-		row.Effect.Type = effectType
-		row.Effect.Param = 0
-		return true
-	case EffectVolumeSlide:
-		row.Effect.Type = effectType
-		row.Effect.Param = decoded // signed delta for playback
-		return true
-	case EffectVibrato, EffectNoteCut, EffectNoteDelay:
-		row.Effect.Type = effectType
-		row.Effect.Param = decoded
-		return true
-	case EffectRowTicks:
-		row.Effect.Type = effectType
-		row.Effect.Param = param
-		if decoded == 0 {
-			row.Ticks = 0
-		} else {
-			row.Ticks = decoded
-		}
-		return true
-	case EffectContinuous:
-		row.Effect.Type = effectType
-		row.Effect.Param = param
-		row.Continuous = decoded == 1
-		return true
-	case EffectArpPreset:
-		preset := (param >> 4) & 0xF
-		step := param & 0xF
-		if step == 0 {
-			step = 4
-		}
-		if preset == 0 {
-			row.Effect.Type = effectType
-			row.Effect.Param = param
-			row.Arpeggio = audio.ArpeggioEffect{}
-			return true
-		}
-		if preset > 5 {
-			return false
-		}
-
-		ticks := row.Ticks
-		if ticks <= 0 {
-			ticks = DefaultSpeed
-		}
-		row.Effect.Type = effectType
-		row.Effect.Param = param
-		row.Arpeggio = audio.ArpeggioEffect{Offsets: generateInlineArpOffsets(preset, ticks, step)}
-		row.Continuous = true
-		return true
-	default:
-		return false
+	row.Effect = result.Effect
+	if result.Ticks > 0 || effectType == EffectRowTicks {
+		row.Ticks = result.Ticks
 	}
+	if result.Continuous || effectType == EffectContinuous {
+		row.Continuous = result.Continuous
+	}
+	if result.Arpeggio.IsActive() || effectType == EffectArpPreset {
+		row.Arpeggio = result.Arpeggio
+	}
+
+	return true
 }
 
 func (m Track) CurrentRow() TrackRow {
 	return m.Rows[m.number]
 }
 
-// moveCursorDown advances the cursor one row, clamping at the last row
-// and scrolling the viewport if necessary.
-func (m *TrackerModel) moveCursorDown() {
-	m.nav.Move(0, 1)
-}
-
 // SetCursorPosition sets the cursor to the specified row and track,
 // clamping to valid ranges and adjusting the viewport if necessary.
 func (m *TrackerModel) SetCursorPosition(row, track int) {
 	m.nav.SetCursorPosition(row, track)
+}
+
+// SetViewport updates the viewport dimensions and keeps the navigation
+// grid's viewport height in sync.
+func (m *TrackerModel) SetViewport(width, height int) {
+	m.Viewport = Viewport{Width: width, Height: height}
+	chromeRows := 4
+	visibleRows := height - chromeRows
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+	m.nav.SetViewportHeight(visibleRows)
 }
 
 // CursorRow returns the current cursor row position.
