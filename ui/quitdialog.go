@@ -22,7 +22,7 @@ var (
 )
 
 // QuitDialog is a simple confirmation dialog shown when quitting with unsaved changes.
-// Keys: S = save & quit, Y/Enter = quit without saving, N/Esc = cancel.
+// Keys: S = save & quit, Y/Enter/Ctrl+C = quit without saving, N/Esc = cancel.
 type QuitDialog struct{}
 
 func NewQuitDialog() *QuitDialog { return &QuitDialog{} }
@@ -34,7 +34,7 @@ func (d *QuitDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "s":
 			return d, func() tea.Msg { return CloseDialogMsg{Payload: QuitSaveMsg{}} }
-		case "y", "enter":
+		case "y", "enter", "ctrl+c":
 			return d, func() tea.Msg { return CloseDialogMsg{Payload: QuitDiscardMsg{}} }
 		case "n", "esc":
 			return d, func() tea.Msg { return CloseDialogMsg{} }
