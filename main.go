@@ -227,6 +227,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tracker.RowEffectsApplied:
 		tm := m.trackerModel()
 		if msg.TrackIdx < len(tm.Tracks) && msg.RowIdx < tm.NumRows {
+			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Volume = msg.Volume
 			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Arpeggio = msg.Arpeggio
 			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Ticks = msg.Ticks
 			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Continuous = msg.Continuous

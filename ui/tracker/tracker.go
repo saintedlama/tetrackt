@@ -36,6 +36,10 @@ var (
 	cursorCellStyle = lipgloss.NewStyle().
 			Background(common.ColorSurface).
 			Foreground(common.ColorAccentPrimary)
+
+	nibblePendingCellStyle = lipgloss.NewStyle().
+				Background(common.ColorSurface).
+				Foreground(common.ColorAccentWarning)
 )
 
 type Viewport struct {
@@ -282,14 +286,34 @@ func (m *TrackerModel) View() string {
 				effects.Type(trackRow.Effect.Type).FormatParam(trackRow.Effect.Param),
 			}
 
+			isCursorCell := row == m.nav.CursorRow() && trackIdx == m.nav.CursorTrack()
 			selected := m.nav.IsSelected(row, trackIdx)
 			for colIdx, part := range parts {
+				col := trackerColumn(colIdx)
+				isNibblePending := isCursorCell && m.nibbleHi != nil && m.Mode == editMode &&
+					(col == columnVolume || col == columnArpeggio || col == columnParam)
+
+				if isNibblePending && col == m.CursorCol {
+					switch col {
+					case columnVolume:
+						part = formatVolumePending(*m.nibbleHi)
+					case columnArpeggio:
+						part = formatArpPending(*m.nibbleHi)
+					case columnParam:
+						part = formatParamPending(*m.nibbleHi)
+					}
+				}
+
 				styled := cellStyle.Render(part)
 				if selected {
 					styled = common.StyleSelected.Render(part)
 				}
-				if row == m.nav.CursorRow() && trackIdx == m.nav.CursorTrack() && trackerColumn(colIdx) == m.CursorCol {
-					styled = cursorCellStyle.Render(part)
+				if isCursorCell && col == m.CursorCol {
+					if isNibblePending {
+						styled = nibblePendingCellStyle.Render(part)
+					} else {
+						styled = cursorCellStyle.Render(part)
+					}
 				}
 				tracks.WriteString(styled)
 				if colIdx < len(parts)-1 {
@@ -395,9 +419,14 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			m.clearNibbleBuffer()
 		default:
 			if m.Mode == editMode {
+				nibbleBefore := m.nibbleHi
 				if msg, didEdit := m.handleEditInput(keyStr); didEdit {
 					edited = true
 					noteEntered = msg
+				} else if nibbleBefore == nil && m.nibbleHi != nil {
+					// First nibble buffered — no cell was committed but view must update
+					// to show the pending digit.
+					return m, nil
 				}
 			}
 		}
@@ -736,6 +765,44 @@ func (m *TrackerModel) pushNibble(v int) *int {
 func (m *TrackerModel) visibleRows() int {
 	chromeRows := 4 // header + separator + padding
 	return m.Viewport.Height - chromeRows
+}
+
+func formatNote(note audio.Note) string {
+	if note.Base == audio.BaseOff {
+		return "---"
+	}
+
+	if len(string(note.Base)) < 2 {
+		return fmt.Sprintf("%s-%d", note.Base, note.Octave)
+	}
+
+	return fmt.Sprintf("%s%d", note.Base, note.Octave)
+}
+
+// formatVolume formats volume value for display.
+func formatVolume(volume int) string {
+	if volume == 0 {
+		return ".."
+	}
+	return fmt.Sprintf("%02X", volume)
+}
+
+// formatVolumePending renders the first nibble of a volume entry in progress.
+// e.g. hi=3 -> "3."
+func formatVolumePending(hi int) string {
+	return fmt.Sprintf("%X.", hi)
+}
+
+// formatArpPending renders the first nibble of an arpeggio entry in progress.
+// e.g. hi=4 -> "A4."
+func formatArpPending(hi int) string {
+	return fmt.Sprintf("A%X.", hi)
+}
+
+// formatParamPending renders the first nibble of a param entry in progress.
+// e.g. hi=B -> "B."
+func formatParamPending(hi int) string {
+	return fmt.Sprintf("%X.", hi)
 }
 
 func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {

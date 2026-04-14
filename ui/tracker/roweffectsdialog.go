@@ -14,6 +14,7 @@ import (
 type RowEffectsApplied struct {
 	TrackIdx   int
 	RowIdx     int
+	Volume     int
 	Ticks      int
 	Continuous bool
 	Arpeggio   audio.ArpeggioEffect
@@ -42,6 +43,7 @@ const (
 	minStep     = 1
 	maxStep     = 24
 	defaultStep = 4
+	maxVolume   = 64
 )
 
 // generateArpOffsets produces a semitone offset slice of length ticks.
@@ -110,26 +112,28 @@ func generateArpOffsets(preset ArpPreset, ticks, step, seed int) []int {
 	return degrees
 }
 
-// RowEffectsDialog lets the user edit per-row tick count and arpeggio settings.
+// RowEffectsDialog lets the user edit per-row volume, tick count, arpeggio, and effect settings.
 //
 // Field layout:
 //
-//	0        — Ticks
-//	1        — ARP on/off
+//	0        — Volume
+//	1        — Ticks
+//	2        — ARP on/off
 //	[if ARP on]
-//	  2      — Preset (None / Up / Down / Converge / Diverge / Random)
+//	  3      — Preset (None / Up / Down / Converge / Diverge / Random)
 //	  [if preset == None]
-//	    3…N  — per-tick semitone offsets
+//	    4…N  — per-tick semitone offsets
 //	  [if preset != None]
-//	    3    — Step (semitone interval between chord degrees)
+//	    4    — Step (semitone interval between chord degrees)
 //	[if ARP off]
-//	  2      — Continuous
+//	  3      — Continuous
 //	N        — Effect type
-//	N+1      — Effect param (speed for vibrato)
+//	N+1      — Effect param (type-specific)
 //	N+2      — Vibrato depth (vibrato only)
 type RowEffectsDialog struct {
 	trackIdx     int
 	rowIdx       int
+	volume       int
 	ticks        int
 	arpEnabled   bool
 	continuous   bool
@@ -139,7 +143,7 @@ type RowEffectsDialog struct {
 	effectType   EffectType
 	vibratoSpeed int // hi-nibble for vibrato (1-15); 0 disables vibrato cycling
 	vibratoDepth int // lo-nibble for vibrato (0-15, semitones * 4)
-	effectParam  int // param for VolumeSlide / NoteCut / NoteDelay
+	effectParam  int // param for VolumeSlide / NoteCut / NoteDelay / RowTicks / Continuous / ArpPreset
 	focusField   int
 }
 
@@ -167,9 +171,16 @@ func NewRowEffectsDialog(row TrackRow, trackIdx, rowIdx int) *RowEffectsDialog {
 	if !row.Arpeggio.IsActive() {
 		preset = ArpPresetUp
 	}
+
+	effectParam := row.Effect.Param
+	if row.Effect.Type == EffectVibrato {
+		effectParam = 0 // vibrato uses separate speed/depth fields
+	}
+
 	return &RowEffectsDialog{
 		trackIdx:     trackIdx,
 		rowIdx:       rowIdx,
+		volume:       row.Volume,
 		ticks:        ticks,
 		arpEnabled:   row.Arpeggio.IsActive(),
 		continuous:   row.Continuous || row.Arpeggio.IsActive(),
@@ -179,7 +190,7 @@ func NewRowEffectsDialog(row TrackRow, trackIdx, rowIdx int) *RowEffectsDialog {
 		effectType:   row.Effect.Type,
 		vibratoSpeed: vibratoSpeed,
 		vibratoDepth: vibratoDepth,
-		effectParam:  row.Effect.Param,
+		effectParam:  effectParam,
 	}
 }
 
@@ -189,19 +200,19 @@ func (d *RowEffectsDialog) FocusForEffect(effect TrackerEffect) {
 	arpBase := d.numArpFields()
 	switch effect.Type {
 	case EffectRowTicks:
-		d.focusField = 0
+		d.focusField = 1 // Ticks field
 	case EffectContinuous:
 		if d.arpEnabled {
-			d.focusField = 1
+			d.focusField = 2
 			return
 		}
-		d.focusField = 2
+		d.focusField = 3
 	case EffectArpPreset:
 		if !d.arpEnabled {
-			d.focusField = 1
+			d.focusField = 2
 			return
 		}
-		d.focusField = 2
+		d.focusField = 3
 	case EffectVibrato, EffectVolumeSlide, EffectNoteCut, EffectNoteDelay:
 		d.focusField = arpBase
 	default:
@@ -211,14 +222,16 @@ func (d *RowEffectsDialog) FocusForEffect(effect TrackerEffect) {
 
 func (d *RowEffectsDialog) Init() tea.Cmd { return nil }
 
+// numArpFields returns the number of fields before the effect section.
+// Layout: Volume(1) + Ticks(1) + ARP(1) + conditional fields
 func (d *RowEffectsDialog) numArpFields() int {
 	if !d.arpEnabled {
-		return 3 // ticks, arp, continuous
+		return 4 // volume, ticks, arp, continuous
 	}
 	if d.preset == ArpPresetNone {
-		return 3 + d.ticks // ticks, arp, preset, offset×ticks
+		return 4 + d.ticks // volume, ticks, arp, preset, offset×ticks
 	}
-	return 4 // ticks, arp, preset, step
+	return 5 // volume, ticks, arp, preset, step
 }
 
 func (d *RowEffectsDialog) numEffectFields() int {
@@ -244,11 +257,12 @@ func (d *RowEffectsDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return d, func() tea.Msg { return ui.CloseDialogMsg{} }
 		case "enter":
 			ticks, continuous, arp, effect := d.build()
-			trackIdx, rowIdx := d.trackIdx, d.rowIdx
+			trackIdx, rowIdx, volume := d.trackIdx, d.rowIdx, d.volume
 			return d, func() tea.Msg {
 				return ui.CloseDialogMsg{Payload: RowEffectsApplied{
 					TrackIdx:   trackIdx,
 					RowIdx:     rowIdx,
+					Volume:     volume,
 					Ticks:      ticks,
 					Continuous: continuous,
 					Arpeggio:   arp,
@@ -268,6 +282,7 @@ func (d *RowEffectsDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "shift+right":
 			d.adjustFocused(6)
 		case "delete":
+			d.volume = 0
 			d.arpEnabled = false
 			d.preset = ArpPresetNone
 			d.offsets = make([]int, d.ticks)
@@ -290,13 +305,15 @@ func (d *RowEffectsDialog) growOffsets() {
 func (d *RowEffectsDialog) adjustFocused(delta int) {
 	arpBase := d.numArpFields()
 	switch {
-	case d.focusField == 0: // Ticks
+	case d.focusField == 0: // Volume
+		d.volume = max(0, min(maxVolume, d.volume+delta))
+	case d.focusField == 1: // Ticks
 		d.ticks = max(minTicks, min(maxTicks, d.ticks+delta))
 		d.growOffsets()
 		if d.focusField >= d.numFields() {
 			d.focusField = d.numFields() - 1
 		}
-	case d.focusField == 1: // ARP ON/OFF
+	case d.focusField == 2: // ARP ON/OFF
 		if delta < 0 {
 			d.arpEnabled = false
 		} else {
@@ -305,9 +322,9 @@ func (d *RowEffectsDialog) adjustFocused(delta int) {
 			d.growOffsets()
 		}
 		if !d.arpEnabled && d.focusField >= d.numFields() {
-			d.focusField = 1
+			d.focusField = 2
 		}
-	case d.focusField == 2: // Continuous (ARP off) or Preset (ARP on)
+	case d.focusField == 3: // Continuous (ARP off) or Preset (ARP on)
 		if !d.arpEnabled {
 			d.continuous = delta > 0
 		} else {
@@ -317,16 +334,16 @@ func (d *RowEffectsDialog) adjustFocused(delta int) {
 				d.focusField = d.numFields() - 1
 			}
 		}
-	case d.focusField >= 3 && d.focusField < arpBase: // arp step or manual offsets
+	case d.focusField >= 4 && d.focusField < arpBase: // arp step or manual offsets
 		if !d.arpEnabled {
 			break // no fields beyond continuous when ARP is off
 		}
 		if d.preset != ArpPresetNone {
-			// field 3 = Step
+			// field 4 = Step
 			d.step = max(minStep, min(maxStep, d.step+delta))
 		} else {
-			// field 3…N = manual offset[i]
-			i := d.focusField - 3
+			// field 4…N = manual offset[i]
+			i := d.focusField - 4
 			if i < len(d.offsets) {
 				d.offsets[i] = max(minSemitone, min(maxSemitone, d.offsets[i]+delta))
 			}
@@ -336,8 +353,8 @@ func (d *RowEffectsDialog) adjustFocused(delta int) {
 		if n < 0 {
 			n = 0
 		}
-		if n > int(EffectNoteDelay) {
-			n = int(EffectNoteDelay)
+		if n > int(EffectArpPreset) {
+			n = int(EffectArpPreset)
 		}
 		d.effectType = EffectType(n)
 		if d.focusField >= d.numFields() {
@@ -349,11 +366,33 @@ func (d *RowEffectsDialog) adjustFocused(delta int) {
 			d.vibratoSpeed = max(1, min(15, d.vibratoSpeed+delta))
 		case EffectVolumeSlide:
 			d.effectParam = max(-16, min(16, d.effectParam+delta))
+		case EffectRowTicks:
+			d.effectParam = max(0, min(maxTicks, d.effectParam+delta))
+		case EffectContinuous:
+			if delta > 0 {
+				d.effectParam = 1
+			} else {
+				d.effectParam = 0
+			}
+		case EffectArpPreset:
+			// hi nibble = preset (0–5), lo nibble = step bucket (0–15)
+			hi := (d.effectParam >> 4) & 0xF
+			lo := d.effectParam & 0xF
+			hi = max(0, min(5, hi+delta))
+			d.effectParam = (hi << 4) | lo
 		default:
 			d.effectParam = max(0, min(31, d.effectParam+delta))
 		}
-	case d.focusField == arpBase+2: // Vibrato depth (vibrato only)
-		d.vibratoDepth = max(0, min(15, d.vibratoDepth+delta))
+	case d.focusField == arpBase+2: // Vibrato depth or ArpPreset lo-nibble
+		switch d.effectType {
+		case EffectVibrato:
+			d.vibratoDepth = max(0, min(15, d.vibratoDepth+delta))
+		case EffectArpPreset:
+			hi := (d.effectParam >> 4) & 0xF
+			lo := d.effectParam & 0xF
+			lo = max(0, min(15, lo+delta))
+			d.effectParam = (hi << 4) | lo
+		}
 	}
 }
 
@@ -380,6 +419,23 @@ func (d *RowEffectsDialog) build() (int, bool, audio.ArpeggioEffect, TrackerEffe
 	return d.ticks, d.continuous, arp, effect
 }
 
+var effectNames = []string{
+	"None", "Vibrato", "VolumeSlide", "NoteCut", "NoteDelay",
+	"RowTicks", "Continuous", "ArpPreset",
+}
+
+const dialogBarWidth = 16
+
+// barField renders "Label  [████▫▫▫▫]  value unit" as a single line.
+// minVal/maxVal define the bar range; value is the current value.
+func barField(label string, value int, minVal, maxVal int, unit string) string {
+	bar := common.NewBar(float64(minVal), float64(maxVal), float64(value), dialogBarWidth)
+	if unit != "" {
+		return fmt.Sprintf("%-11s %s  %3d %s", label, bar.View(), value, unit)
+	}
+	return fmt.Sprintf("%-11s %s  %3d", label, bar.View(), value)
+}
+
 func (d *RowEffectsDialog) View() tea.View {
 	render := func(focused bool, text string) string {
 		if focused {
@@ -391,14 +447,20 @@ func (d *RowEffectsDialog) View() tea.View {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Row Effects — Track %d, Row %02d\n\n", d.trackIdx+1, d.rowIdx)
 
+	// Volume
+	b.WriteString(render(d.focusField == 0, barField("Volume", d.volume, 0, maxVolume, "")))
+	b.WriteByte('\n')
+
+	// Ticks
+	b.WriteString(render(d.focusField == 1, barField("Ticks", d.ticks, minTicks, maxTicks, "")))
+	b.WriteByte('\n')
+
+	// ARP on/off
 	arpStatus := "OFF"
 	if d.arpEnabled {
 		arpStatus = "ON "
 	}
-
-	b.WriteString(render(d.focusField == 0, fmt.Sprintf("Ticks      %3d", d.ticks)))
-	b.WriteByte('\n')
-	b.WriteString(render(d.focusField == 1, fmt.Sprintf("ARP mode   %s", arpStatus)))
+	b.WriteString(render(d.focusField == 2, fmt.Sprintf("%-11s %s", "ARP mode", arpStatus)))
 	b.WriteByte('\n')
 
 	if !d.arpEnabled {
@@ -406,17 +468,17 @@ func (d *RowEffectsDialog) View() tea.View {
 		if d.continuous {
 			contStatus = "ON "
 		}
-		b.WriteString(render(d.focusField == 2, fmt.Sprintf("Continuous %s", contStatus)))
+		b.WriteString(render(d.focusField == 3, fmt.Sprintf("%-11s %s", "Continuous", contStatus)))
 		b.WriteByte('\n')
 	}
 
 	if d.arpEnabled {
 		b.WriteByte('\n')
-		b.WriteString(render(d.focusField == 2, fmt.Sprintf("Preset     %-8s", arpPresetNames[d.preset])))
+		b.WriteString(render(d.focusField == 3, fmt.Sprintf("%-11s %-8s", "Preset", arpPresetNames[d.preset])))
 		b.WriteByte('\n')
 
 		if d.preset != ArpPresetNone {
-			b.WriteString(render(d.focusField == 3, fmt.Sprintf("Step       %3d  semitones", d.step)))
+			b.WriteString(render(d.focusField == 4, barField("Step", d.step, minStep, maxStep, "semitones")))
 			b.WriteByte('\n')
 		} else {
 			b.WriteByte('\n')
@@ -425,7 +487,8 @@ func (d *RowEffectsDialog) View() tea.View {
 				if i < len(d.offsets) {
 					offset = d.offsets[i]
 				}
-				b.WriteString(render(d.focusField == i+3, fmt.Sprintf("Tick %2d    %+4d  semitones", i+1, offset)))
+				label := fmt.Sprintf("Tick %2d", i+1)
+				b.WriteString(render(d.focusField == i+4, barField(label, offset, minSemitone, maxSemitone, "semitones")))
 				b.WriteByte('\n')
 			}
 		}
@@ -433,28 +496,48 @@ func (d *RowEffectsDialog) View() tea.View {
 
 	// Effect section
 	arpBase := d.numArpFields()
-	effectNames := []string{"None", "Vibrato", "VolumeSlide", "NoteCut", "NoteDelay"}
 	b.WriteByte('\n')
-	b.WriteString(render(d.focusField == arpBase, fmt.Sprintf("Effect     %-11s", effectNames[d.effectType])))
+	b.WriteString(render(d.focusField == arpBase, fmt.Sprintf("%-11s %-11s", "Effect", effectNames[d.effectType])))
 	b.WriteByte('\n')
 	switch d.effectType {
 	case EffectVibrato:
-		b.WriteString(render(d.focusField == arpBase+1, fmt.Sprintf("  Speed    %3d  ticks/cycle", d.vibratoSpeed)))
+		b.WriteString(render(d.focusField == arpBase+1, barField("  Speed", d.vibratoSpeed, 1, 15, "ticks/cycle")))
 		b.WriteByte('\n')
-		b.WriteString(render(d.focusField == arpBase+2, fmt.Sprintf("  Depth    %3d  (×0.25 semitones)", d.vibratoDepth)))
+		b.WriteString(render(d.focusField == arpBase+2, barField("  Depth", d.vibratoDepth, 0, 15, "×0.25 semitones")))
 		b.WriteByte('\n')
 	case EffectVolumeSlide:
-		b.WriteString(render(d.focusField == arpBase+1, fmt.Sprintf("  Delta    %+3d  /64 per tick", d.effectParam)))
+		b.WriteString(render(d.focusField == arpBase+1, barField("  Delta", d.effectParam, -16, 16, "/64 per tick")))
 		b.WriteByte('\n')
 	case EffectNoteCut:
-		b.WriteString(render(d.focusField == arpBase+1, fmt.Sprintf("  At tick  %3d", d.effectParam)))
+		b.WriteString(render(d.focusField == arpBase+1, barField("  At tick", d.effectParam, 0, 31, "")))
 		b.WriteByte('\n')
 	case EffectNoteDelay:
-		b.WriteString(render(d.focusField == arpBase+1, fmt.Sprintf("  At tick  %3d", d.effectParam)))
+		b.WriteString(render(d.focusField == arpBase+1, barField("  At tick", d.effectParam, 0, 31, "")))
+		b.WriteByte('\n')
+	case EffectRowTicks:
+		b.WriteString(render(d.focusField == arpBase+1, barField("  Ticks", d.effectParam, 0, maxTicks, "(0 = clear)")))
+		b.WriteByte('\n')
+	case EffectContinuous:
+		contStr := "OFF"
+		if d.effectParam != 0 {
+			contStr = "ON "
+		}
+		b.WriteString(render(d.focusField == arpBase+1, fmt.Sprintf("%-11s %s", "  On/Off", contStr)))
+		b.WriteByte('\n')
+	case EffectArpPreset:
+		presetIdx := (d.effectParam >> 4) & 0xF
+		stepBucket := d.effectParam & 0xF
+		presetName := "None"
+		if presetIdx > 0 && presetIdx < len(arpPresetNames) {
+			presetName = arpPresetNames[presetIdx]
+		}
+		b.WriteString(render(d.focusField == arpBase+1, fmt.Sprintf("%-11s %s  %d %-8s", "  Preset", common.NewBar(0, 5, float64(presetIdx), dialogBarWidth).View(), presetIdx, presetName)))
+		b.WriteByte('\n')
+		b.WriteString(render(d.focusField == arpBase+2, barField("  Step", stepBucket, 0, 15, "(bucket)")))
 		b.WriteByte('\n')
 	}
 
 	b.WriteByte('\n')
-	b.WriteString("[Enter: Apply | Esc: Cancel | ↑↓: Navigate | ←→: ±1 / ON-OFF / Preset | Shift+←→: ±6 | Del: Clear]")
+	b.WriteString("[Enter: Apply | Esc: Cancel | ↑↓: Navigate | ←→: ±1 | Shift+←→: ±6 | Del: Clear]")
 	return tea.NewView(b.String())
 }
