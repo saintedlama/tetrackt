@@ -562,9 +562,13 @@ func mcpToolSetNotes() mcp.Tool {
 			mcp.Items(map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"track":  map[string]any{"type": "integer", "minimum": 0},
-					"row":    map[string]any{"type": "integer", "minimum": 0},
-					"note":   map[string]any{"type": "string", "description": "C-4, C#4, or ---"},
+					"track": map[string]any{"type": "integer", "minimum": 0},
+					"row":   map[string]any{"type": "integer", "minimum": 0},
+					"note": map[string]any{
+						"type":        "string",
+						"description": "Tracker note token. Examples: C-4, C#4, A3, OFF, ---. Octave range: 0..8.",
+						"pattern":     `^(---|OFF|[A-G]#?-?[0-8])$`,
+					},
 					"volume": map[string]any{"type": "integer", "minimum": 0, "maximum": 64},
 				},
 				"required": []string{"track", "row", "note"},
