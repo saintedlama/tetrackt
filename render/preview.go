@@ -1,69 +1,68 @@
 package render
 
 import (
-	"math"
-	"time"
-
 	"github.com/tetrackt/tetrackt/audio"
 	"github.com/tetrackt/tetrackt/ui/tracker"
 )
 
 type PreviewPlayer struct {
-	sink            *SpeakerSink
-	previewPatch    *audio.Patch
-	previewArp      audio.ArpeggioEffect
-	previewBaseFreq float64
-	previewSubTick  int
-	previewSpeed    int
+	sink *SpeakerSink
 }
 
 func NewPreviewPlayer(sink *SpeakerSink) PreviewPlayer {
 	return PreviewPlayer{sink: sink}
 }
 
-func (p *PreviewPlayer) Reset() {
-	p.previewPatch = nil
-	p.previewArp = audio.ArpeggioEffect{}
-	p.previewBaseFreq = 0
-	p.previewSubTick = 0
-	p.previewSpeed = 0
-}
+func (p *PreviewPlayer) Reset() {}
 
-func (p *PreviewPlayer) Start(note audio.Note, arp audio.ArpeggioEffect, s *audio.Synth, duration time.Duration, sampleRate audio.SampleRate, globalVolume float64, speed int) bool {
-	noteSamples := sampleRate.N(duration)
-	patch := s.NewPatch(sampleRate, note.Frequency(), noteSamples)
-	p.previewPatch = patch
-
-	if arp.IsActive() {
-		if speed <= 0 {
-			speed = tracker.DefaultSpeed
-		}
-		p.previewArp = arp
-		p.previewBaseFreq = note.Frequency()
-		p.previewSubTick = 0
-		p.previewSpeed = speed
-		mult := math.Pow(2, float64(arp.Offsets[0])/12)
-		patch.SetFrequency(p.previewBaseFreq * mult)
-		p.sink.Play(patch, globalVolume)
-		return true
+func (p *PreviewPlayer) Start(row tracker.TrackRow, synth *audio.Synth, bpm int, speed int, sampleRate audio.SampleRate, globalVolume float64) bool {
+	if audio.IsOff(row.Note) || synth == nil {
+		return false
 	}
 
-	p.previewArp = audio.ArpeggioEffect{}
-	p.sink.Play(patch, globalVolume)
+	// TODO: This is a bit hacky
+	tm := tracker.NewTracker(1, 1, 0, 0)
+	tm.BPM = tracker.NewBPM(bpm)
+	if speed > 0 {
+		tm.Speed = speed
+	}
+	tm.Tracks[0].Synth = synth
+	tm.Tracks[0].Rows[0] = row
+
+	collector := &bufferSink{}
+	engine := NewRenderEngine(tm, RenderConfig{
+		SampleRate:   sampleRate,
+		GlobalVolume: globalVolume,
+		LoopCount:    1,
+	})
+	if err := engine.Run(collector); err != nil {
+		return false
+	}
+	if len(collector.frames) == 0 {
+		return false
+	}
+	p.sink.Play(&sampleStreamer{samples: collector.frames}, 1.0)
 	return false
 }
 
 func (p *PreviewPlayer) Tick() bool {
-	if p.previewPatch == nil || !p.previewArp.IsActive() {
-		return false
-	}
-	p.previewSubTick++
-	if p.previewSubTick >= p.previewSpeed {
-		p.previewArp = audio.ArpeggioEffect{}
-		return false
-	}
-	idx := p.previewSubTick % len(p.previewArp.Offsets)
-	mult := math.Pow(2, float64(p.previewArp.Offsets[idx])/12)
-	p.previewPatch.SetFrequency(p.previewBaseFreq * mult)
-	return true
+	return false
+}
+
+type bufferSink struct {
+	frames [][2]float64
+}
+
+func (s *bufferSink) Begin(sampleRate audio.SampleRate) error {
+	s.frames = nil
+	return nil
+}
+
+func (s *bufferSink) Write(samples [][2]float64) error {
+	s.frames = append(s.frames, samples...)
+	return nil
+}
+
+func (s *bufferSink) End() error {
+	return nil
 }

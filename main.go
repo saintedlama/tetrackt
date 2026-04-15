@@ -307,8 +307,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if speed <= 0 {
 			speed = tracker.DefaultSpeed
 		}
-		if m.preview.Start(msg.Note, msg.Row.Arpeggio, msg.Synth,
-			m.trackerModel().BPMDuration(), m.sampleRate, m.globalVolume, speed) {
+		if m.preview.Start(msg.Row, msg.Synth,
+			m.trackerModel().BPM.Value(), speed, m.sampleRate, m.globalVolume) {
 			return m, m.previewTick()
 		}
 		return m, nil

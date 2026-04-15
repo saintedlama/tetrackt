@@ -13,6 +13,7 @@ type SpeakerSink struct {
 	mu          sync.Mutex
 	initialized bool
 	sampleRate  audio.SampleRate
+	live        *queuedStreamer
 }
 
 func NewSpeakerSink(sampleRate audio.SampleRate) *SpeakerSink {
@@ -24,13 +25,14 @@ func NewSpeakerSink(sampleRate audio.SampleRate) *SpeakerSink {
 func (s *SpeakerSink) Begin(sampleRate audio.SampleRate) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.initialized {
-		return nil
+	if !s.initialized {
+		bufferSize := sampleRate.N(100 * time.Millisecond)
+		speaker.Init(beep.SampleRate(sampleRate), bufferSize)
+		s.sampleRate = sampleRate
+		s.initialized = true
 	}
-	bufferSize := sampleRate.N(100 * time.Millisecond)
-	speaker.Init(beep.SampleRate(sampleRate), bufferSize)
-	s.sampleRate = sampleRate
-	s.initialized = true
+	s.live = &queuedStreamer{}
+	speaker.Play(s.live)
 	return nil
 }
 
@@ -38,15 +40,33 @@ func (s *SpeakerSink) Write(samples [][2]float64) error {
 	if len(samples) == 0 {
 		return nil
 	}
-	speaker.Play(audio.NewVolume(1.0).Streamer(&sampleStreamer{samples: append([][2]float64(nil), samples...)}))
+	s.mu.Lock()
+	live := s.live
+	s.mu.Unlock()
+	if live == nil {
+		return nil
+	}
+	live.Append(samples)
 	return nil
 }
 
 func (s *SpeakerSink) End() error {
+	s.mu.Lock()
+	if s.live != nil {
+		s.live.Stop()
+		s.live = nil
+	}
+	s.mu.Unlock()
 	return nil
 }
 
 func (s *SpeakerSink) Clear() {
+	s.mu.Lock()
+	if s.live != nil {
+		s.live.Stop()
+		s.live = nil
+	}
+	s.mu.Unlock()
 	speaker.Clear()
 }
 
@@ -69,5 +89,58 @@ func (s *sampleStreamer) Stream(buf [][2]float64) (int, bool) {
 }
 
 func (s *sampleStreamer) Err() error {
+	return nil
+}
+
+type queuedStreamer struct {
+	mu     sync.Mutex
+	queue  [][2]float64
+	closed bool
+	offset int
+}
+
+func (s *queuedStreamer) Append(samples [][2]float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || len(samples) == 0 {
+		return
+	}
+	s.queue = append(s.queue, samples...)
+}
+
+func (s *queuedStreamer) Stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	s.queue = nil
+	s.offset = 0
+}
+
+func (s *queuedStreamer) Stream(buf [][2]float64) (int, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return 0, false
+	}
+	if len(s.queue) == 0 {
+		for i := range buf {
+			buf[i] = [2]float64{}
+		}
+		return len(buf), true
+	}
+
+	n := copy(buf, s.queue)
+	for i := n; i < len(buf); i++ {
+		buf[i] = [2]float64{}
+	}
+	if n == len(s.queue) {
+		s.queue = s.queue[:0]
+	} else {
+		s.queue = append(s.queue[:0], s.queue[n:]...)
+	}
+	return len(buf), true
+}
+
+func (s *queuedStreamer) Err() error {
 	return nil
 }
