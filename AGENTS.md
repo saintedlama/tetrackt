@@ -59,3 +59,5 @@ plans/          design docs (not code)
 
 - After an audio feature was implemented, revise the synth patch bank instruments and use the feature for presets that benefit from the feature.
 - If you work on a plan in plans/, update the plan with a "Status" field and mark it as "Done" when the feature is implemented. This helps us keep track of what features are implemented and which are still in progress.
+- When a new plan is created in plans/, add it to the open table in plans/TODO.md.
+- When a plan is marked done, move it to plans/done/ and remove it from the open table in plans/TODO.md.
