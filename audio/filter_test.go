@@ -78,13 +78,13 @@ func TestLowPassAttenuatesHighFreq(t *testing.T) {
 	const numSamples = 44100
 
 	// Reference: 1000 Hz sine, no filter
-	inputSamples := streamN(NewOscillator(Sine, 1000.0, sr, 0, 0, 0, nil, 0), numSamples)
+	inputSamples := StreamN(NewOscillator(Sine, 1000.0, sr, 0, 0, 0, nil, 0), numSamples)
 	inputRMS := rms(inputSamples)
 
 	// LP filter with Cutoff=0.1 → cutoff ≈ 39 Hz, well below 1000 Hz
 	f := Filter{Type: FilterLowPass, Cutoff: 0.1}
 	filtered := NewFilterStreamer(NewOscillator(Sine, 1000.0, sr, 0, 0, 0, nil, 0), sr, f)
-	filteredRMS := rms(streamN(filtered, numSamples))
+	filteredRMS := rms(StreamN(filtered, numSamples))
 
 	if filteredRMS >= inputRMS*0.1 {
 		t.Errorf("LP filter should heavily attenuate 1000 Hz; inputRMS=%v filteredRMS=%v",
@@ -97,13 +97,13 @@ func TestHighPassAttenuatesLowFreq(t *testing.T) {
 	const numSamples = 44100
 
 	// Reference: 100 Hz sine, no filter
-	inputSamples := streamN(NewOscillator(Sine, 100.0, sr, 0, 0, 0, nil, 0), numSamples)
+	inputSamples := StreamN(NewOscillator(Sine, 100.0, sr, 0, 0, 0, nil, 0), numSamples)
 	inputRMS := rms(inputSamples)
 
 	// HP filter with Cutoff=0.9 → cutoff ≈ 9128 Hz, well above 100 Hz
 	f := Filter{Type: FilterHighPass, Cutoff: 0.9}
 	filtered := NewFilterStreamer(NewOscillator(Sine, 100.0, sr, 0, 0, 0, nil, 0), sr, f)
-	filteredRMS := rms(streamN(filtered, numSamples))
+	filteredRMS := rms(StreamN(filtered, numSamples))
 
 	if filteredRMS >= inputRMS*0.1 {
 		t.Errorf("HP filter should heavily attenuate 100 Hz; inputRMS=%v filteredRMS=%v",

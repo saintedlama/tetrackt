@@ -41,7 +41,7 @@ func TestSynthSilentOscillators(t *testing.T) {
 	osc := Oscillator{Type: Silent}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc, env, osc, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, Mixer{Volume1: 1.0, Volume2: 1.0}, NewFilter(), LFO{}, LFO{}, LFO{})
-	samples := streamN(synth.NewPatch(sr, NewNote(BaseA, Octave4).Frequency(), n), n)
+	samples := StreamN(synth.NewPatch(sr, NewNote(BaseA, Octave4).Frequency(), n), n)
 
 	for i, s := range samples {
 		if s[0] != 0 || s[1] != 0 {
@@ -58,7 +58,7 @@ func TestSynthMixerZeroVolume(t *testing.T) {
 	osc := Oscillator{Type: Square}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc, env, osc, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, Mixer{Volume1: 0, Volume2: 0}, NewFilter(), LFO{}, LFO{}, LFO{})
-	samples := streamN(synth.NewPatch(sr, NewNote(BaseA, Octave4).Frequency(), n), n)
+	samples := StreamN(synth.NewPatch(sr, NewNote(BaseA, Octave4).Frequency(), n), n)
 
 	for i, s := range samples {
 		if s[0] != 0 || s[1] != 0 {
@@ -76,7 +76,7 @@ func TestSynthMixerBalance(t *testing.T) {
 	osc2 := Oscillator{Type: Silent}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc1, env, osc2, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, Mixer{Volume1: 1.0, Volume2: 0}, NewFilter(), LFO{}, LFO{}, LFO{})
-	samples := streamN(synth.NewPatch(sr, NewNote(BaseA, Octave4).Frequency(), n), n)
+	samples := StreamN(synth.NewPatch(sr, NewNote(BaseA, Octave4).Frequency(), n), n)
 
 	hasNonZero := false
 	for _, s := range samples {
@@ -101,10 +101,10 @@ func TestSynthFilterOff(t *testing.T) {
 	mixer := Mixer{Volume1: 1.0, Volume2: 0}
 
 	synthOff := NewSynth(osc, env, osc, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, mixer, Filter{Type: FilterOff, Cutoff: 0.5}, LFO{}, LFO{}, LFO{})
-	samplesOff := streamN(synthOff.NewPatch(sr, freq, n), n)
+	samplesOff := StreamN(synthOff.NewPatch(sr, freq, n), n)
 
 	synthLP := NewSynth(osc, env, osc, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, mixer, Filter{Type: FilterLowPass, Cutoff: 0.01}, LFO{}, LFO{}, LFO{})
-	samplesLP := streamN(synthLP.NewPatch(sr, freq, n), n)
+	samplesLP := StreamN(synthLP.NewPatch(sr, freq, n), n)
 
 	rmsOff := rms(samplesOff)
 	rmsLP := rms(samplesLP)
@@ -128,8 +128,8 @@ func TestSynthDetuneShiftsFrequency(t *testing.T) {
 	oscUp := Oscillator{Type: Sine, Detune: 1200}
 	synthUp := NewSynth(oscUp, env, oscUp, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, mixer, NewFilter(), LFO{}, LFO{}, LFO{})
 
-	samplesNone := streamN(synthNone.NewPatch(sr, baseFreq, n), n)
-	samplesUp := streamN(synthUp.NewPatch(sr, baseFreq, n), n)
+	samplesNone := StreamN(synthNone.NewPatch(sr, baseFreq, n), n)
+	samplesUp := StreamN(synthUp.NewPatch(sr, baseFreq, n), n)
 
 	countCrossings := func(s [][2]float64) int {
 		count := 0
@@ -157,7 +157,7 @@ func TestSynthDetuneZeroNoEffect(t *testing.T) {
 	env := Envelope{Sustain: 1.0}
 	mixer := Mixer{Volume1: 1.0, Volume2: 0}
 	synth := NewSynth(osc, env, osc, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, mixer, NewFilter(), LFO{}, LFO{}, LFO{})
-	s := streamN(synth.NewPatch(sr, 440.0, n), n)
+	s := StreamN(synth.NewPatch(sr, 440.0, n), n)
 	if len(s) == 0 {
 		t.Fatal("no samples")
 	}
@@ -175,10 +175,10 @@ func TestPatchSetFrequencyRetunes(t *testing.T) {
 	synth := NewSynth(osc, env, osc, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, mixer, NewFilter(), LFO{}, LFO{}, LFO{})
 
 	patch := synth.NewPatch(sr, 440.0, n)
-	first := streamN(patch, half)
+	first := StreamN(patch, half)
 
 	patch.SetFrequency(880.0)
-	second := streamN(patch, half)
+	second := StreamN(patch, half)
 
 	countCrossings := func(s [][2]float64) int {
 		count := 0
@@ -211,9 +211,9 @@ func TestPatchSetFrequencyPreservesDetune(t *testing.T) {
 
 	// base=220Hz + detune → 440Hz; after SetFrequency base=440Hz + detune → 880Hz
 	patch := synth.NewPatch(sr, 220.0, n)
-	first := streamN(patch, n/2)
+	first := StreamN(patch, n/2)
 	patch.SetFrequency(440.0)
-	second := streamN(patch, n/2)
+	second := StreamN(patch, n/2)
 
 	countCrossings := func(s [][2]float64) int {
 		count := 0
@@ -244,13 +244,13 @@ func TestPatchReset(t *testing.T) {
 	patch := synth.NewPatch(sr, 50.0, n)
 
 	// Stream 300 samples: 200 attack + 100 into sustain
-	streamN(patch, 300)
-	sustainSamples := streamN(patch, 100)
+	StreamN(patch, 300)
+	sustainSamples := StreamN(patch, 100)
 	sustainRMS := rms(sustainSamples)
 
 	// Reset and stream 10 samples from the very start of attack
 	patch.Reset()
-	attackStartSamples := streamN(patch, 10)
+	attackStartSamples := StreamN(patch, 10)
 	attackStartRMS := rms(attackStartSamples)
 
 	if sustainRMS < 0.5 {

@@ -44,8 +44,8 @@ func renderSparklineValues(streamer audio.Streamer, streamSamples, width int) []
 	if streamer == nil || streamSamples <= 0 {
 		return make([]float64, max(width, 0))
 	}
-	buffer := make([][2]float64, streamSamples)
-	streamer.Stream(buffer)
+	buffer := audio.StreamN(streamer, streamSamples)
+
 	values := make([]float64, len(buffer))
 	for i, sample := range buffer {
 		values[i] = sample[0]
