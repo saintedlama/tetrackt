@@ -5,63 +5,39 @@ import (
 	"testing"
 
 	"github.com/gopxl/beep/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const srLFO beep.SampleRate = 44100
 
 func TestLFOWaveformSine(t *testing.T) {
 	t.Helper()
-	if got := lfoWaveformSample(LFOSine, 0); math.Abs(got) > 1e-9 {
-		t.Fatalf("phase=0: want 0, got %v", got)
-	}
-	if got := lfoWaveformSample(LFOSine, 0.25); math.Abs(got-1) > 1e-6 {
-		t.Fatalf("phase=0.25: want 1, got %v", got)
-	}
-	if got := lfoWaveformSample(LFOSine, 0.5); math.Abs(got) > 1e-6 {
-		t.Fatalf("phase=0.5: want 0, got %v", got)
-	}
-	if got := lfoWaveformSample(LFOSine, 0.75); math.Abs(got+1) > 1e-6 {
-		t.Fatalf("phase=0.75: want -1, got %v", got)
-	}
+	assert.InDelta(t, 0.0, lfoWaveformSample(LFOSine, 0), 1e-9, "phase=0: want 0")
+	assert.InDelta(t, 1.0, lfoWaveformSample(LFOSine, 0.25), 1e-6, "phase=0.25: want 1")
+	assert.InDelta(t, 0.0, lfoWaveformSample(LFOSine, 0.5), 1e-6, "phase=0.5: want 0")
+	assert.InDelta(t, -1.0, lfoWaveformSample(LFOSine, 0.75), 1e-6, "phase=0.75: want -1")
 }
 
 func TestLFOWaveformTriangle(t *testing.T) {
-	if got := lfoWaveformSample(LFOTriangle, 0); math.Abs(got+1) > 1e-9 {
-		t.Fatalf("phase=0: want -1, got %v", got)
-	}
-	if got := lfoWaveformSample(LFOTriangle, 0.25); math.Abs(got) > 1e-9 {
-		t.Fatalf("phase=0.25: want 0, got %v", got)
-	}
-	if got := lfoWaveformSample(LFOTriangle, 0.5); math.Abs(got-1) > 1e-9 {
-		t.Fatalf("phase=0.5: want 1, got %v", got)
-	}
+	assert.InDelta(t, -1.0, lfoWaveformSample(LFOTriangle, 0), 1e-9, "phase=0: want -1")
+	assert.InDelta(t, 0.0, lfoWaveformSample(LFOTriangle, 0.25), 1e-9, "phase=0.25: want 0")
+	assert.InDelta(t, 1.0, lfoWaveformSample(LFOTriangle, 0.5), 1e-9, "phase=0.5: want 1")
 }
 
 func TestLFOWaveformSquare(t *testing.T) {
-	if got := lfoWaveformSample(LFOSquare, 0.25); got != 1 {
-		t.Fatalf("phase=0.25: want 1, got %v", got)
-	}
-	if got := lfoWaveformSample(LFOSquare, 0.75); got != -1 {
-		t.Fatalf("phase=0.75: want -1, got %v", got)
-	}
+	assert.Equal(t, 1.0, lfoWaveformSample(LFOSquare, 0.25), "phase=0.25: want 1")
+	assert.Equal(t, -1.0, lfoWaveformSample(LFOSquare, 0.75), "phase=0.75: want -1")
 }
 
 func TestLFOWaveformSawtooth(t *testing.T) {
-	if got := lfoWaveformSample(LFOSawtooth, 0); math.Abs(got+1) > 1e-9 {
-		t.Fatalf("phase=0: want -1, got %v", got)
-	}
-	if got := lfoWaveformSample(LFOSawtooth, 0.5); math.Abs(got) > 1e-9 {
-		t.Fatalf("phase=0.5: want 0, got %v", got)
-	}
-	if got := lfoWaveformSample(LFOSawtooth, 1.0); math.Abs(got-1) > 1e-9 {
-		t.Fatalf("phase=1: want 1, got %v", got)
-	}
+	assert.InDelta(t, -1.0, lfoWaveformSample(LFOSawtooth, 0), 1e-9, "phase=0: want -1")
+	assert.InDelta(t, 0.0, lfoWaveformSample(LFOSawtooth, 0.5), 1e-9, "phase=0.5: want 0")
+	assert.InDelta(t, 1.0, lfoWaveformSample(LFOSawtooth, 1.0), 1e-9, "phase=1: want 1")
 }
 
 func TestLFOWaveformUnknownReturnsZero(t *testing.T) {
-	if got := lfoWaveformSample("unknown", 0.5); got != 0 {
-		t.Fatalf("want 0, got %v", got)
-	}
+	assert.Equal(t, 0.0, lfoWaveformSample("unknown", 0.5), "want 0")
 }
 
 func TestLFODelayHoldsZero(t *testing.T) {
@@ -70,9 +46,7 @@ func TestLFODelayHoldsZero(t *testing.T) {
 
 	// advance 0.5 s — still within the 1 s delay
 	got := g.nextBlock(int(srLFO) / 2)
-	if got != 0 {
-		t.Fatalf("within delay window: want 0, got %v", got)
-	}
+	require.Equal(t, 0.0, got, "within delay window: want 0")
 }
 
 func TestLFOAfterDelayProducesNonZero(t *testing.T) {
@@ -84,9 +58,7 @@ func TestLFOAfterDelayProducesNonZero(t *testing.T) {
 	// advance another quarter period (0.25 s at 1 Hz → phase ≈ 0.25, sine ≈ 1)
 	g.nextBlock(int(srLFO) / 4)
 	got := g.nextBlock(1)
-	if got == 0 {
-		t.Fatalf("after delay, expected non-zero modulation, got 0")
-	}
+	require.NotEqual(t, 0.0, got, "after delay, expected non-zero modulation")
 }
 
 func TestLFODepthScalesOutput(t *testing.T) {
@@ -101,9 +73,7 @@ func TestLFODepthScalesOutput(t *testing.T) {
 		g := newLFOGenerator(lfo, sr)
 		got := g.nextBlock(quarterSamples)
 		want := math.Sin(2*math.Pi*rate*float64(quarterSamples)/sr) * depth
-		if math.Abs(got-want) > 0.05 {
-			t.Errorf("depth=%v: want ≈%v, got %v", depth, want, got)
-		}
+		assert.InDelta(t, want, got, 0.05, "depth=%v: want ≈%v", depth, want)
 	}
 }
 
@@ -114,17 +84,14 @@ func TestLFOPhaseWraps(t *testing.T) {
 	for range 100 {
 		g.nextBlock(441) // 441 samples at 44100 Hz = 0.01 s = 1 cycle at 100 Hz
 	}
-	if g.phase < 0 || g.phase >= 1.0 {
-		t.Fatalf("phase out of range: %v", g.phase)
-	}
+	assert.GreaterOrEqual(t, g.phase, 0.0, "phase out of range")
+	assert.Less(t, g.phase, 1.0, "phase out of range")
 }
 
 func TestModulatedOscillatorNilLFOsReturnOscDirect(t *testing.T) {
 	osc := NewOscillator(Square, 440, srLFO, 0, 0.5, 0, nil, 0)
 	got := newModulatedOscillatorStreamer(osc, 440, 0.5, nil, nil, nil)
-	if got != osc {
-		t.Fatal("expected the bare oscillator to be returned unchanged when both LFOs are nil")
-	}
+	require.Equal(t, osc, got, "expected the bare oscillator to be returned unchanged when both LFOs are nil")
 }
 
 func TestModulatedOscillatorPitchLFOChangesFrequency(t *testing.T) {
@@ -136,9 +103,7 @@ func TestModulatedOscillatorPitchLFOChangesFrequency(t *testing.T) {
 	// phase 0 outputs +1, so freq = 440 * 1.5 = 660).
 	buf := make([][2]float64, 512)
 	mod.Stream(buf)
-	if osc.frequency == 440 {
-		t.Fatal("expected frequency to be modulated away from 440 Hz")
-	}
+	require.NotEqual(t, 440.0, osc.frequency, "expected frequency to be modulated away from 440 Hz")
 }
 
 func TestModulatedOscillatorPWMLFOClampsDuty(t *testing.T) {
@@ -149,9 +114,8 @@ func TestModulatedOscillatorPWMLFOClampsDuty(t *testing.T) {
 
 	buf := make([][2]float64, 512)
 	mod.Stream(buf)
-	if osc.pulseWidth > 0.95 || osc.pulseWidth < 0.05 {
-		t.Fatalf("pulse width %v out of clamped range [0.05, 0.95]", osc.pulseWidth)
-	}
+	assert.LessOrEqual(t, osc.pulseWidth, 0.95, "pulse width above clamped maximum")
+	assert.GreaterOrEqual(t, osc.pulseWidth, 0.05, "pulse width below clamped minimum")
 }
 
 func TestModulatedOscillatorDetuneLFOShiftsFrequency(t *testing.T) {
@@ -167,12 +131,8 @@ func TestModulatedOscillatorDetuneLFOShiftsFrequency(t *testing.T) {
 
 	// After streaming, detuneMultiplier should differ from the static value.
 	// osc.frequency remains the transparent raw Hz value and must be unchanged.
-	if osc.detuneMultiplier == baseMult {
-		t.Fatal("expected detune LFO to shift detuneMultiplier away from static value")
-	}
-	if osc.frequency != 440 {
-		t.Fatalf("expected osc.frequency to remain raw 440 Hz, got %v", osc.frequency)
-	}
+	require.NotEqual(t, baseMult, osc.detuneMultiplier, "expected detune LFO to shift detuneMultiplier away from static value")
+	require.Equal(t, 440.0, osc.frequency, "expected osc.frequency to remain raw 440 Hz")
 }
 
 func TestModulatedOscillatorDetuneLFODoesNotAffectOsc1(t *testing.T) {
@@ -184,17 +144,13 @@ func TestModulatedOscillatorDetuneLFODoesNotAffectOsc1(t *testing.T) {
 
 	buf := make([][2]float64, 512)
 	mod1.Stream(buf)
-	if osc1.frequency != staticFreq {
-		t.Fatalf("osc1 frequency changed from %v to %v without detune LFO", staticFreq, osc1.frequency)
-	}
+	require.Equal(t, staticFreq, osc1.frequency, "osc1 frequency changed without detune LFO")
 }
 
 func TestModulatedVolumeNilLFOReturnsDirect(t *testing.T) {
 	osc2 := NewOscillator(Silent, 440, srLFO, 0, 0, 0, nil, 0)
 	got := newModulatedVolumeStreamer(osc2, nil)
-	if got != osc2 {
-		t.Fatal("expected inner streamer returned unchanged when LFO is nil")
-	}
+	require.Equal(t, osc2, got, "expected inner streamer returned unchanged when LFO is nil")
 }
 
 func TestModulatedVolumeTremoloScalesSamples(t *testing.T) {
@@ -207,9 +163,7 @@ func TestModulatedVolumeTremoloScalesSamples(t *testing.T) {
 
 	buf := make([][2]float64, 512)
 	n, ok := mod.Stream(buf)
-	if !ok || n == 0 {
-		t.Fatal("stream returned no samples")
-	}
+	require.True(t, ok && n > 0, "stream returned no samples")
 	// At least verify samples are not all zero (the LFO is active).
 	allZero := true
 	for _, s := range buf[:n] {
@@ -218,9 +172,7 @@ func TestModulatedVolumeTremoloScalesSamples(t *testing.T) {
 			break
 		}
 	}
-	if allZero {
-		t.Fatal("expected non-zero output from modulated volume streamer")
-	}
+	require.False(t, allZero, "expected non-zero output from modulated volume streamer")
 }
 
 func TestModulatedVolumeGainFloorIsZero(t *testing.T) {
@@ -242,9 +194,7 @@ func TestModulatedVolumeGainFloorIsZero(t *testing.T) {
 	buf := make([][2]float64, 64)
 	mod.Stream(buf)
 	for i, s := range buf {
-		if s[0] < 0 {
-			t.Fatalf("sample %d: gain floor violated, got %v", i, s[0])
-		}
+		assert.GreaterOrEqual(t, s[0], 0.0, "sample %d: gain floor violated", i)
 	}
 }
 
@@ -253,18 +203,15 @@ func TestModulatedFilterOffReturnsSource(t *testing.T) {
 	lfo := newLFOGenerator(LFO{Waveform: LFOSine, Rate: 1, Depth: 0.5, Delay: 0}, float64(srLFO))
 	f := Filter{Type: FilterOff, Cutoff: 0.5, Resonance: 0}
 	got := NewModulatedFilterStreamer(osc, srLFO, f, lfo)
-	if got != osc {
-		t.Fatal("FilterOff should return the source streamer unchanged")
-	}
+	require.Equal(t, osc, got, "FilterOff should return the source streamer unchanged")
 }
 
 func TestModulatedFilterNilLFOReturnsBiquad(t *testing.T) {
 	osc := NewOscillator(Sine, 440, srLFO, 0, 0, 0, nil, 0)
 	f := Filter{Type: FilterLowPass, Cutoff: 0.5, Resonance: 0}
 	got := NewModulatedFilterStreamer(osc, srLFO, f, nil)
-	if _, ok := got.(*biquadFilter); !ok {
-		t.Fatal("nil LFO with active filter should return *biquadFilter")
-	}
+	_, ok := got.(*biquadFilter)
+	require.True(t, ok, "nil LFO with active filter should return *biquadFilter")
 }
 
 func TestModulatedFilterLFOReturnModulatedType(t *testing.T) {
@@ -272,9 +219,8 @@ func TestModulatedFilterLFOReturnModulatedType(t *testing.T) {
 	lfo := newLFOGenerator(LFO{Waveform: LFOSine, Rate: 1, Depth: 0.5, Delay: 0}, float64(srLFO))
 	f := Filter{Type: FilterLowPass, Cutoff: 0.5, Resonance: 0}
 	got := NewModulatedFilterStreamer(osc, srLFO, f, lfo)
-	if _, ok := got.(*modulatedFilterStreamer); !ok {
-		t.Fatalf("expected *modulatedFilterStreamer, got %T", got)
-	}
+	_, ok := got.(*modulatedFilterStreamer)
+	require.True(t, ok, "expected *modulatedFilterStreamer, got %T", got)
 }
 
 func TestModulatedFilterCutoffClamped(t *testing.T) {
@@ -289,8 +235,6 @@ func TestModulatedFilterCutoffClamped(t *testing.T) {
 	mf.Stream(buf)
 	// No panic and no NaN in output is sufficient to verify clamping works.
 	for i, s := range buf {
-		if math.IsNaN(s[0]) || math.IsNaN(s[1]) {
-			t.Fatalf("NaN at sample %d after cutoff modulation", i)
-		}
+		assert.False(t, math.IsNaN(s[0]) || math.IsNaN(s[1]), "NaN at sample %d after cutoff modulation", i)
 	}
 }

@@ -5,20 +5,18 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tetrackt/tetrackt/audio"
 	"github.com/tetrackt/tetrackt/ui/tracker/effects"
 )
 
 func TestSpaceTogglesEditMode(t *testing.T) {
 	m := NewTracker(2, 8, 80, 24)
-	if m.Mode != editMode {
-		t.Fatalf("expected default edit mode, got %v", m.Mode)
-	}
+	require.Equal(t, editMode, m.Mode, "expected default edit mode")
 
 	_, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
-	if m.Mode != navigateMode {
-		t.Fatalf("expected navigate mode after space, got %v", m.Mode)
-	}
+	assert.Equal(t, navigateMode, m.Mode, "expected navigate mode after space")
 }
 
 func TestNoteEntryInEditModeEmitsPreviewMessage(t *testing.T) {
@@ -28,20 +26,13 @@ func TestNoteEntryInEditModeEmitsPreviewMessage(t *testing.T) {
 	m.CursorCol = columnNote
 
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'z', Text: "z"})
-	if cmd == nil {
-		t.Fatal("expected note entry command")
-	}
+	require.NotNil(t, cmd, "expected note entry command")
 	msg := cmd()
 	noteMsg, ok := msg.(TrackerNoteEntered)
-	if !ok {
-		t.Fatalf("expected TrackerNoteEntered, got %T", msg)
-	}
-	if noteMsg.Note.Base != audio.Base("C") || noteMsg.Note.Octave != 4 {
-		t.Fatalf("unexpected note in message: %+v", noteMsg.Note)
-	}
-	if m.Tracks[0].Rows[0].Note.Base != audio.Base("C") {
-		t.Fatalf("expected C note in current cell")
-	}
+	require.True(t, ok, "expected TrackerNoteEntered, got %T", msg)
+	assert.Equal(t, audio.Base("C"), noteMsg.Note.Base, "unexpected note base")
+	assert.Equal(t, audio.Octave(4), noteMsg.Note.Octave, "unexpected note octave")
+	assert.Equal(t, audio.Base("C"), m.Tracks[0].Rows[0].Note.Base, "expected C note in current cell")
 }
 
 func TestEditStepAdvancesCursor(t *testing.T) {
@@ -52,21 +43,15 @@ func TestEditStepAdvancesCursor(t *testing.T) {
 	m.CursorCol = columnNote
 
 	_, _ = m.Update(tea.KeyPressMsg{Code: 'z', Text: "z"})
-	if m.nav.CursorRow() != 2 {
-		t.Fatalf("expected cursor row 2, got %d", m.nav.CursorRow())
-	}
+	assert.Equal(t, 2, m.nav.CursorRow(), "expected cursor row 2")
 }
 
 func TestTabMovesToNextSubcolumn(t *testing.T) {
 	m := NewTracker(2, 8, 80, 24)
-	if m.CursorCol != columnNote {
-		t.Fatalf("expected initial note column, got %v", m.CursorCol)
-	}
+	require.Equal(t, columnNote, m.CursorCol, "expected initial note column")
 
 	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	if m.CursorCol != columnVolume {
-		t.Fatalf("expected volume column after tab, got %v", m.CursorCol)
-	}
+	assert.Equal(t, columnVolume, m.CursorCol, "expected volume column after tab")
 }
 
 func TestInsertTrackSpaceShiftsRowsDown(t *testing.T) {
@@ -76,16 +61,10 @@ func TestInsertTrackSpaceShiftsRowsDown(t *testing.T) {
 	m.Tracks[0].Rows[2].Note = audio.Note{Base: audio.Base("D"), Octave: 4}
 
 	edited := m.handleGlobalEditingKey("insert")
-	if !edited {
-		t.Fatal("expected insert to be treated as edit")
-	}
+	require.True(t, edited, "expected insert to be treated as edit")
 
-	if got := m.Tracks[0].Rows[1].Note.Base; got != audio.BaseOff {
-		t.Fatalf("expected inserted empty row at cursor, got %q", got)
-	}
-	if got := m.Tracks[0].Rows[2].Note.Base; got != audio.Base("C") {
-		t.Fatalf("expected previous row shifted down to row 2, got %q", got)
-	}
+	assert.Equal(t, audio.BaseOff, m.Tracks[0].Rows[1].Note.Base, "expected inserted empty row at cursor")
+	assert.Equal(t, audio.Base("C"), m.Tracks[0].Rows[2].Note.Base, "expected previous row shifted down to row 2")
 }
 
 func TestTransposeCurrentStoredNoteSemitone(t *testing.T) {
@@ -94,14 +73,11 @@ func TestTransposeCurrentStoredNoteSemitone(t *testing.T) {
 	m.Tracks[0].Rows[0].Note = audio.Note{Base: audio.BaseC, Octave: 4}
 
 	edited := m.handleGlobalEditingKey("alt+up")
-	if !edited {
-		t.Fatal("expected transpose to edit current note")
-	}
+	require.True(t, edited, "expected transpose to edit current note")
 
 	got := m.Tracks[0].Rows[0].Note
-	if got.Base != audio.BaseCs || got.Octave != 4 {
-		t.Fatalf("expected C#4 after transpose, got %+v", got)
-	}
+	assert.Equal(t, audio.BaseCs, got.Base, "expected C# after transpose")
+	assert.Equal(t, audio.Octave(4), got.Octave, "expected octave 4 after transpose")
 }
 
 func TestTransposeSelectedNotesOctave(t *testing.T) {
@@ -114,34 +90,26 @@ func TestTransposeSelectedNotesOctave(t *testing.T) {
 	m.nav.MoveExtending(1, 1)
 
 	edited := m.handleGlobalEditingKey("alt+shift+up")
-	if !edited {
-		t.Fatal("expected transpose to edit selected notes")
-	}
+	require.True(t, edited, "expected transpose to edit selected notes")
 
 	n0 := m.Tracks[0].Rows[0].Note
-	if n0.Base != audio.BaseC || n0.Octave != 5 {
-		t.Fatalf("expected C5, got %+v", n0)
-	}
+	assert.Equal(t, audio.BaseC, n0.Base, "expected C")
+	assert.Equal(t, audio.Octave(5), n0.Octave, "expected C5")
+
 	n1 := m.Tracks[1].Rows[1].Note
-	if n1.Base != audio.BaseE || n1.Octave != 5 {
-		t.Fatalf("expected E5, got %+v", n1)
-	}
+	assert.Equal(t, audio.BaseE, n1.Base, "expected E")
+	assert.Equal(t, audio.Octave(5), n1.Octave, "expected E5")
 }
 
 func TestParseEffectCommandNibbleSupportsInlineExtensions(t *testing.T) {
 	for i := 0; i <= int(EffectArpPreset); i++ {
 		typ, ok := effects.ParseNibble(i)
-		if !ok {
-			t.Fatalf("expected nibble %d to be valid", i)
-		}
-		if int(typ) != i {
-			t.Fatalf("expected type %d, got %d", i, typ)
-		}
+		require.True(t, ok, "expected nibble %d to be valid", i)
+		assert.Equal(t, i, int(typ), "expected type %d", i)
 	}
 
-	if _, ok := effects.ParseNibble(8); ok {
-		t.Fatal("expected nibble 8 to be invalid")
-	}
+	_, ok := effects.ParseNibble(8)
+	assert.False(t, ok, "expected nibble 8 to be invalid")
 }
 
 func TestParseEffectCommandKeyAliases(t *testing.T) {
@@ -157,9 +125,8 @@ func TestParseEffectCommandKeyAliases(t *testing.T) {
 
 	for key, want := range cases {
 		got, ok := effects.ParseKey(key)
-		if !ok || EffectType(got) != want {
-			t.Fatalf("key %q expected %v, got %v (ok=%v)", key, want, got, ok)
-		}
+		require.True(t, ok, "key %q: expected ok=true", key)
+		assert.Equal(t, want, EffectType(got), "key %q expected %v", key, want)
 	}
 }
 
@@ -169,21 +136,15 @@ func TestInlineRowTicksCommand(t *testing.T) {
 	m.CursorCol = columnEffect
 
 	_, _ = m.Update(tea.KeyPressMsg{Text: "5"})
-	if got := m.Tracks[0].Rows[0].Effect.Type; got != EffectRowTicks {
-		t.Fatalf("expected EffectRowTicks, got %v", got)
-	}
+	assert.Equal(t, EffectRowTicks, m.Tracks[0].Rows[0].Effect.Type, "expected EffectRowTicks")
 
 	m.CursorCol = columnParam
 	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
 	_, _ = m.Update(tea.KeyPressMsg{Text: "C"})
 
 	row := m.Tracks[0].Rows[0]
-	if row.Ticks != 12 {
-		t.Fatalf("expected ticks=12, got %d", row.Ticks)
-	}
-	if row.Effect.Param != 0x0C {
-		t.Fatalf("expected effect param 0x0C, got %#x", row.Effect.Param)
-	}
+	assert.Equal(t, 12, row.Ticks, "expected ticks=12")
+	assert.Equal(t, 0x0C, row.Effect.Param, "expected effect param 0x0C")
 }
 
 func TestInlineContinuousCommandToggle(t *testing.T) {
@@ -196,9 +157,7 @@ func TestInlineContinuousCommandToggle(t *testing.T) {
 	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
 	_, _ = m.Update(tea.KeyPressMsg{Text: "1"})
 
-	if !m.Tracks[0].Rows[0].Continuous {
-		t.Fatal("expected continuous to be enabled")
-	}
+	assert.True(t, m.Tracks[0].Rows[0].Continuous, "expected continuous to be enabled")
 
 	m.nav.Move(0, 1)
 	m.CursorCol = columnEffect
@@ -207,9 +166,7 @@ func TestInlineContinuousCommandToggle(t *testing.T) {
 	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
 	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
 
-	if m.Tracks[0].Rows[1].Continuous {
-		t.Fatal("expected continuous to be disabled")
-	}
+	assert.False(t, m.Tracks[0].Rows[1].Continuous, "expected continuous to be disabled")
 }
 
 func TestInlineArpPresetCommand(t *testing.T) {
@@ -223,15 +180,9 @@ func TestInlineArpPresetCommand(t *testing.T) {
 	_, _ = m.Update(tea.KeyPressMsg{Text: "4"})
 
 	row := m.Tracks[0].Rows[0]
-	if row.Effect.Type != EffectArpPreset {
-		t.Fatalf("expected EffectArpPreset, got %v", row.Effect.Type)
-	}
-	if !row.Arpeggio.IsActive() {
-		t.Fatal("expected arp offsets to be generated")
-	}
-	if !row.Continuous {
-		t.Fatal("expected arp preset command to force continuous")
-	}
+	assert.Equal(t, EffectArpPreset, row.Effect.Type, "expected EffectArpPreset")
+	assert.True(t, row.Arpeggio.IsActive(), "expected arp offsets to be generated")
+	assert.True(t, row.Continuous, "expected arp preset command to force continuous")
 }
 
 func TestTransposeAltShiftOrderVariants(t *testing.T) {
@@ -240,24 +191,18 @@ func TestTransposeAltShiftOrderVariants(t *testing.T) {
 	m.Tracks[0].Rows[0].Note = audio.Note{Base: audio.BaseC, Octave: 4}
 
 	edited := m.handleGlobalEditingKey("shift+alt+up")
-	if !edited {
-		t.Fatal("expected shift+alt+up to transpose")
-	}
+	require.True(t, edited, "expected shift+alt+up to transpose")
 
 	got := m.Tracks[0].Rows[0].Note
-	if got.Base != audio.BaseC || got.Octave != 5 {
-		t.Fatalf("expected C5 after shift+alt+up, got %+v", got)
-	}
+	assert.Equal(t, audio.BaseC, got.Base, "expected C")
+	assert.Equal(t, audio.Octave(5), got.Octave, "expected octave 5 after shift+alt+up")
 
 	edited = m.handleGlobalEditingKey("shift+alt+down")
-	if !edited {
-		t.Fatal("expected shift+alt+down to transpose")
-	}
+	require.True(t, edited, "expected shift+alt+down to transpose")
 
 	got = m.Tracks[0].Rows[0].Note
-	if got.Base != audio.BaseC || got.Octave != 4 {
-		t.Fatalf("expected C4 after shift+alt+down, got %+v", got)
-	}
+	assert.Equal(t, audio.BaseC, got.Base, "expected C")
+	assert.Equal(t, audio.Octave(4), got.Octave, "expected octave 4 after shift+alt+down")
 }
 
 func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
@@ -283,20 +228,17 @@ func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 	m.nav.SetCursorPosition(1, 1)
 
 	edited := m.handleGlobalEditingKey("alt+shift+v")
-	if !edited {
-		t.Fatal("expected alt+shift+v to edit destination cell")
-	}
+	require.True(t, edited, "expected alt+shift+v to edit destination cell")
 
 	got := m.Tracks[1].Rows[1]
-	if got.Note.Base != audio.BaseA || got.Note.Octave != 5 {
-		t.Fatalf("expected destination note A5 to be preserved, got %+v", got.Note)
-	}
-	if got.Volume != 48 || got.Ticks != 12 || !got.Continuous {
-		t.Fatalf("expected effects payload copied, got row %+v", got)
-	}
-	if !got.Arpeggio.IsActive() || got.Effect.Type != EffectVibrato || got.Effect.Param != 0x24 {
-		t.Fatalf("expected arp/effect copied, got row %+v", got)
-	}
+	assert.Equal(t, audio.BaseA, got.Note.Base, "expected destination note base A to be preserved")
+	assert.Equal(t, audio.Octave(5), got.Note.Octave, "expected destination note octave 5 to be preserved")
+	assert.Equal(t, 48, got.Volume, "expected volume copied")
+	assert.Equal(t, 12, got.Ticks, "expected ticks copied")
+	assert.True(t, got.Continuous, "expected continuous copied")
+	assert.True(t, got.Arpeggio.IsActive(), "expected arp copied")
+	assert.Equal(t, EffectVibrato, got.Effect.Type, "expected effect type copied")
+	assert.Equal(t, 0x24, got.Effect.Param, "expected effect param copied")
 }
 
 func TestNewBPM_ClampsToValidRange(t *testing.T) {
@@ -313,9 +255,7 @@ func TestNewBPM_ClampsToValidRange(t *testing.T) {
 
 	for _, tt := range tests {
 		bpm := NewBPM(tt.input)
-		if bpm.Value() != tt.expected {
-			t.Errorf("NewBPM(%d).Value() = %d, want %d", tt.input, bpm.Value(), tt.expected)
-		}
+		assert.Equal(t, tt.expected, bpm.Value(), "NewBPM(%d).Value()", tt.input)
 	}
 }
 
@@ -323,17 +263,13 @@ func TestBPM_Duration(t *testing.T) {
 	bpm := NewBPM(120)
 	duration := bpm.Duration()
 	expected := 500 * time.Millisecond // 60000ms / 120 BPM = 500ms per beat
-	if duration != expected {
-		t.Errorf("BPM(120).Duration() = %v, want %v", duration, expected)
-	}
+	assert.Equal(t, expected, duration, "BPM(120).Duration()")
 
 	// Test edge case: zero BPM should fall back to DefaultBPM
 	zeroBPM := BPM{value: 0}
 	duration = zeroBPM.Duration()
 	expected = time.Duration(60000/DefaultBPM) * time.Millisecond
-	if duration != expected {
-		t.Errorf("BPM(0).Duration() = %v, want %v (DefaultBPM fallback)", duration, expected)
-	}
+	assert.Equal(t, expected, duration, "BPM(0).Duration() (DefaultBPM fallback)")
 }
 
 func TestBPM_Adjust(t *testing.T) {
@@ -353,9 +289,6 @@ func TestBPM_Adjust(t *testing.T) {
 	for _, tt := range tests {
 		bpm := NewBPM(tt.initial)
 		adjusted := bpm.Adjust(tt.delta)
-		if adjusted.Value() != tt.expected {
-			t.Errorf("BPM(%d).Adjust(%d).Value() = %d, want %d",
-				tt.initial, tt.delta, adjusted.Value(), tt.expected)
-		}
+		assert.Equal(t, tt.expected, adjusted.Value(), "BPM(%d).Adjust(%d).Value()", tt.initial, tt.delta)
 	}
 }

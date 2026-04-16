@@ -2,22 +2,20 @@ package effects
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseNibble_SupportsInlineExtensions(t *testing.T) {
 	for i := 0; i <= int(ArpPreset); i++ {
 		typ, ok := ParseNibble(i)
-		if !ok {
-			t.Fatalf("expected nibble %d to be valid", i)
-		}
-		if int(typ) != i {
-			t.Fatalf("expected type %d, got %d", i, typ)
-		}
+		require.True(t, ok, "expected nibble %d to be valid", i)
+		assert.Equal(t, i, int(typ), "expected type %d", i)
 	}
 
-	if _, ok := ParseNibble(8); ok {
-		t.Fatal("expected nibble 8 to be invalid")
-	}
+	_, ok := ParseNibble(8)
+	assert.False(t, ok, "expected nibble 8 to be invalid")
 }
 
 func TestParseKey_Aliases(t *testing.T) {
@@ -33,9 +31,8 @@ func TestParseKey_Aliases(t *testing.T) {
 
 	for key, want := range cases {
 		got, ok := ParseKey(key)
-		if !ok || got != want {
-			t.Fatalf("key %q expected %v, got %v (ok=%v)", key, want, got, ok)
-		}
+		require.True(t, ok, "key %q: expected ok=true", key)
+		assert.Equal(t, want, got, "key %q expected %v", key, want)
 	}
 }
 
@@ -52,10 +49,7 @@ func TestType_Format(t *testing.T) {
 	}
 
 	for typ, want := range cases {
-		got := typ.Format()
-		if got != want {
-			t.Fatalf("type %d expected format %q, got %q", typ, want, got)
-		}
+		assert.Equal(t, want, typ.Format(), "type %d", typ)
 	}
 }
 
@@ -74,10 +68,7 @@ func TestType_FormatParam(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := tt.typ.FormatParam(tt.param)
-		if got != tt.want {
-			t.Fatalf("type %d param %d: expected %q, got %q", tt.typ, tt.param, tt.want, got)
-		}
+		assert.Equal(t, tt.want, tt.typ.FormatParam(tt.param), "type %d param %d", tt.typ, tt.param)
 	}
 }
 
@@ -100,94 +91,60 @@ func TestType_DecodeParam(t *testing.T) {
 
 	for _, tt := range tests {
 		gotVal, gotOk := tt.typ.DecodeParam(tt.param)
-		if gotOk != tt.wantOk || (gotOk && gotVal != tt.wantVal) {
-			t.Fatalf("type %d param %d: expected (%d, %v), got (%d, %v)",
-				tt.typ, tt.param, tt.wantVal, tt.wantOk, gotVal, gotOk)
+		assert.Equal(t, tt.wantOk, gotOk, "type %d param %d: ok", tt.typ, tt.param)
+		if tt.wantOk {
+			assert.Equal(t, tt.wantVal, gotVal, "type %d param %d: value", tt.typ, tt.param)
 		}
 	}
 }
 
 func TestApply_RowTicks(t *testing.T) {
 	result, ok := Apply(RowTicks, 0x0C, 0, 6)
-	if !ok {
-		t.Fatal("expected apply to succeed")
-	}
-	if result.Ticks != 12 {
-		t.Fatalf("expected ticks=12, got %d", result.Ticks)
-	}
-	if result.Effect.Type != RowTicks {
-		t.Fatalf("expected effect type RowTicks, got %v", result.Effect.Type)
-	}
+	require.True(t, ok, "expected apply to succeed")
+	assert.Equal(t, 12, result.Ticks, "expected ticks=12")
+	assert.Equal(t, RowTicks, result.Effect.Type, "expected effect type RowTicks")
 }
 
 func TestApply_Continuous(t *testing.T) {
 	result, ok := Apply(Continuous, 1, 0, 6)
-	if !ok {
-		t.Fatal("expected apply to succeed")
-	}
-	if !result.Continuous {
-		t.Fatal("expected continuous to be enabled")
-	}
+	require.True(t, ok, "expected apply to succeed")
+	assert.True(t, result.Continuous, "expected continuous to be enabled")
 
 	result, ok = Apply(Continuous, 0, 0, 6)
-	if !ok {
-		t.Fatal("expected apply to succeed")
-	}
-	if result.Continuous {
-		t.Fatal("expected continuous to be disabled")
-	}
+	require.True(t, ok, "expected apply to succeed")
+	assert.False(t, result.Continuous, "expected continuous to be disabled")
 }
 
 func TestApply_ArpPreset(t *testing.T) {
 	// Preset 1, step 4 (default)
 	result, ok := Apply(ArpPreset, 0x14, 0, 6)
-	if !ok {
-		t.Fatal("expected apply to succeed")
-	}
-	if !result.Arpeggio.IsActive() {
-		t.Fatal("expected arp offsets to be generated")
-	}
-	if !result.Continuous {
-		t.Fatal("expected arp preset command to force continuous")
-	}
+	require.True(t, ok, "expected apply to succeed")
+	assert.True(t, result.Arpeggio.IsActive(), "expected arp offsets to be generated")
+	assert.True(t, result.Continuous, "expected arp preset command to force continuous")
 	// Should generate 6 offsets (defaultSpeed)
-	if len(result.Arpeggio.Offsets) != 6 {
-		t.Fatalf("expected 6 offsets, got %d", len(result.Arpeggio.Offsets))
-	}
+	assert.Len(t, result.Arpeggio.Offsets, 6, "expected 6 offsets")
 }
 
 func TestApply_ArpPreset_ZeroClearsArp(t *testing.T) {
 	result, ok := Apply(ArpPreset, 0x00, 12, 6)
-	if !ok {
-		t.Fatal("expected apply to succeed")
-	}
-	if result.Arpeggio.IsActive() {
-		t.Fatal("expected arpeggio to be cleared")
-	}
+	require.True(t, ok, "expected apply to succeed")
+	assert.False(t, result.Arpeggio.IsActive(), "expected arpeggio to be cleared")
 }
 
 func TestGenerateArpOffsets_Up(t *testing.T) {
 	offsets := generateArpOffsets(1, 4, 3)
 	want := []int{0, 3, 6, 9}
-	if len(offsets) != len(want) {
-		t.Fatalf("expected %d offsets, got %d", len(want), len(offsets))
-	}
+	require.Len(t, offsets, len(want), "expected %d offsets", len(want))
 	for i, v := range want {
-		if offsets[i] != v {
-			t.Fatalf("offset[%d]: expected %d, got %d", i, v, offsets[i])
-		}
+		assert.Equal(t, v, offsets[i], "offset[%d]", i)
 	}
 }
 
 func TestGenerateArpOffsets_Down(t *testing.T) {
 	offsets := generateArpOffsets(2, 4, 3)
 	want := []int{9, 6, 3, 0}
-	if len(offsets) != len(want) {
-		t.Fatalf("expected %d offsets, got %d", len(want), len(offsets))
-	}
+	require.Len(t, offsets, len(want), "expected %d offsets", len(want))
 	for i, v := range want {
-		if offsets[i] != v {
-			t.Fatalf("offset[%d]: expected %d, got %d", i, v, offsets[i])
-		}
+		assert.Equal(t, v, offsets[i], "offset[%d]", i)
 	}
 }

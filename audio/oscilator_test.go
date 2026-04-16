@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/gopxl/beep/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOscillatorSilent(t *testing.T) {
@@ -12,9 +14,8 @@ func TestOscillatorSilent(t *testing.T) {
 	osc := NewOscillator(Silent, 440.0, sr, 0, 0, 0, nil, 0)
 	samples := StreamN(osc, 100)
 	for i, s := range samples {
-		if s[0] != 0 || s[1] != 0 {
-			t.Errorf("sample %d: expected 0,0 got %v,%v", i, s[0], s[1])
-		}
+		assert.Equal(t, 0.0, s[0], "sample %d L", i)
+		assert.Equal(t, 0.0, s[1], "sample %d R", i)
 	}
 }
 
@@ -24,18 +25,11 @@ func TestOscillatorSquare(t *testing.T) {
 	osc := NewOscillator(Square, 100.0, sr, 0, 0, 0, nil, 0)
 	samples := StreamN(osc, 250)
 
-	if samples[0][0] != 1.0 {
-		t.Errorf("sample 0: want +1, got %v", samples[0][0])
-	}
-	if samples[221][0] != -1.0 {
-		t.Errorf("sample 221: want -1 (past half period), got %v", samples[221][0])
-	}
+	assert.Equal(t, 1.0, samples[0][0], "sample 0: want +1")
+	assert.Equal(t, -1.0, samples[221][0], "sample 221: want -1 (past half period)")
 	// All samples must be exactly ±1
 	for i, s := range samples {
-		if s[0] != 1.0 && s[0] != -1.0 {
-			t.Errorf("sample %d: want ±1, got %v", i, s[0])
-			break
-		}
+		assert.True(t, s[0] == 1.0 || s[0] == -1.0, "sample %d: want ±1, got %v", i, s[0])
 	}
 }
 
@@ -45,14 +39,10 @@ func TestOscillatorSawtooth(t *testing.T) {
 	samples := StreamN(osc, 10)
 
 	// phase=0 → 2*0-1 = -1
-	if math.Abs(samples[0][0]-(-1.0)) > 1e-6 {
-		t.Errorf("sample 0: want -1, got %v", samples[0][0])
-	}
+	assert.InDelta(t, -1.0, samples[0][0], 1e-6, "sample 0: want -1")
 	// Sawtooth increases linearly within a period
 	for i := 1; i < len(samples); i++ {
-		if samples[i][0] <= samples[i-1][0] {
-			t.Errorf("sample %d: expected increase, %v <= %v", i, samples[i][0], samples[i-1][0])
-		}
+		assert.Greater(t, samples[i][0], samples[i-1][0], "sample %d: expected increase", i)
 	}
 }
 
@@ -62,14 +52,10 @@ func TestOscillatorSawtoothReverse(t *testing.T) {
 	samples := StreamN(osc, 10)
 
 	// phase=0 → 1-2*0 = +1
-	if math.Abs(samples[0][0]-1.0) > 1e-6 {
-		t.Errorf("sample 0: want +1, got %v", samples[0][0])
-	}
+	assert.InDelta(t, 1.0, samples[0][0], 1e-6, "sample 0: want +1")
 	// Decreases linearly within a period
 	for i := 1; i < len(samples); i++ {
-		if samples[i][0] >= samples[i-1][0] {
-			t.Errorf("sample %d: expected decrease, %v >= %v", i, samples[i][0], samples[i-1][0])
-		}
+		assert.Less(t, samples[i][0], samples[i-1][0], "sample %d: expected decrease", i)
 	}
 }
 
@@ -78,21 +64,15 @@ func TestOscillatorTriangle(t *testing.T) {
 
 	// phase=0 → 4*0-1 = -1
 	s0 := StreamN(NewOscillator(Triangle, 100.0, sr, 0.0, 0, 0, nil, 0), 1)
-	if math.Abs(s0[0][0]-(-1.0)) > 1e-6 {
-		t.Errorf("phase 0.0: want -1, got %v", s0[0][0])
-	}
+	assert.InDelta(t, -1.0, s0[0][0], 1e-6, "phase 0.0: want -1")
 
 	// phase=0.25 → 4*0.25-1 = 0
 	s25 := StreamN(NewOscillator(Triangle, 100.0, sr, 0.25, 0, 0, nil, 0), 1)
-	if math.Abs(s25[0][0]) > 1e-6 {
-		t.Errorf("phase 0.25: want 0, got %v", s25[0][0])
-	}
+	assert.InDelta(t, 0.0, s25[0][0], 1e-6, "phase 0.25: want 0")
 
 	// phase=0.5 → -4*0.5+3 = 1
 	s50 := StreamN(NewOscillator(Triangle, 100.0, sr, 0.5, 0, 0, nil, 0), 1)
-	if math.Abs(s50[0][0]-1.0) > 1e-6 {
-		t.Errorf("phase 0.5: want 1, got %v", s50[0][0])
-	}
+	assert.InDelta(t, 1.0, s50[0][0], 1e-6, "phase 0.5: want 1")
 }
 
 func TestOscillatorSine(t *testing.T) {
@@ -108,9 +88,7 @@ func TestOscillatorSine(t *testing.T) {
 	}
 	for _, tt := range tests {
 		s := StreamN(NewOscillator(Sine, 100.0, sr, tt.phase, 0, 0, nil, 0), 1)
-		if math.Abs(s[0][0]-tt.want) > 1e-6 {
-			t.Errorf("phase %v: want %v, got %v", tt.phase, tt.want, s[0][0])
-		}
+		assert.InDelta(t, tt.want, s[0][0], 1e-6, "phase %v: want %v", tt.phase, tt.want)
 	}
 }
 
@@ -122,16 +100,12 @@ func TestOscillatorNoise(t *testing.T) {
 	first := samples[0][0]
 	allSame := true
 	for _, s := range samples {
-		if math.Abs(s[0]) > 1.0 {
-			t.Errorf("sample out of range [-1,1]: %v", s[0])
-		}
+		assert.LessOrEqual(t, math.Abs(s[0]), 1.0, "sample out of range [-1,1]")
 		if s[0] != first {
 			allSame = false
 		}
 	}
-	if allSame {
-		t.Error("noise: all 1000 samples are identical")
-	}
+	require.False(t, allSame, "noise: all 1000 samples are identical")
 }
 
 func TestOscillatorStereo(t *testing.T) {
@@ -139,9 +113,7 @@ func TestOscillatorStereo(t *testing.T) {
 	osc := NewOscillator(Sine, 440.0, sr, 0, 0, 0, nil, 0)
 	samples := StreamN(osc, 100)
 	for i, s := range samples {
-		if s[0] != s[1] {
-			t.Errorf("sample %d: L(%v) != R(%v)", i, s[0], s[1])
-		}
+		assert.Equal(t, s[0], s[1], "sample %d: L != R", i)
 	}
 }
 
@@ -150,9 +122,7 @@ func TestOscillatorInitialPhase(t *testing.T) {
 	// Square with phase=0.6, default pulseWidth=0.5 → 0.6 >= 0.5 → -1
 	osc := NewOscillator(Square, 100.0, sr, 0.6, 0, 0, nil, 0)
 	s := StreamN(osc, 1)
-	if s[0][0] != -1.0 {
-		t.Errorf("square at phase 0.6: want -1, got %v", s[0][0])
-	}
+	assert.Equal(t, -1.0, s[0][0], "square at phase 0.6: want -1")
 }
 
 func TestOscillatorWavetableInterpolates(t *testing.T) {
@@ -163,9 +133,7 @@ func TestOscillatorWavetableInterpolates(t *testing.T) {
 	s := StreamN(osc, 1)
 
 	// phase=0 → pos=0.0 → i0=0, i1=1, frac=0 → table[0]*(1)+table[1]*0 = 0
-	if math.Abs(s[0][0]) > 1e-9 {
-		t.Errorf("wavetable phase=0: want 0, got %v", s[0][0])
-	}
+	assert.InDelta(t, 0.0, s[0][0], 1e-9, "wavetable phase=0: want 0")
 }
 
 func TestOscillatorWavetableEmptyIsSilent(t *testing.T) {
@@ -173,9 +141,8 @@ func TestOscillatorWavetableEmptyIsSilent(t *testing.T) {
 	osc := NewOscillator(Wavetable, 440.0, sr, 0, 0, 0, nil, 0)
 	s := StreamN(osc, 100)
 	for i, sample := range s {
-		if sample[0] != 0 || sample[1] != 0 {
-			t.Errorf("sample %d: empty wavetable should be silent, got %v", i, sample)
-		}
+		assert.Equal(t, 0.0, sample[0], "sample %d L: empty wavetable should be silent", i)
+		assert.Equal(t, 0.0, sample[1], "sample %d R: empty wavetable should be silent", i)
 	}
 }
 
@@ -184,9 +151,7 @@ func TestOscillatorWavetableStereo(t *testing.T) {
 	osc := NewOscillator(Wavetable, 440.0, sr, 0, 0, 0, WavetableSoftSaw, 0)
 	s := StreamN(osc, 100)
 	for i, sample := range s {
-		if sample[0] != sample[1] {
-			t.Errorf("sample %d: L(%v) != R(%v)", i, sample[0], sample[1])
-		}
+		assert.Equal(t, sample[0], sample[1], "sample %d: L != R", i)
 	}
 }
 
@@ -198,17 +163,13 @@ func TestBuiltinWavetablesNormalized(t *testing.T) {
 		"Glass":      WavetableGlass,
 	}
 	for name, table := range tables {
-		if len(table) != wavetableSize {
-			t.Errorf("%s: want len=%d, got %d", name, wavetableSize, len(table))
-		}
+		assert.Equal(t, wavetableSize, len(table), "%s: want len=%d", name, wavetableSize)
 		peak := 0.0
 		for _, v := range table {
 			if a := math.Abs(v); a > peak {
 				peak = a
 			}
 		}
-		if math.Abs(peak-1.0) > 1e-9 {
-			t.Errorf("%s: peak amplitude should be 1.0, got %v", name, peak)
-		}
+		assert.InDelta(t, 1.0, peak, 1e-9, "%s: peak amplitude should be 1.0", name)
 	}
 }

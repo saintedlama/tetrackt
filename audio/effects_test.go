@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEnvelopeAttackRises(t *testing.T) {
@@ -18,12 +19,8 @@ func TestEnvelopeAttackRises(t *testing.T) {
 	first := samples[0][0]
 	last := samples[n-1][0]
 
-	if first > 0.01 {
-		t.Errorf("first attack sample should be near 0, got %v", first)
-	}
-	if last < 0.9 {
-		t.Errorf("last attack sample should be near 1, got %v", last)
-	}
+	assert.LessOrEqual(t, first, 0.01, "first attack sample should be near 0")
+	assert.GreaterOrEqual(t, last, 0.9, "last attack sample should be near 1")
 }
 
 func TestEnvelopeSustainFlat(t *testing.T) {
@@ -34,9 +31,7 @@ func TestEnvelopeSustainFlat(t *testing.T) {
 	samples := StreamN(env, n)
 
 	for i, s := range samples {
-		if math.Abs(s[0]-0.5) > 1e-6 {
-			t.Errorf("sample %d: want 0.5, got %v", i, s[0])
-		}
+		assert.InDelta(t, 0.5, s[0], 1e-6, "sample %d: want 0.5", i)
 	}
 }
 
@@ -48,9 +43,7 @@ func TestEnvelopeReleaseFallsToZero(t *testing.T) {
 	samples := StreamN(env, n)
 
 	last := samples[n-1][0]
-	if last > 0.001 {
-		t.Errorf("last release sample should be near 0, got %v", last)
-	}
+	assert.LessOrEqual(t, last, 0.001, "last release sample should be near 0")
 
 	for i := 1; i < n; i++ {
 		assert.Less(t, samples[i][0], samples[i-1][0], "release sample %d (%v) should be less than sample %d (%v)", i, samples[i][0], i-1, samples[i-1][0])
@@ -70,27 +63,19 @@ func TestEnvelopeStagesProgression(t *testing.T) {
 
 	for i := range 25 {
 		env.Stream(buf)
-		if eg.currentStage != StageAttack {
-			t.Errorf("sample %d: expected StageAttack, got %v", i, eg.currentStage)
-		}
+		assert.Equal(t, StageAttack, eg.currentStage, "sample %d: expected StageAttack", i)
 	}
 	for i := 25; i < 50; i++ {
 		env.Stream(buf)
-		if eg.currentStage != StageDecay {
-			t.Errorf("sample %d: expected StageDecay, got %v", i, eg.currentStage)
-		}
+		assert.Equal(t, StageDecay, eg.currentStage, "sample %d: expected StageDecay", i)
 	}
 	for i := 50; i < 75; i++ {
 		env.Stream(buf)
-		if eg.currentStage != StageSustain {
-			t.Errorf("sample %d: expected StageSustain, got %v", i, eg.currentStage)
-		}
+		assert.Equal(t, StageSustain, eg.currentStage, "sample %d: expected StageSustain", i)
 	}
 	for i := 75; i < 100; i++ {
 		env.Stream(buf)
-		if eg.currentStage != StageRelease {
-			t.Errorf("sample %d: expected StageRelease, got %v", i, eg.currentStage)
-		}
+		assert.Equal(t, StageRelease, eg.currentStage, "sample %d: expected StageRelease", i)
 	}
 }
 
@@ -104,8 +89,7 @@ func TestCalculateMultiplier(t *testing.T) {
 		level *= m
 	}
 	// The formula is a first-order approximation; accept 0.5% relative error
-	if math.Abs(level/end-1.0) > 0.005 {
-		t.Errorf("after %d steps [%v→%v]: got %v (%.3f%% error)",
-			n, start, end, level, math.Abs(level/end-1.0)*100)
-	}
+	relativeError := math.Abs(level/end - 1.0)
+	require.Less(t, relativeError, 0.005,
+		"after %d steps [%v→%v]: got %v (%.3f%% error)", n, start, end, level, relativeError*100)
 }

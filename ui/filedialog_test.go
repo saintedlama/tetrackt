@@ -5,23 +5,19 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFileDialogModeSet(t *testing.T) {
 	dialog := NewFileDialog(ModeSave, "")
-	if dialog.Mode != ModeSave {
-		t.Errorf("Expected Mode=ModeSave, got %v", dialog.Mode)
-	}
+	assert.Equal(t, ModeSave, dialog.Mode, "expected Mode=ModeSave")
 }
 
 func TestFileDialogPrefill(t *testing.T) {
 	dialog := NewFileDialog(ModeSave, "mymodule.json")
-	if dialog.InputValue() != "mymodule.json" {
-		t.Errorf("Expected InputValue='mymodule.json', got '%s'", dialog.InputValue())
-	}
-	if dialog.Mode != ModeSave {
-		t.Errorf("Expected Mode=ModeSave, got %v", dialog.Mode)
-	}
+	assert.Equal(t, "mymodule.json", dialog.InputValue(), "expected InputValue='mymodule.json'")
+	assert.Equal(t, ModeSave, dialog.Mode, "expected Mode=ModeSave")
 }
 
 func TestFileDialogInput(t *testing.T) {
@@ -37,15 +33,11 @@ func TestFileDialogInput(t *testing.T) {
 	model, _ = dialog.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
 	dialog = model.(*FileDialogModel)
 
-	if dialog.InputValue() != "test" {
-		t.Errorf("Expected InputValue='test', got '%s'", dialog.InputValue())
-	}
+	assert.Equal(t, "test", dialog.InputValue(), "expected InputValue='test'")
 
 	model, _ = dialog.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	dialog = model.(*FileDialogModel)
-	if dialog.InputValue() != "tes" {
-		t.Errorf("Expected InputValue='tes' after backspace, got '%s'", dialog.InputValue())
-	}
+	assert.Equal(t, "tes", dialog.InputValue(), "expected InputValue='tes' after backspace")
 }
 
 func TestFileDialogConfirm(t *testing.T) {
@@ -53,46 +45,30 @@ func TestFileDialogConfirm(t *testing.T) {
 	dialog.FocusInput()
 
 	_, cmd := dialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if cmd == nil {
-		t.Fatal("Expected command to be returned")
-	}
+	require.NotNil(t, cmd, "expected command to be returned")
 
 	msg := cmd()
 	closeMsg, ok := msg.(CloseDialogMsg)
-	if !ok {
-		t.Fatal("Expected CloseDialogMsg")
-	}
+	require.True(t, ok, "expected CloseDialogMsg")
 
 	confirmed, ok := closeMsg.Payload.(FileDialogConfirmed)
-	if !ok {
-		t.Fatal("Expected FileDialogConfirmed payload")
-	}
+	require.True(t, ok, "expected FileDialogConfirmed payload")
 
-	if !strings.HasSuffix(confirmed.Filename, "test.json") {
-		t.Errorf("Expected Filename to end with 'test.json', got '%s'", confirmed.Filename)
-	}
-	if confirmed.Mode != ModeSave {
-		t.Errorf("Expected Mode=ModeSave, got %v", confirmed.Mode)
-	}
+	assert.True(t, strings.HasSuffix(confirmed.Filename, "test.json"), "expected Filename to end with 'test.json', got %q", confirmed.Filename)
+	assert.Equal(t, ModeSave, confirmed.Mode, "expected Mode=ModeSave")
 }
 
 func TestFileDialogCancel(t *testing.T) {
 	dialog := NewFileDialog(ModeSave, "test")
 
 	_, cmd := dialog.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if cmd == nil {
-		t.Fatal("Expected command to be returned")
-	}
+	require.NotNil(t, cmd, "expected command to be returned")
 
 	msg := cmd()
 	closeMsg, ok := msg.(CloseDialogMsg)
-	if !ok {
-		t.Fatal("Expected CloseDialogMsg")
-	}
+	require.True(t, ok, "expected CloseDialogMsg")
 
-	if closeMsg.Payload != nil {
-		t.Error("Expected nil Payload for cancel")
-	}
+	assert.Nil(t, closeMsg.Payload, "expected nil Payload for cancel")
 }
 
 func TestFileDialogEmptyFilename(t *testing.T) {
@@ -100,10 +76,6 @@ func TestFileDialogEmptyFilename(t *testing.T) {
 	dialog.FocusInput()
 
 	_, cmd := dialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if cmd != nil {
-		t.Error("Expected nil command for empty filename")
-	}
-	if dialog.ErrMsg == "" {
-		t.Error("Expected error message for empty filename")
-	}
+	assert.Nil(t, cmd, "expected nil command for empty filename")
+	assert.NotEmpty(t, dialog.ErrMsg, "expected error message for empty filename")
 }

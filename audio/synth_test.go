@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/gopxl/beep/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSynthPatchLength(t *testing.T) {
@@ -28,9 +30,7 @@ func TestSynthPatchLength(t *testing.T) {
 		}
 	}
 
-	if total != n {
-		t.Errorf("want %d samples, got %d", n, total)
-	}
+	assert.Equal(t, n, total, "want %d samples", n)
 }
 
 func TestSynthSilentOscillators(t *testing.T) {
@@ -44,9 +44,8 @@ func TestSynthSilentOscillators(t *testing.T) {
 	samples := StreamN(synth.NewPatch(sr, NewNote(BaseA, Octave4).Frequency(), n), n)
 
 	for i, s := range samples {
-		if s[0] != 0 || s[1] != 0 {
-			t.Errorf("sample %d: want 0,0 got %v,%v", i, s[0], s[1])
-		}
+		assert.Equal(t, 0.0, s[0], "sample %d L", i)
+		assert.Equal(t, 0.0, s[1], "sample %d R", i)
 	}
 }
 
@@ -61,9 +60,8 @@ func TestSynthMixerZeroVolume(t *testing.T) {
 	samples := StreamN(synth.NewPatch(sr, NewNote(BaseA, Octave4).Frequency(), n), n)
 
 	for i, s := range samples {
-		if s[0] != 0 || s[1] != 0 {
-			t.Errorf("sample %d: want silent, got %v,%v", i, s[0], s[1])
-		}
+		assert.Equal(t, 0.0, s[0], "sample %d L: want silent", i)
+		assert.Equal(t, 0.0, s[1], "sample %d R: want silent", i)
 	}
 }
 
@@ -85,9 +83,7 @@ func TestSynthMixerBalance(t *testing.T) {
 			break
 		}
 	}
-	if !hasNonZero {
-		t.Error("expected non-zero output with Square osc1 at Volume1=1")
-	}
+	assert.True(t, hasNonZero, "expected non-zero output with Square osc1 at Volume1=1")
 }
 
 func TestSynthFilterOff(t *testing.T) {
@@ -109,9 +105,7 @@ func TestSynthFilterOff(t *testing.T) {
 	rmsOff := rms(samplesOff)
 	rmsLP := rms(samplesLP)
 
-	if rmsOff <= rmsLP {
-		t.Errorf("FilterOff RMS (%v) should exceed LP-filtered RMS (%v)", rmsOff, rmsLP)
-	}
+	assert.Greater(t, rmsOff, rmsLP, "FilterOff RMS should exceed LP-filtered RMS")
 }
 
 func TestSynthDetuneShiftsFrequency(t *testing.T) {
@@ -143,9 +137,7 @@ func TestSynthDetuneShiftsFrequency(t *testing.T) {
 	cNone := countCrossings(samplesNone)
 	cUp := countCrossings(samplesUp)
 	ratio := float64(cUp) / float64(cNone)
-	if ratio < 1.8 || ratio > 2.2 {
-		t.Errorf("expected ~2x crossings for +1200 cent detune, got ratio %v (%d vs %d)", ratio, cUp, cNone)
-	}
+	assert.InDelta(t, 2.0, ratio, 0.2, "expected ~2x crossings for +1200 cent detune (%d vs %d)", cUp, cNone)
 }
 
 func TestSynthDetuneZeroNoEffect(t *testing.T) {
@@ -158,9 +150,7 @@ func TestSynthDetuneZeroNoEffect(t *testing.T) {
 	mixer := Mixer{Volume1: 1.0, Volume2: 0}
 	synth := NewSynth(osc, env, osc, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, mixer, NewFilter(), LFO{}, LFO{}, LFO{})
 	s := StreamN(synth.NewPatch(sr, 440.0, n), n)
-	if len(s) == 0 {
-		t.Fatal("no samples")
-	}
+	require.NotEmpty(t, s, "no samples")
 }
 
 func TestPatchSetFrequencyRetunes(t *testing.T) {
@@ -192,9 +182,7 @@ func TestPatchSetFrequencyRetunes(t *testing.T) {
 	c1 := countCrossings(first)
 	c2 := countCrossings(second)
 	ratio := float64(c2) / float64(c1)
-	if ratio < 1.8 || ratio > 2.2 {
-		t.Errorf("expected ~2x crossings after SetFrequency(880), got ratio %v (%d vs %d)", ratio, c2, c1)
-	}
+	assert.InDelta(t, 2.0, ratio, 0.2, "expected ~2x crossings after SetFrequency(880) (%d vs %d)", c2, c1)
 }
 
 func TestPatchSetFrequencyPreservesDetune(t *testing.T) {
@@ -225,9 +213,7 @@ func TestPatchSetFrequencyPreservesDetune(t *testing.T) {
 		return count
 	}
 	ratio := float64(countCrossings(second)) / float64(countCrossings(first))
-	if ratio < 1.8 || ratio > 2.2 {
-		t.Errorf("expected ~2x crossings after doubling frequency (detune preserved), got ratio %v", ratio)
-	}
+	assert.InDelta(t, 2.0, ratio, 0.2, "expected ~2x crossings after doubling frequency (detune preserved)")
 }
 
 func TestPatchReset(t *testing.T) {
@@ -253,10 +239,6 @@ func TestPatchReset(t *testing.T) {
 	attackStartSamples := StreamN(patch, 10)
 	attackStartRMS := rms(attackStartSamples)
 
-	if sustainRMS < 0.5 {
-		t.Errorf("expected sustain RMS near 1, got %v", sustainRMS)
-	}
-	if attackStartRMS > sustainRMS*0.3 {
-		t.Errorf("expected attack-start RMS much lower than sustain after Reset, got %v vs %v", attackStartRMS, sustainRMS)
-	}
+	assert.GreaterOrEqual(t, sustainRMS, 0.5, "expected sustain RMS near 1")
+	assert.Less(t, attackStartRMS, sustainRMS*0.3, "expected attack-start RMS much lower than sustain after Reset")
 }

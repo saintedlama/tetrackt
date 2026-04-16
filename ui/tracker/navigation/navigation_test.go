@@ -1,136 +1,94 @@
 package navigation
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestNew_InitializesCursorAtOrigin(t *testing.T) {
 	g := New(10, 4, 5)
-	if row, track := g.cursorPosition(); row != 0 || track != 0 {
-		t.Fatalf("expected cursor at (0,0), got (%d,%d)", row, track)
-	}
+	row, track := g.cursorPosition()
+	assert.Equal(t, 0, row, "expected cursor row 0")
+	assert.Equal(t, 0, track, "expected cursor track 0")
 }
 
 func TestMove_Down_FromOrigin(t *testing.T) {
 	g := New(10, 4, 5)
 	result := g.Move(0, 1)
-	if !result.Changed() {
-		t.Fatal("expected move to succeed")
-	}
-	if !result.RowChanged {
-		t.Fatal("expected row to change")
-	}
-	if result.TrackChanged {
-		t.Fatal("expected track to stay the same")
-	}
-	if g.CursorRow() != 1 {
-		t.Fatalf("expected row 1, got %d", g.CursorRow())
-	}
+	assert.True(t, result.Changed(), "expected move to succeed")
+	assert.True(t, result.RowChanged, "expected row to change")
+	assert.False(t, result.TrackChanged, "expected track to stay the same")
+	assert.Equal(t, 1, g.CursorRow(), "expected row 1")
 }
 
 func TestMove_Down_AtBottom_Clamps(t *testing.T) {
 	g := New(10, 4, 5)
 	g.SetCursorPosition(9, 0)
 	result := g.Move(0, 1)
-	if result.Changed() {
-		t.Fatal("expected move to be clamped")
-	}
-	if g.CursorRow() != 9 {
-		t.Fatalf("expected row 9, got %d", g.CursorRow())
-	}
+	assert.False(t, result.Changed(), "expected move to be clamped")
+	assert.Equal(t, 9, g.CursorRow(), "expected row 9")
 }
 
 func TestMove_Up_AtTop_Clamps(t *testing.T) {
 	g := New(10, 4, 5)
 	result := g.Move(0, -1)
-	if result.Changed() {
-		t.Fatal("expected move to be clamped")
-	}
-	if g.CursorRow() != 0 {
-		t.Fatalf("expected row 0, got %d", g.CursorRow())
-	}
+	assert.False(t, result.Changed(), "expected move to be clamped")
+	assert.Equal(t, 0, g.CursorRow(), "expected row 0")
 }
 
 func TestMove_Right_FromOrigin(t *testing.T) {
 	g := New(10, 4, 5)
 	result := g.Move(1, 0)
-	if !result.Changed() {
-		t.Fatal("expected move to succeed")
-	}
-	if result.RowChanged {
-		t.Fatal("expected row to stay the same")
-	}
-	if !result.TrackChanged {
-		t.Fatal("expected track to change")
-	}
-	if g.CursorTrack() != 1 {
-		t.Fatalf("expected track 1, got %d", g.CursorTrack())
-	}
+	assert.True(t, result.Changed(), "expected move to succeed")
+	assert.False(t, result.RowChanged, "expected row to stay the same")
+	assert.True(t, result.TrackChanged, "expected track to change")
+	assert.Equal(t, 1, g.CursorTrack(), "expected track 1")
 }
 
 func TestMove_Right_AtRightmost_Clamps(t *testing.T) {
 	g := New(10, 4, 5)
 	g.SetCursorPosition(0, 3)
 	result := g.Move(1, 0)
-	if result.Changed() {
-		t.Fatal("expected move to be clamped")
-	}
-	if g.CursorTrack() != 3 {
-		t.Fatalf("expected track 3, got %d", g.CursorTrack())
-	}
+	assert.False(t, result.Changed(), "expected move to be clamped")
+	assert.Equal(t, 3, g.CursorTrack(), "expected track 3")
 }
 
 func TestMove_Left_AtLeftmost_Clamps(t *testing.T) {
 	g := New(10, 4, 5)
 	result := g.Move(-1, 0)
-	if result.Changed() {
-		t.Fatal("expected move to be clamped")
-	}
-	if g.CursorTrack() != 0 {
-		t.Fatalf("expected track 0, got %d", g.CursorTrack())
-	}
+	assert.False(t, result.Changed(), "expected move to be clamped")
+	assert.Equal(t, 0, g.CursorTrack(), "expected track 0")
 }
 
 func TestMove_Diagonal(t *testing.T) {
 	g := New(10, 4, 5)
 	result := g.Move(1, 2)
-	if !result.Changed() {
-		t.Fatal("expected move to succeed")
-	}
-	if !result.RowChanged {
-		t.Fatal("expected row to change")
-	}
-	if !result.TrackChanged {
-		t.Fatal("expected track to change")
-	}
-	if g.CursorRow() != 2 || g.CursorTrack() != 1 {
-		t.Fatalf("expected (2,1), got (%d,%d)", g.CursorRow(), g.CursorTrack())
-	}
+	assert.True(t, result.Changed(), "expected move to succeed")
+	assert.True(t, result.RowChanged, "expected row to change")
+	assert.True(t, result.TrackChanged, "expected track to change")
+	assert.Equal(t, 2, g.CursorRow(), "expected row 2")
+	assert.Equal(t, 1, g.CursorTrack(), "expected track 1")
 }
 
 func TestMove_ByViewportHeight(t *testing.T) {
 	g := New(20, 4, 5)
 	vh := g.ViewportHeight()
 	g.Move(0, vh)
-	if g.CursorRow() != 5 {
-		t.Fatalf("expected row 5, got %d", g.CursorRow())
-	}
+	assert.Equal(t, 5, g.CursorRow(), "expected row 5")
 }
 
 func TestViewportScrolls_WhenCursorMovesDown(t *testing.T) {
 	g := New(20, 4, 5)
 	// Move cursor to bottom of initial viewport (row 4)
 	g.SetCursorPosition(4, 0)
-	if g.ViewportRow() != 0 {
-		t.Fatalf("expected viewport at 0, got %d", g.ViewportRow())
-	}
+	assert.Equal(t, 0, g.ViewportRow(), "expected viewport at 0")
 
 	// Move one more down - viewport should scroll
 	g.Move(0, 1)
-	if g.CursorRow() != 5 {
-		t.Fatalf("expected cursor at 5, got %d", g.CursorRow())
-	}
-	if g.ViewportRow() != 1 {
-		t.Fatalf("expected viewport at 1, got %d", g.ViewportRow())
-	}
+	assert.Equal(t, 5, g.CursorRow(), "expected cursor at 5")
+	assert.Equal(t, 1, g.ViewportRow(), "expected viewport at 1")
 }
 
 func TestViewportScrolls_WhenCursorMovesUp(t *testing.T) {
@@ -140,66 +98,51 @@ func TestViewportScrolls_WhenCursorMovesUp(t *testing.T) {
 
 	// Move up to viewport boundary
 	g.SetCursorPosition(viewportStart, 0)
-	if g.ViewportRow() != viewportStart {
-		t.Fatal("viewport should not have moved yet")
-	}
+	assert.Equal(t, viewportStart, g.ViewportRow(), "viewport should not have moved yet")
 
 	// Move one more up - viewport should scroll
 	g.Move(0, -1)
-	if g.ViewportRow() != viewportStart-1 {
-		t.Fatalf("expected viewport to scroll up, got %d", g.ViewportRow())
-	}
+	assert.Equal(t, viewportStart-1, g.ViewportRow(), "expected viewport to scroll up")
 }
 
 func TestSetCursorPosition_ClampsToValid(t *testing.T) {
 	g := New(10, 4, 5)
 	g.SetCursorPosition(100, 100)
-	if g.CursorRow() != 9 || g.CursorTrack() != 3 {
-		t.Fatalf("expected (9,3), got (%d,%d)", g.CursorRow(), g.CursorTrack())
-	}
+	assert.Equal(t, 9, g.CursorRow(), "expected row 9")
+	assert.Equal(t, 3, g.CursorTrack(), "expected track 3")
 }
 
 func TestSetCursorPosition_ClampsNegative(t *testing.T) {
 	g := New(10, 4, 5)
 	g.SetCursorPosition(-5, -5)
-	if g.CursorRow() != 0 || g.CursorTrack() != 0 {
-		t.Fatalf("expected (0,0), got (%d,%d)", g.CursorRow(), g.CursorTrack())
-	}
+	assert.Equal(t, 0, g.CursorRow(), "expected row 0")
+	assert.Equal(t, 0, g.CursorTrack(), "expected track 0")
 }
 
 func TestClearSelection_DeactivatesSelection(t *testing.T) {
 	g := New(10, 4, 5)
 	g.SelectAll()
-	if !g.HasSelection() {
-		t.Fatal("expected selection to be active")
-	}
+	require.True(t, g.HasSelection(), "expected selection to be active")
 	g.ClearSelection()
-	if g.HasSelection() {
-		t.Fatal("expected selection to be cleared")
-	}
+	assert.False(t, g.HasSelection(), "expected selection to be cleared")
 }
 
 func TestSelectAll_SelectsEntireGrid(t *testing.T) {
 	g := New(10, 4, 5)
 	g.SelectAll()
-	if !g.HasSelection() {
-		t.Fatal("expected selection to be active")
-	}
+	require.True(t, g.HasSelection(), "expected selection to be active")
 	minRow, maxRow, minTrack, maxTrack, _ := g.SelectionBounds()
-	if minRow != 0 || maxRow != 9 || minTrack != 0 || maxTrack != 3 {
-		t.Fatalf("expected (0,9,0,3), got (%d,%d,%d,%d)", minRow, maxRow, minTrack, maxTrack)
-	}
+	assert.Equal(t, 0, minRow)
+	assert.Equal(t, 9, maxRow)
+	assert.Equal(t, 0, minTrack)
+	assert.Equal(t, 3, maxTrack)
 }
 
 func TestMoveExtending_StartsSelection(t *testing.T) {
 	g := New(10, 4, 5)
-	if g.HasSelection() {
-		t.Fatal("expected no initial selection")
-	}
+	require.False(t, g.HasSelection(), "expected no initial selection")
 	g.MoveExtending(0, 1)
-	if !g.HasSelection() {
-		t.Fatal("expected selection to be started")
-	}
+	assert.True(t, g.HasSelection(), "expected selection to be started")
 }
 
 func TestMoveExtending_ExtendsSelection(t *testing.T) {
@@ -208,64 +151,53 @@ func TestMoveExtending_ExtendsSelection(t *testing.T) {
 	g.MoveExtending(1, 1)
 
 	minRow, maxRow, minTrack, maxTrack, hasSelection := g.SelectionBounds()
-	if !hasSelection {
-		t.Fatal("expected selection to be active")
-	}
-	if minRow != 0 || maxRow != 2 || minTrack != 0 || maxTrack != 1 {
-		t.Fatalf("expected (0,2,0,1), got (%d,%d,%d,%d)", minRow, maxRow, minTrack, maxTrack)
-	}
+	require.True(t, hasSelection, "expected selection to be active")
+	assert.Equal(t, 0, minRow)
+	assert.Equal(t, 2, maxRow)
+	assert.Equal(t, 0, minTrack)
+	assert.Equal(t, 1, maxTrack)
 }
 
 func TestMove_ClearsSelection(t *testing.T) {
 	g := New(10, 4, 5)
 	g.SelectAll()
 	g.Move(0, 1)
-	if g.HasSelection() {
-		t.Fatal("expected selection to be cleared after normal move")
-	}
+	assert.False(t, g.HasSelection(), "expected selection to be cleared after normal move")
 }
 
 func TestIsSelected_ReturnsTrueForSelectedCells(t *testing.T) {
 	g := New(10, 4, 5)
 	g.SelectAll()
-	if !g.IsSelected(5, 2) {
-		t.Fatal("expected (5,2) to be selected")
-	}
+	assert.True(t, g.IsSelected(5, 2), "expected (5,2) to be selected")
 }
 
 func TestIsSelected_ReturnsFalseWithoutSelection(t *testing.T) {
 	g := New(10, 4, 5)
-	if g.IsSelected(5, 2) {
-		t.Fatal("expected (5,2) to not be selected")
-	}
+	assert.False(t, g.IsSelected(5, 2), "expected (5,2) to not be selected")
 }
 
 func TestSelectionBounds_NoSelection_ReturnsCursor(t *testing.T) {
 	g := New(10, 4, 5)
 	g.SetCursorPosition(3, 2)
 	minRow, maxRow, minTrack, maxTrack, hasSelection := g.SelectionBounds()
-	if hasSelection {
-		t.Fatal("expected hasSelection to be false")
-	}
-	if minRow != 3 || maxRow != 3 || minTrack != 2 || maxTrack != 2 {
-		t.Fatalf("expected (3,3,2,2), got (%d,%d,%d,%d)", minRow, maxRow, minTrack, maxTrack)
-	}
+	assert.False(t, hasSelection, "expected hasSelection to be false")
+	assert.Equal(t, 3, minRow)
+	assert.Equal(t, 3, maxRow)
+	assert.Equal(t, 2, minTrack)
+	assert.Equal(t, 2, maxTrack)
 }
 
 func TestViewportBounds_ReturnsCorrectRange(t *testing.T) {
 	g := New(20, 4, 5)
 	first, last := g.viewportBounds()
-	if first != 0 || last != 4 {
-		t.Fatalf("expected (0,4), got (%d,%d)", first, last)
-	}
+	assert.Equal(t, 0, first)
+	assert.Equal(t, 4, last)
 }
 
 func TestIsCursorVisible_TrueWhenInViewport(t *testing.T) {
 	g := New(20, 4, 5)
 	g.SetCursorPosition(2, 0)
-	if !g.isCursorVisible() {
-		t.Fatal("expected cursor to be visible")
-	}
+	assert.True(t, g.isCursorVisible(), "expected cursor to be visible")
 }
 
 func TestIsCursorVisible_FalseWhenOutsideViewport(t *testing.T) {
@@ -275,76 +207,54 @@ func TestIsCursorVisible_FalseWhenOutsideViewport(t *testing.T) {
 	// Viewport should now be at row 11 (15 - viewportHeight + 1)
 	// Now test if row 0 would be visible (it shouldn't be)
 	g.cursorRow = 0 // directly set without adjusting viewport
-	if g.isCursorVisible() {
-		t.Fatal("expected cursor to not be visible")
-	}
+	assert.False(t, g.isCursorVisible(), "expected cursor to not be visible")
 }
 
 func TestNumRows_ReturnsCorrectValue(t *testing.T) {
 	g := New(10, 4, 5)
-	if g.numRows != 10 {
-		t.Fatalf("expected 10 rows, got %d", g.numRows)
-	}
+	assert.Equal(t, 10, g.numRows, "expected 10 rows")
 }
 
 func TestNumTracks_ReturnsCorrectValue(t *testing.T) {
 	g := New(10, 4, 5)
-	if g.numTracks != 4 {
-		t.Fatalf("expected 4 tracks, got %d", g.numTracks)
-	}
+	assert.Equal(t, 4, g.numTracks, "expected 4 tracks")
 }
 
 func TestViewportHeight_ReturnsCorrectValue(t *testing.T) {
 	g := New(10, 4, 5)
-	if g.ViewportHeight() != 5 {
-		t.Fatalf("expected viewport height 5, got %d", g.ViewportHeight())
-	}
+	assert.Equal(t, 5, g.ViewportHeight(), "expected viewport height 5")
 }
 
 func TestEdgeCase_ZeroRows(t *testing.T) {
 	g := New(0, 4, 5)
-	if g.CursorRow() != 0 {
-		t.Fatalf("expected cursor at 0, got %d", g.CursorRow())
-	}
+	assert.Equal(t, 0, g.CursorRow(), "expected cursor at 0")
 	g.Move(0, 1)
-	if g.CursorRow() != 0 {
-		t.Fatalf("expected cursor to stay at 0, got %d", g.CursorRow())
-	}
+	assert.Equal(t, 0, g.CursorRow(), "expected cursor to stay at 0")
 }
 
 func TestEdgeCase_ZeroTracks(t *testing.T) {
 	g := New(10, 0, 5)
-	if g.CursorTrack() != 0 {
-		t.Fatalf("expected cursor at 0, got %d", g.CursorTrack())
-	}
+	assert.Equal(t, 0, g.CursorTrack(), "expected cursor at 0")
 	g.Move(1, 0)
-	if g.CursorTrack() != 0 {
-		t.Fatalf("expected cursor to stay at 0, got %d", g.CursorTrack())
-	}
+	assert.Equal(t, 0, g.CursorTrack(), "expected cursor to stay at 0")
 }
 
 func TestEdgeCase_ViewportLargerThanGrid(t *testing.T) {
 	g := New(3, 4, 10)
 	g.SetCursorPosition(2, 0)
-	if g.ViewportRow() != 0 {
-		t.Fatalf("expected viewport at 0, got %d", g.ViewportRow())
-	}
+	assert.Equal(t, 0, g.ViewportRow(), "expected viewport at 0")
 }
 
 func TestEdgeCase_SingleRowGrid(t *testing.T) {
 	g := New(1, 4, 5)
 	g.Move(0, 1)
-	if g.CursorRow() != 0 {
-		t.Fatalf("expected cursor to stay at 0, got %d", g.CursorRow())
-	}
+	assert.Equal(t, 0, g.CursorRow(), "expected cursor to stay at 0")
 }
 
 func TestEdgeCase_SingleTrackGrid(t *testing.T) {
 	g := New(10, 1, 5)
 	g.Move(1, 0)
-	if g.CursorTrack() != 0 {
-		t.Fatalf("expected cursor to stay at 0, got %d", g.CursorTrack())
-	}
+	assert.Equal(t, 0, g.CursorTrack(), "expected cursor to stay at 0")
 }
 
 func TestSelectedCells_WithSelection_ReturnsAllCells(t *testing.T) {
@@ -355,9 +265,7 @@ func TestSelectedCells_WithSelection_ReturnsAllCells(t *testing.T) {
 	cells := g.SelectedCells()
 
 	expected := 6 // 3 rows * 2 tracks
-	if len(cells) != expected {
-		t.Fatalf("expected %d cells, got %d", expected, len(cells))
-	}
+	require.Len(t, cells, expected, "expected %d cells", expected)
 
 	// Verify iteration order: rows outer, tracks inner
 	expectedCells := []Cell{
@@ -366,10 +274,8 @@ func TestSelectedCells_WithSelection_ReturnsAllCells(t *testing.T) {
 		{4, 1}, {4, 2},
 	}
 	for i, c := range expectedCells {
-		if cells[i].Row != c.Row || cells[i].Track != c.Track {
-			t.Fatalf("cell %d: expected (%d,%d), got (%d,%d)",
-				i, c.Row, c.Track, cells[i].Row, cells[i].Track)
-		}
+		assert.Equal(t, c.Row, cells[i].Row, "cell %d: expected row %d", i, c.Row)
+		assert.Equal(t, c.Track, cells[i].Track, "cell %d: expected track %d", i, c.Track)
 	}
 }
 
@@ -379,12 +285,9 @@ func TestSelectedCells_NoSelection_ReturnsCursorOnly(t *testing.T) {
 
 	cells := g.SelectedCells()
 
-	if len(cells) != 1 {
-		t.Fatalf("expected 1 cell, got %d", len(cells))
-	}
-	if cells[0].Row != 3 || cells[0].Track != 2 {
-		t.Fatalf("expected (3,2), got (%d,%d)", cells[0].Row, cells[0].Track)
-	}
+	require.Len(t, cells, 1, "expected 1 cell")
+	assert.Equal(t, 3, cells[0].Row)
+	assert.Equal(t, 2, cells[0].Track)
 }
 
 func TestSelectedCells_SingleCellSelection_ReturnsOne(t *testing.T) {
@@ -394,10 +297,7 @@ func TestSelectedCells_SingleCellSelection_ReturnsOne(t *testing.T) {
 
 	cells := g.SelectedCells()
 
-	if len(cells) != 1 {
-		t.Fatalf("expected 1 cell, got %d", len(cells))
-	}
-	if cells[0].Row != 5 || cells[0].Track != 1 {
-		t.Fatalf("expected (5,1), got (%d,%d)", cells[0].Row, cells[0].Track)
-	}
+	require.Len(t, cells, 1, "expected 1 cell")
+	assert.Equal(t, 5, cells[0].Row)
+	assert.Equal(t, 1, cells[0].Track)
 }

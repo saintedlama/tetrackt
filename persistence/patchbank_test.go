@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tetrackt/tetrackt/audio"
 )
 
@@ -40,51 +42,28 @@ func TestPatchBankRoundTrip(t *testing.T) {
 	// Save to a temp file.
 	tmpPath := t.TempDir() + "/test_patchbank.tetrackt"
 	data, err := json.MarshalIndent(bank, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal failed: %v", err)
-	}
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
-		t.Fatalf("write failed: %v", err)
-	}
+	require.NoError(t, err, "marshal failed")
+	require.NoError(t, os.WriteFile(tmpPath, data, 0600), "write failed")
 
 	// Load back.
 	raw, err := os.ReadFile(tmpPath)
-	if err != nil {
-		t.Fatalf("read failed: %v", err)
-	}
+	require.NoError(t, err, "read failed")
 	var loaded PatchBank
-	if err := json.Unmarshal(raw, &loaded); err != nil {
-		t.Fatalf("unmarshal failed: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(raw, &loaded), "unmarshal failed")
 
-	if loaded.Version != 1 {
-		t.Errorf("expected Version=1, got %d", loaded.Version)
-	}
-	if len(loaded.SynthPatches) != 1 {
-		t.Fatalf("expected 1 patch, got %d", len(loaded.SynthPatches))
-	}
+	require.Len(t, loaded.SynthPatches, 1, "expected 1 patch")
+	assert.Equal(t, 1, loaded.Version, "expected Version=1")
+
 	p := loaded.SynthPatches[0]
-	if p.Name != "Cool Bass" {
-		t.Errorf("expected Name='Cool Bass', got %q", p.Name)
-	}
-	if p.Category != "Bass" {
-		t.Errorf("expected Category='Bass', got %q", p.Category)
-	}
-	if !p.IsCustom() {
-		t.Error("expected IsCustom()=true")
-	}
-	if len(p.Tags) != 2 {
-		t.Errorf("expected 2 tags, got %d", len(p.Tags))
-	}
+	assert.Equal(t, "Cool Bass", p.Name, "expected Name='Cool Bass'")
+	assert.Equal(t, "Bass", p.Category, "expected Category='Bass'")
+	assert.True(t, p.IsCustom(), "expected IsCustom()=true")
+	assert.Len(t, p.Tags, 2, "expected 2 tags")
 
 	// Reconstruct synth and check oscillator type round-trips.
 	restored := SynthFromSavedPatch(p)
-	if restored.Oscillator1.Type != audio.Square {
-		t.Errorf("expected Oscillator1=Square, got %v", restored.Oscillator1.Type)
-	}
-	if restored.Oscillator1.PulseWidth != 0.3 {
-		t.Errorf("expected PulseWidth=0.3, got %v", restored.Oscillator1.PulseWidth)
-	}
+	assert.Equal(t, audio.Square, restored.Oscillator1.Type, "expected Oscillator1=Square")
+	assert.Equal(t, 0.3, restored.Oscillator1.PulseWidth, "expected PulseWidth=0.3")
 }
 
 func TestLoadPatchBankMissingFile(t *testing.T) {
@@ -93,15 +72,9 @@ func TestLoadPatchBankMissingFile(t *testing.T) {
 	t.Setenv("USERPROFILE", t.TempDir()) // Windows
 
 	bank, err := LoadPatchBank()
-	if err != nil {
-		t.Fatalf("expected no error for missing file, got %v", err)
-	}
-	if bank.Version != 1 {
-		t.Errorf("expected Version=1, got %d", bank.Version)
-	}
-	if len(bank.SynthPatches) != 0 {
-		t.Errorf("expected empty patches, got %d", len(bank.SynthPatches))
-	}
+	require.NoError(t, err, "expected no error for missing file")
+	assert.Equal(t, 1, bank.Version, "expected Version=1")
+	assert.Empty(t, bank.SynthPatches, "expected empty patches")
 }
 
 func TestLoadPatchBankCorruptJSON(t *testing.T) {
@@ -109,14 +82,10 @@ func TestLoadPatchBankCorruptJSON(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
-	if err := os.WriteFile(home+"/.tetrackt", []byte("{corrupt json"), 0600); err != nil {
-		t.Fatalf("setup failed: %v", err)
-	}
+	require.NoError(t, os.WriteFile(home+"/.tetrackt", []byte("{corrupt json"), 0600), "setup failed")
 
 	_, err := LoadPatchBank()
-	if err == nil {
-		t.Error("expected error for corrupt JSON, got nil")
-	}
+	require.Error(t, err, "expected error for corrupt JSON")
 }
 
 func TestPatchBankSaveAtomic(t *testing.T) {
@@ -125,21 +94,15 @@ func TestPatchBankSaveAtomic(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 
 	bank := &PatchBank{Version: 1, SynthPatches: []SavedPatch{{Name: "Test", Tags: []string{"Custom"}}}}
-	if err := bank.Save(); err != nil {
-		t.Fatalf("Save failed: %v", err)
-	}
+	require.NoError(t, bank.Save(), "Save failed")
 
 	// Temp file should not exist after successful save.
-	if _, err := os.Stat(home + "/.tetrackt.tmp"); !os.IsNotExist(err) {
-		t.Error("expected temp file to be removed after save")
-	}
+	_, err := os.Stat(home + "/.tetrackt.tmp")
+	assert.True(t, os.IsNotExist(err), "expected temp file to be removed after save")
 
 	// Final file should exist and be valid JSON.
 	loaded, err := LoadPatchBank()
-	if err != nil {
-		t.Fatalf("LoadPatchBank after Save failed: %v", err)
-	}
-	if len(loaded.SynthPatches) != 1 || loaded.SynthPatches[0].Name != "Test" {
-		t.Errorf("unexpected loaded patches: %+v", loaded.SynthPatches)
-	}
+	require.NoError(t, err, "LoadPatchBank after Save failed")
+	require.Len(t, loaded.SynthPatches, 1)
+	assert.Equal(t, "Test", loaded.SynthPatches[0].Name)
 }
