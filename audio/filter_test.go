@@ -31,7 +31,7 @@ func TestNewFilterDefaults(t *testing.T) {
 
 func TestFilterOffPassthrough(t *testing.T) {
 	sr := beep.SampleRate(44100)
-	src := constStreamer(1.0)
+	src := ConstantStreamer(1.0)
 	result := NewFilterStreamer(src, sr, Filter{Type: FilterOff, Cutoff: 0.5})
 	if result != src {
 		t.Error("FilterOff should return the original streamer (pointer equality)")

@@ -97,7 +97,7 @@ func (g *gatedEnvelopeGenerator) Stream(samples [][2]float64) (int, bool) {
 	defer g.mu.Unlock()
 
 	if g.state == gateIdle {
-		for i := 0; i < n; i++ {
+		for i := range n {
 			samples[i][0] = 0
 			samples[i][1] = 0
 		}
@@ -107,7 +107,7 @@ func (g *gatedEnvelopeGenerator) Stream(samples [][2]float64) (int, bool) {
 		return 0, false
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		samples[i][0] *= g.currentLevel
 		samples[i][1] *= g.currentLevel
 		g.currentLevel *= g.multiplier

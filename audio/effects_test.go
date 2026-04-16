@@ -4,32 +4,13 @@ import (
 	"math"
 	"testing"
 	"time"
-
-	"github.com/gopxl/beep/v2"
 )
 
-// constStreamer returns a beep.Streamer that always outputs v on both channels.
-type constStreamerType struct{ v float64 }
-
-func (c *constStreamerType) Stream(samples [][2]float64) (int, bool) {
-	for i := range samples {
-		samples[i][0] = c.v
-		samples[i][1] = c.v
-	}
-	return len(samples), true
-}
-
-func (c *constStreamerType) Err() error { return nil }
-
-func constStreamer(v float64) beep.Streamer {
-	return &constStreamerType{v: v}
-}
-
 func TestEnvelopeAttackRises(t *testing.T) {
-	const sr = beep.SampleRate(1000)
+	const sr = SampleRate(1000)
 	const n = 1000
 	// At 1000 Hz, Attack=1s means all 1000 samples are in the attack stage
-	env := NewEnvelope(constStreamer(1.0), sr, n, Envelope{Attack: 1 * time.Second})
+	env := NewEnvelope(ConstantStreamer(1.0), sr, n, Envelope{Attack: 1 * time.Second})
 	samples := streamN(env, n)
 
 	first := samples[0][0]
@@ -44,10 +25,10 @@ func TestEnvelopeAttackRises(t *testing.T) {
 }
 
 func TestEnvelopeSustainFlat(t *testing.T) {
-	const sr = beep.SampleRate(1000)
+	const sr = SampleRate(1000)
 	const n = 100
 	// Attack=0, Decay=0, Release=0 → all samples at sustain level
-	env := NewEnvelope(constStreamer(1.0), sr, n, Envelope{Sustain: 0.5})
+	env := NewEnvelope(ConstantStreamer(1.0), sr, n, Envelope{Sustain: 0.5})
 	samples := streamN(env, n)
 
 	for i, s := range samples {
@@ -58,10 +39,10 @@ func TestEnvelopeSustainFlat(t *testing.T) {
 }
 
 func TestEnvelopeReleaseFallsToZero(t *testing.T) {
-	const sr = beep.SampleRate(1000)
+	const sr = SampleRate(1000)
 	const n = 1000
 	// At 1000 Hz, Release=1s means all 1000 samples are release, level falls from 0.5 to ~0.0001
-	env := NewEnvelope(constStreamer(1.0), sr, n, Envelope{Sustain: 0.5, Release: 1 * time.Second})
+	env := NewEnvelope(ConstantStreamer(1.0), sr, n, Envelope{Sustain: 0.5, Release: 1 * time.Second})
 	samples := streamN(env, n)
 
 	last := samples[n-1][0]
@@ -71,17 +52,17 @@ func TestEnvelopeReleaseFallsToZero(t *testing.T) {
 }
 
 func TestEnvelopeStagesProgression(t *testing.T) {
-	const sr = beep.SampleRate(1000)
+	const sr = SampleRate(1000)
 	const n = 100
 	// At 1000 Hz: 25ms = 25 samples per stage
-	env := NewEnvelope(constStreamer(1.0), sr, n, Envelope{
+	env := NewEnvelope(ConstantStreamer(1.0), sr, n, Envelope{
 		Attack: 25 * time.Millisecond, Decay: 25 * time.Millisecond, Sustain: 0.5, Release: 25 * time.Millisecond,
 	})
 	eg := env.(*envelopeGenerator)
 
 	buf := make([][2]float64, 1)
 
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		env.Stream(buf)
 		if eg.currentStage != StageAttack {
 			t.Errorf("sample %d: expected StageAttack, got %v", i, eg.currentStage)
@@ -113,7 +94,7 @@ func TestCalculateMultiplier(t *testing.T) {
 	m := calculateMultiplier(start, end, n)
 
 	level := start
-	for i := 0; i < n; i++ {
+	for range n {
 		level *= m
 	}
 	// The formula is a first-order approximation; accept 0.5% relative error

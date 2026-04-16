@@ -11,11 +11,17 @@ import (
 	"github.com/tetrackt/tetrackt/ui/common"
 )
 
+type panelDef struct {
+	Title string
+	Color color.Color
+	Child ui.Component
+}
+
 // SynthScreen is the synthesizer editor screen containing the five synth panels.
 // It owns panel navigation state (which panel is active) that was previously
 // held as InputMode in main.go.
 type SynthScreen struct {
-	panels        []ui.Panel
+	panels        []panelDef
 	ActivePanel   int // 0=Osc1, 1=Env1, 2=Osc2, 3=Env2, 4=Mixer
 	patchBankView *SynthPatchBankView
 }
@@ -23,18 +29,18 @@ type SynthScreen struct {
 // NewSynthScreen creates a new SynthScreen for the given synth instance.
 // Panels are constructed internally from the synth's initial state.
 func NewSynthScreen(synth *audio.Synth) *SynthScreen {
-	panels := []ui.Panel{
-		ui.NewPanel("Oscillator 1", common.ColorAccentPrimary, NewOscillatorModel(synth.Oscillator1)),
-		ui.NewPanel("Envelope 1", common.ColorAccentPrimary, NewEnvelopeModel(synth.Envelope1)),
-		ui.NewPanel("LFO 1", common.ColorAccentPrimary, NewLFOModel(synth.LFO1)),
-		ui.NewPanel("Oscillator 2", common.ColorAccentEnvelope, NewOscillatorModel(synth.Oscillator2)),
-		ui.NewPanel("Envelope 2", common.ColorAccentEnvelope, NewEnvelopeModel(synth.Envelope2)),
-		ui.NewPanel("LFO 2", common.ColorAccentEnvelope, NewLFOModel(synth.LFO2)),
-		ui.NewPanel("Oscillator 3", common.ColorAccentPlay, NewOscillatorModel(synth.Oscillator3)),
-		ui.NewPanel("Envelope 3", common.ColorAccentPlay, NewEnvelopeModel(synth.Envelope3)),
-		ui.NewPanel("LFO 3", common.ColorAccentPlay, NewLFOModel(synth.LFO3)),
-		ui.NewPanel("Mixer", common.ColorAccentModulation, NewMixer(synth.Mixer, synth.Portamento)),
-		ui.NewPanel("Filter", common.ColorAccentModulation, NewFilterModel(synth.Filter)),
+	panels := []panelDef{
+		{Title: "Oscillator 1", Color: common.ColorAccentPrimary, Child: NewOscillatorModel(synth.Oscillator1)},
+		{Title: "Envelope 1", Color: common.ColorAccentPrimary, Child: NewEnvelopeModel(synth.Envelope1)},
+		{Title: "LFO 1", Color: common.ColorAccentPrimary, Child: NewLFOModel(synth.LFO1)},
+		{Title: "Oscillator 2", Color: common.ColorAccentEnvelope, Child: NewOscillatorModel(synth.Oscillator2)},
+		{Title: "Envelope 2", Color: common.ColorAccentEnvelope, Child: NewEnvelopeModel(synth.Envelope2)},
+		{Title: "LFO 2", Color: common.ColorAccentEnvelope, Child: NewLFOModel(synth.LFO2)},
+		{Title: "Oscillator 3", Color: common.ColorAccentPlay, Child: NewOscillatorModel(synth.Oscillator3)},
+		{Title: "Envelope 3", Color: common.ColorAccentPlay, Child: NewEnvelopeModel(synth.Envelope3)},
+		{Title: "LFO 3", Color: common.ColorAccentPlay, Child: NewLFOModel(synth.LFO3)},
+		{Title: "Mixer", Color: common.ColorAccentModulation, Child: NewMixer(synth.Mixer, synth.Portamento)},
+		{Title: "Filter", Color: common.ColorAccentModulation, Child: NewFilterModel(synth.Filter)},
 	}
 	return &SynthScreen{
 		panels:        panels,
@@ -75,7 +81,7 @@ func (s *SynthScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 
 		// Forward to active panel; convert any component update into SynthUpdated.
 		var cmd tea.Cmd
-		s.panels[s.ActivePanel], cmd = s.panels[s.ActivePanel].Update(msg)
+		s.panels[s.ActivePanel].Child, cmd = s.panels[s.ActivePanel].Child.Update(msg)
 		return s, s.toSynthUpdated(cmd)
 
 	case ui.SynthUpdated:
@@ -197,11 +203,20 @@ func (s *SynthScreen) View() string {
 // renderVoice renders a voice group with a colored horizontal rule above
 // and a left-edge ▌ strip in the voice color beside the panels.
 func (s *SynthScreen) renderVoice(clr color.Color, panelIndices ...int) string {
-	// Render all panels in the row.
+	// Render all panels in the row with equalised content heights.
+	contents := make([]string, len(panelIndices))
+	maxH := 0
+	for i, idx := range panelIndices {
+		contents[i] = s.panels[idx].Child.View()
+		if h := lipgloss.Height(contents[i]); h > maxH {
+			maxH = h
+		}
+	}
 	parts := make([]string, len(panelIndices))
 	for i, idx := range panelIndices {
 		p := s.panels[idx]
-		parts[i] = ui.RenderPanel(p.Title, p.Color, p.Child.View(), idx == s.ActivePanel)
+		content := lipgloss.NewStyle().Height(maxH).Render(contents[i])
+		parts[i] = ui.RenderPanel(p.Title, p.Color, content, idx == s.ActivePanel)
 	}
 	panels := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 
