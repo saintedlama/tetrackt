@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
-	ui "github.com/tetrackt/tetrackt/ui"
+	"github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 )
 
@@ -145,7 +145,7 @@ func (s *SynthScreen) Env2() *EnvelopeModel    { return s.panels[4].Child.(*Enve
 func (s *SynthScreen) LFO2() *LFOModel         { return s.panels[5].Child.(*LFOModel) }
 func (s *SynthScreen) Osc3() *OscillatorModel  { return s.panels[6].Child.(*OscillatorModel) }
 func (s *SynthScreen) Env3() *EnvelopeModel    { return s.panels[7].Child.(*EnvelopeModel) }
-func (s *SynthScreen) LFO3Screen() *LFOModel   { return s.panels[8].Child.(*LFOModel) }
+func (s *SynthScreen) LFO3() *LFOModel         { return s.panels[8].Child.(*LFOModel) }
 func (s *SynthScreen) GetMixer() *Mixer        { return s.panels[9].Child.(*Mixer) }
 func (s *SynthScreen) GetFilter() *FilterModel { return s.panels[10].Child.(*FilterModel) }
 
@@ -159,7 +159,7 @@ func (s *SynthScreen) ApplyTrackChange(msg ui.TrackChanged) {
 	s.Env2().Envelope = synth.Envelope2
 	s.Osc3().Oscillator = normalizeOscillator(synth.Oscillator3)
 	s.Env3().Envelope = synth.Envelope3
-	s.LFO3Screen().LFO = synth.LFO3
+	s.LFO3().LFO = synth.LFO3
 	s.GetMixer().SetMixer(synth.Mixer)
 	s.GetMixer().SetPortamento(synth.Portamento)
 	s.GetFilter().Filter = synth.Filter
@@ -245,11 +245,8 @@ func (s *SynthScreen) Help() []ui.HelpSection {
 
 // GetSynth builds and returns an audio.Synth from the current panel state.
 func (s *SynthScreen) GetSynth() *audio.Synth {
-	synth := audio.NewSynth(s.Osc1().Oscillator, s.Env1().Envelope, s.Osc2().Oscillator, s.Env2().Envelope, s.GetMixer().Mixer, s.GetFilter().Filter, s.LFO1().LFO, s.LFO2().LFO)
+	synth := audio.NewSynth(s.Osc1().Oscillator, s.Env1().Envelope, s.Osc2().Oscillator, s.Env2().Envelope, s.Osc3().Oscillator, s.Env3().Envelope, s.GetMixer().Mixer, s.GetFilter().Filter, s.LFO1().LFO, s.LFO2().LFO, s.LFO3().LFO)
 	synth.Portamento = s.GetMixer().Portamento
-	synth.Oscillator3 = s.Osc3().Oscillator
-	synth.Envelope3 = s.Env3().Envelope
-	synth.LFO3 = s.LFO3Screen().LFO
 	synth.FilterEnvelope = s.GetFilter().FilterEnvelope
 	return synth
 }

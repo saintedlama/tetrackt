@@ -192,10 +192,13 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 				audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
 				audio.Oscillator{Type: audio.Silent},
 				audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
+				audio.Oscillator{Type: audio.Silent},
+				audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
 				audio.Mixer{Volume1: 1.0, Volume2: 1.0},
 				audio.NewFilter(),
 				audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0, Dest: audio.ModPitch},
 				audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0, Dest: audio.ModVolume},
+				audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Depth: 0, Delay: 0, Dest: audio.ModPitch},
 			),
 			Rows: make([]TrackRow, numRows),
 		}

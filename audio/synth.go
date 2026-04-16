@@ -16,6 +16,8 @@ type SampleRate = beep.SampleRate
 // don't need to import beep directly.
 type Streamer = beep.Streamer
 
+type StreamerFunc = beep.StreamerFunc
+
 // Synth represents the audio synthesis engine (instrument patch definition).
 type Synth struct {
 	Oscillator1    Oscillator
@@ -34,16 +36,19 @@ type Synth struct {
 }
 
 // NewSynth creates a new synthesis engine
-func NewSynth(oscillator1 Oscillator, envelope1 Envelope, oscillator2 Oscillator, envelope2 Envelope, mixer Mixer, filter Filter, lfo1, lfo2 LFO) *Synth {
+func NewSynth(oscillator1 Oscillator, envelope1 Envelope, oscillator2 Oscillator, envelope2 Envelope, oscillator3 Oscillator, envelope3 Envelope, mixer Mixer, filter Filter, lfo1, lfo2, lfo3 LFO) *Synth {
 	return &Synth{
 		Oscillator1: oscillator1,
 		Envelope1:   envelope1,
 		Oscillator2: oscillator2,
 		Envelope2:   envelope2,
+		Oscillator3: oscillator3,
+		Envelope3:   envelope3,
 		Mixer:       mixer,
 		Filter:      filter,
 		LFO1:        lfo1,
 		LFO2:        lfo2,
+		LFO3:        lfo3,
 	}
 }
 

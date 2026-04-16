@@ -233,15 +233,15 @@ func fromSavedSynth(s SavedSynth) *audio.Synth {
 		fromSavedEnvelope(s.Envelope1),
 		fromSavedOscillator(s.Oscillator2),
 		fromSavedEnvelope(s.Envelope2),
+		fromSavedOscillator(s.Oscillator3),
+		fromSavedEnvelope(s.Envelope3),
 		fromSavedMixer(s.Mixer),
 		fromSavedFilter(s.Filter),
 		fromSavedLFO(s.LFO1),
 		fromSavedLFO(s.LFO2),
+		fromSavedLFO(s.LFO3),
 	)
 	synth.Portamento = s.Portamento
-	synth.Oscillator3 = fromSavedOscillator(s.Oscillator3)
-	synth.Envelope3 = fromSavedEnvelope(s.Envelope3)
-	synth.LFO3 = fromSavedLFO(s.LFO3)
 	synth.FilterEnvelope = fromSavedFilterEnvelope(s.FilterEnvelope)
 	return synth
 }

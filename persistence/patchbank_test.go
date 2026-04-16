@@ -16,9 +16,12 @@ func TestPatchBankRoundTrip(t *testing.T) {
 		audio.Envelope{Attack: 10 * time.Millisecond, Decay: 50 * time.Millisecond, Sustain: 0.7, Release: 100 * time.Millisecond},
 		audio.Oscillator{Type: audio.Sine},
 		audio.Envelope{Attack: 5 * time.Millisecond, Decay: 20 * time.Millisecond, Sustain: 0.5, Release: 80 * time.Millisecond},
+		audio.Oscillator{Type: audio.Silent},
+		audio.Envelope{Sustain: 1.0},
 		audio.Mixer{Volume1: 0.8, Volume2: 0.4},
 		audio.Filter{Type: audio.FilterLowPass, Cutoff: 1000, Resonance: 0.5},
 		audio.LFO{Rate: 2.0, Depth: 0.3},
+		audio.LFO{},
 		audio.LFO{},
 	)
 

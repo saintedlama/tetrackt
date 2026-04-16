@@ -5,8 +5,9 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
-	ui "github.com/tetrackt/tetrackt/ui"
+	"github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 )
 
@@ -77,16 +78,10 @@ func (m *EnvelopeModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 func (m *EnvelopeModel) adjustEnvelopeValue(delta float64) {
 	switch m.envelopeField {
 	case EnvelopeAttack:
-		d := m.Envelope.Attack + time.Duration(delta*float64(time.Second))
-		if d < 0 {
-			d = 0
-		}
+		d := max(m.Envelope.Attack+time.Duration(delta*float64(time.Second)), 0)
 		m.Envelope.Attack = d
 	case EnvelopeDecay:
-		d := m.Envelope.Decay + time.Duration(delta*float64(time.Second))
-		if d < 0 {
-			d = 0
-		}
+		d := max(m.Envelope.Decay+time.Duration(delta*float64(time.Second)), 0)
 		m.Envelope.Decay = d
 	case EnvelopeSustain:
 		newValue := m.Envelope.Sustain + delta
@@ -97,22 +92,20 @@ func (m *EnvelopeModel) adjustEnvelopeValue(delta float64) {
 		}
 		m.Envelope.Sustain = newValue
 	case EnvelopeRelease:
-		d := m.Envelope.Release + time.Duration(delta*float64(time.Second))
-		if d < 0 {
-			d = 0
-		}
+		d := max(m.Envelope.Release+time.Duration(delta*float64(time.Second)), 0)
 		m.Envelope.Release = d
 	}
 }
 
 func (m *EnvelopeModel) View() string {
-	envView := strings.Builder{}
+	inputs := strings.Join([]string{
+		common.RenderKnobDurationSelected("Attack", m.Envelope.Attack, m.envelopeField == EnvelopeAttack),
+		common.RenderKnobDurationSelected("Decay", m.Envelope.Decay, m.envelopeField == EnvelopeDecay),
+		common.RenderKnobSelected("Sustain", m.Envelope.Sustain, m.envelopeField == EnvelopeSustain),
+		common.RenderKnobDurationSelected("Release", m.Envelope.Release, m.envelopeField == EnvelopeRelease),
+	}, "\n")
 
-	envView.WriteString(common.RenderKnobDurationSelected("Attack", m.Envelope.Attack, m.envelopeField == EnvelopeAttack) + "\n")
-	envView.WriteString(common.RenderKnobDurationSelected("Decay", m.Envelope.Decay, m.envelopeField == EnvelopeDecay) + "\n")
-	envView.WriteString(common.RenderKnobSelected("Sustain", m.Envelope.Sustain, m.envelopeField == EnvelopeSustain) + "\n")
-	envView.WriteString(common.RenderKnobDurationSelected("Release", m.Envelope.Release, m.envelopeField == EnvelopeRelease) + "\n")
-	// Blank 5th line keeps all voice panels (Osc/Env/LFO) the same height.
+	graph := RenderADSRGraph(m.Envelope, 20, 4)
 
-	return envView.String()
+	return lipgloss.JoinHorizontal(lipgloss.Top, inputs, " ", graph)
 }
