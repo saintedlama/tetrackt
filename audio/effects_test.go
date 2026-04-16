@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEnvelopeAttackRises(t *testing.T) {
@@ -48,6 +50,10 @@ func TestEnvelopeReleaseFallsToZero(t *testing.T) {
 	last := samples[n-1][0]
 	if last > 0.001 {
 		t.Errorf("last release sample should be near 0, got %v", last)
+	}
+
+	for i := 1; i < n; i++ {
+		assert.Less(t, samples[i][0], samples[i-1][0], "release sample %d (%v) should be less than sample %d (%v)", i, samples[i][0], i-1, samples[i-1][0])
 	}
 }
 
