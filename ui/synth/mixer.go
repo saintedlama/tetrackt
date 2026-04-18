@@ -85,8 +85,8 @@ var mixerSelectedStyle = lipgloss.NewStyle().
 var mixerMutedStyle = lipgloss.NewStyle().Foreground(common.ColorAccentWarning)
 var mixerActiveStyle = lipgloss.NewStyle().Foreground(common.ColorAccentPlay)
 
-func muteIndicator(muted bool) string {
-	if muted {
+func muteIndicator(muted bool, volume float64) string {
+	if muted || volume == 0 {
 		return mixerMutedStyle.Render("[M]")
 	}
 	return mixerActiveStyle.Render("[ ]")
@@ -111,7 +111,7 @@ func (m *Mixer) View() string {
 		lbl("Osc1", m.selected == 0),
 		m.volBar1.View(),
 		int(math.Round(m.Mixer.Volume1*100)),
-		muteIndicator(m.Mixer.Mute1),
+		muteIndicator(m.Mixer.Mute1, m.Mixer.Volume1),
 	))
 	sb.WriteString(fmt.Sprintf("%s %s %+.2f\n",
 		lbl("Pan1", m.selected == 1),
@@ -124,7 +124,7 @@ func (m *Mixer) View() string {
 		lbl("Osc2", m.selected == 2),
 		m.volBar2.View(),
 		int(math.Round(m.Mixer.Volume2*100)),
-		muteIndicator(m.Mixer.Mute2),
+		muteIndicator(m.Mixer.Mute2, m.Mixer.Volume2),
 	))
 	sb.WriteString(fmt.Sprintf("%s %s %+.2f\n",
 		lbl("Pan2", m.selected == 3),
@@ -137,7 +137,7 @@ func (m *Mixer) View() string {
 		lbl("Osc3", m.selected == 4),
 		m.volBar3.View(),
 		int(math.Round(m.Mixer.Volume3*100)),
-		muteIndicator(m.Mixer.Mute3),
+		muteIndicator(m.Mixer.Mute3, m.Mixer.Volume3),
 	))
 	sb.WriteString(fmt.Sprintf("%s %s %+.2f\n",
 		lbl("Pan3", m.selected == 5),
@@ -177,7 +177,7 @@ func (m *Mixer) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			if m.selected < mixerNumRows-1 {
 				m.selected++
 			}
-		case "m":
+		case "enter":
 			switch m.selected {
 			case 0:
 				m.Mixer.Mute1 = !m.Mixer.Mute1
