@@ -1,62 +1,23 @@
 # Tetrackt
 
-Tetrackt is a terminal tracker for people who like hex, pulse waves, acid squelch, FM-adjacent weirdness, and the moment a tiny pattern suddenly turns into a whole soundtrack.
+Tetrackt is a noise maker for the command line. A creative playground for whisking crazy sounds together — not for making great music, but for making interesting ones. It is not a chiptune tracker, a sequencer, or a DAW. It is a noise maker.
 
-It gives you a fast tracker workflow on one side and a proper built-in synth engine on the other: per-track instruments, three oscillators, envelopes, filters, LFO routing, patch browsing, live playback, and WAV export without leaving the app.
+## What's inside
 
-## Why it rips
+Three oscillators per patch. Detune them against each other, run them through a filter, slap an LFO on the cutoff, and watch something weird happen. That's the idea.
 
-- Tracker-first workflow with fast keyboard editing, block selection, transpose, copy/cut/paste, and inline effect entry.
-- Per-track synth design instead of fixed playback samples.
-- Three-oscillator synth engine with pulse width, detune, wavetable tones, noise, periodic noise, envelopes, and portamento.
-- Modulation that can target pitch, volume, cutoff, pulse width, and detune.
-- Filter section with low-pass, high-pass, and band-pass modes plus filter envelope support.
-- Mixer character modes including linear summing, an NES-style nonlinear pulse mix, and soft clipping for dirtier tones.
-- Built-in patch bank full of leads, basses, pads, arps, drums, 808/909-style hits, and game-style SFX.
-- Save songs as JSON modules or render them directly to `.wav`.
-
-## Install
-
-Grab a prebuilt binary from GitHub Releases:
-
-- <https://github.com/saintedlama/tetrackt/releases>
-
-Or build it yourself:
-
-```sh
-go build .
-```
-
-Run the resulting binary from the project directory or wherever you unpacked it.
-
-## First boot
-
-Tetrackt already ships with music in the box.
-
-- Press `Ctrl+l` to open the load dialog.
-- Load `Quickstart` if you want a fast orientation.
-- Load `Demo Song` if you want to hear the machine stretch a bit.
-- You can also load external module files such as `modules/quickstart.json` and `modules/chiptune-demo.json`.
-
-## What is actually inside the synth
-
-This is not a token “retro” sound toggle. The synth engine in `audio/` is a real signal path:
-
-- up to **three oscillators per patch**
-- oscillator types including **sine, square, triangle, saw, reverse saw, noise, periodic noise, and wavetable**
-- **band-limited wavetable tones** for sounds like soft saw, soft square, organ, glass, bass, strings, flute, brass, chime, and voice-like spectra
-- per-oscillator **ADSR envelopes**
-- **LFO routing** to pitch, volume, cutoff, pulse width, and detune
-- **filter modulation** via both LFO and filter envelope
-- **portamento/glide**
-- per-oscillator **volume and stereo pan**, plus master volume
-- selectable mix character: **Linear**, **NES**, or **Clip**
-
-That means you can build straight-up chip leads, unstable detuned pads, fake SID growls, percussive noise hits, or soft analog-ish textures without changing tools.
+- Three oscillators: sine, square, triangle, saw, reverse saw, noise, periodic noise, and wavetable
+- Band-limited wavetable tones for soft saw, organ, glass, bass, strings, flute, brass, chime, and voice-like stuff
+- Per-oscillator ADSR envelopes
+- LFO routing to pitch, volume, cutoff, pulse width, and detune
+- Filter with low-pass, high-pass, and band-pass modes plus its own envelope
+- Portamento/glide
+- Per-oscillator volume and pan, plus master volume
+- Mix character: linear summing, NES-style nonlinear pulse mix, or soft clipping for dirtier tones
 
 ## Patch bank
 
-The synth screen has a patch bank (`b`) with built-in instruments grouped into categories like:
+Hit `b` on the synth screen to open the patch browser. It ships with a bunch of presets grouped into categories:
 
 - Lead
 - Bass
@@ -65,39 +26,25 @@ The synth screen has a patch bank (`b`) with built-in instruments grouped into c
 - Percussive
 - SFX
 
-The built-in presets cover a lot of territory: NES/Game Boy/C64-flavored patches, arcade tones, analog-style pads and basses, plus drum-machine-inspired kits like 808 and 909 style hits.
+NES/Game Boy/C64 flavors, arcade tones, analog-style pads and basses, 808 and 909 style hits. Start from one of those and break it until it sounds wrong in a good way.
 
-The patch browser also supports:
+You can filter by category or tag, save your own patches, rename them, delete them. Custom patches live in `~/.tetrackt`.
 
-- category filtering
-- tag filtering
-- custom patch saving
-- custom patch rename/delete
+## The tracker
 
-Your custom synth patches are stored in `~/.tetrackt`.
+Tetrackt has a tracker grid for sequencing. It's not the point — the noise is the point — but having a grid means you can loop a pattern and keep tweaking the synth while it runs.
 
-## Tracker workflow
-
-Tetrackt uses a two-mode tracker workflow:
-
-- `EDIT` for writing notes and values
-- `NAV` for moving around cleanly
-
-Switch modes with `Space`.
+Two modes: `EDIT` for writing notes, `NAV` for moving around. Switch with `Space`.
 
 ### Note input
 
-Default profile is `QWERTY`.
-
-If you want `QWERTZ`, set this in `~/.tetrackt`:
+Default layout is QWERTY. Want QWERTZ? Put this in `~/.tetrackt`:
 
 ```json
 {
   "inputProfile": "qwertz"
 }
 ```
-
-Default QWERTY note layout:
 
 | Row | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -106,30 +53,30 @@ Default QWERTY note layout:
 | Lower keys | `Z` | `S` | `X` | `D` | `C` | `V` | `G` | `B` | `H` | `N` | `J` | `M` |
 | Lower notes | `C` | `C#` | `D` | `D#` | `E` | `F` | `F#` | `G` | `G#` | `A` | `A#` | `B` |
 
-### Core controls
+### Moving around
 
-- `Arrow keys`: move around the grid
+- `Arrow keys`: move
 - `PgUp` / `PgDn`: jump by viewport height
 - `Home` / `End`: first/last row
 - `Tab` / `Shift+Tab`: move between subcolumns
-- `Delete`: clear the focused value
+- `Delete`: clear value
 - `Insert`: insert space in current track
-- `Shift+Insert`: insert row space across all tracks
+- `Shift+Insert`: insert row across all tracks
 
-### Pattern editing power moves
+### Selection and editing
 
 - `Shift+Arrow`: rectangular selection
-- `Alt+C` / `Alt+X` / `Alt+V`: copy, cut, paste selection
-- `Alt+Shift+V`: paste effects only and keep the destination note
+- `Alt+C` / `Alt+X` / `Alt+V`: copy, cut, paste
+- `Alt+Shift+V`: paste effects only, keep destination notes
 - `Alt+Up` / `Alt+Down`: transpose by semitone
 - `Alt+Shift+Up` / `Alt+Shift+Down`: transpose by octave
 - `F8` / `F7` and `Shift+F8` / `Shift+F7`: transpose aliases
 
-### Inline tracker effects
+### Effects
 
-Effects are edited directly in the grid. The effect column accepts `0..7` or letter aliases.
+Effects go in the effect column. Accepts `0..7` or letter aliases.
 
-- `0xx`: clear / no effect
+- `0xx`: no effect
 - `1xy` or `V`: vibrato
 - `2xx` or `S`: volume slide
 - `3xx` or `C`: note cut
@@ -138,49 +85,45 @@ Effects are edited directly in the grid. The effect column accepts `0..7` or let
 - `6xx` or `O`: continuous note toggle
 - `7xy` or `A`: arpeggio preset
 
-Arpeggio presets include up, down, converge, diverge, and random variants.
+Arpeggio presets: up, down, converge, diverge, random.
 
 ## Screens and playback
 
-Tetrackt is split into two main screens:
+Two screens: **Tracker** and **Synth**. Switch with `Ctrl+t`.
 
-- **Tracker** for sequencing
-- **Synth** for instrument design
-
-Useful keys:
-
-- `Ctrl+t`: switch between Tracker and Synth
 - `Ctrl+Left` / `Ctrl+Right`: move between tracker panels
 - `Ctrl+Arrow keys`: move between synth panels
 - `p`: play/pause from row 0
 - `P`: loop up to the current row
-- `?`: open the in-app key reference
+- `?`: key reference
 
-When you enter notes, Tetrackt previews them through the current synth patch, so sound design and sequencing stay tightly connected.
+When you enter a note it previews through the current patch, so you hear changes immediately.
 
 ## Save, load, export
 
 - `Ctrl+s`: save
 - `Ctrl+l`: load
 
-Tetrackt supports two output paths:
+Saves as JSON. You can also export directly to `.wav` from the save dialog — same render engine as live playback, so all the effects and modulation make it to the file.
 
-- **module save/load** as JSON
-- **WAV export** directly from the save dialog
+## First run
 
-The offline WAV export uses the same render engine as playback, so tracker effects, envelopes, modulation, and per-row behavior all make the trip to disk.
+Tetrackt ships with a couple of modules to poke around in.
 
-## Project layout
+- `Ctrl+l` → load `Quickstart` for a quick orientation
+- `Ctrl+l` → load `Demo Song` to hear what it can do
+- Or load `modules/quickstart.json` / `modules/chiptune-demo.json` directly
 
-If you want to poke around in the code:
+## Install
 
-```text
-audio/        synthesis engine, oscillators, envelopes, LFO, filter, mixer
-render/       live playback and offline WAV rendering
-ui/tracker/   tracker editor, navigation, selections, row effects
-ui/synth/     synth editor, patch bank, parameter panels
-persistence/  module save/load and patch bank persistence
-main.go       app wiring, dialogs, playback, screen routing
+Grab a binary from GitHub Releases:
+
+- <https://github.com/saintedlama/tetrackt/releases>
+
+Or build it:
+
+```sh
+go build .
 ```
 
 ## Development
@@ -203,4 +146,4 @@ make run
 
 ## Contributing
 
-If you want to add a new tracker trick, a meaner bass patch, a cleaner render path, or a more cursed sound effect, pull requests are welcome.
+New tracker trick, meaner bass patch, cleaner render path, more cursed sound effect — pull requests are welcome.
