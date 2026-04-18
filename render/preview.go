@@ -15,7 +15,7 @@ func NewPreviewPlayer(sink *SpeakerSink) PreviewPlayer {
 
 func (p *PreviewPlayer) Reset() {}
 
-func (p *PreviewPlayer) Start(row tracker.TrackRow, synth *audio.Synth, bpm int, speed int, sampleRate audio.SampleRate, globalVolume float64) bool {
+func (p *PreviewPlayer) Start(row tracker.TrackRow, synth *audio.Synth, bpm int, sampleRate audio.SampleRate, globalVolume float64) bool {
 	if audio.IsOff(row.Note) || synth == nil {
 		return false
 	}
@@ -23,9 +23,6 @@ func (p *PreviewPlayer) Start(row tracker.TrackRow, synth *audio.Synth, bpm int,
 	// TODO: This is a bit hacky
 	tm := tracker.NewTracker(1, 1, 0, 0)
 	tm.BPM = tracker.NewBPM(bpm)
-	if speed > 0 {
-		tm.Speed = speed
-	}
 	tm.Tracks[0].Synth = synth
 	tm.Tracks[0].Rows[0] = row
 

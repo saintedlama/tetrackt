@@ -95,7 +95,7 @@ func (e *RenderEngine) TickLive(sink RenderSink, globalVolume float64) error {
 
 	rowIdx := e.trackerModel.PlaybackRow
 	e.applyTick(rowIdx, e.subTickCount)
-	if err := e.mixActiveVoices(e.tickSampleCount(e.subTickCount), sink); err != nil {
+	if err := e.mixActiveVoices(e.tickSampleCount(rowIdx, e.subTickCount), sink); err != nil {
 		return err
 	}
 	e.advancePlaybackRow()
@@ -140,10 +140,10 @@ func (e *RenderEngine) resetState() {
 func (e *RenderEngine) renderRow(rowIdx int, sink RenderSink) error {
 	e.startRow(rowIdx)
 	e.subTickCount = 0
-	speed := e.currentSpeed()
+	ticks := e.trackerModel.RowTicks(rowIdx)
 
-	for subTick := 0; subTick < speed; subTick++ {
-		tickSamples := e.tickSampleCount(subTick)
+	for subTick := 0; subTick < ticks; subTick++ {
+		tickSamples := e.tickSampleCount(rowIdx, subTick)
 		e.applyTick(rowIdx, subTick)
 		if err := e.mixActiveVoices(tickSamples, sink); err != nil {
 			return err
@@ -288,19 +288,11 @@ func (e *RenderEngine) drainVoices(sink RenderSink) error {
 	return nil
 }
 
-func (e *RenderEngine) currentSpeed() int {
-	speed := e.trackerModel.Speed
-	if speed <= 0 {
-		speed = tracker.DefaultSpeed
-	}
-	return speed
-}
-
-func (e *RenderEngine) tickSampleCount(subTick int) int {
-	speed := e.currentSpeed()
+func (e *RenderEngine) tickSampleCount(rowIdx, subTick int) int {
+	ticks := e.trackerModel.RowTicks(rowIdx)
 	rowSamples := int(e.cfg.SampleRate.N(e.trackerModel.BPMDuration()))
-	baseTickSamples := rowSamples / speed
-	remainder := rowSamples % speed
+	baseTickSamples := rowSamples / ticks
+	remainder := rowSamples % ticks
 	if subTick < remainder {
 		return baseTickSamples + 1
 	}
@@ -309,7 +301,7 @@ func (e *RenderEngine) tickSampleCount(subTick int) int {
 
 func (e *RenderEngine) advancePlaybackRow() {
 	e.subTickCount++
-	if e.subTickCount < e.currentSpeed() {
+	if e.subTickCount < e.trackerModel.RowTicks(e.trackerModel.PlaybackRow) {
 		return
 	}
 	e.subTickCount = 0

@@ -15,7 +15,7 @@ type RowEffectsApplied struct {
 	TrackIdx   int
 	RowIdx     int
 	Volume     int
-	Speed      int
+	Ticks      int
 	Continuous bool
 	Arpeggio   audio.ArpeggioEffect
 	Effect     TrackerEffect
@@ -149,9 +149,9 @@ type RowEffectsDialog struct {
 
 // NewRowEffectsDialog creates a dialog pre-populated with the current row's settings.
 func NewRowEffectsDialog(row TrackRow, trackIdx, rowIdx int) *RowEffectsDialog {
-	ticks := row.Speed
+	ticks := row.Ticks
 	if ticks <= 0 {
-		ticks = DefaultSpeed / 2
+		ticks = DefaultTicks / 2
 		if ticks < 1 {
 			ticks = 1
 		}
@@ -263,7 +263,7 @@ func (d *RowEffectsDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					TrackIdx:   trackIdx,
 					RowIdx:     rowIdx,
 					Volume:     volume,
-					Speed:      ticks,
+					Ticks:      ticks,
 					Continuous: continuous,
 					Arpeggio:   arp,
 					Effect:     effect,

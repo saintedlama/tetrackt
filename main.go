@@ -229,7 +229,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.TrackIdx < len(tm.Tracks) && msg.RowIdx < tm.NumRows {
 			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Volume = msg.Volume
 			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Arpeggio = msg.Arpeggio
-			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Speed = msg.Speed
+			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Ticks = msg.Ticks
 			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Continuous = msg.Continuous
 			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Effect = msg.Effect
 		}
@@ -297,22 +297,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// BPM is already updated on the TrackerModel; nothing else to do here.
 		m.dirty = true
 
-	case tracker.SpeedChanged:
-		// Speed is already updated on the TrackerModel; nothing else to do here.
-		m.dirty = true
-
 	case tracker.TrackerEdited:
 		m.dirty = true
 		return m, nil
 
 	case tracker.TrackerNoteEntered:
 		m.dirty = true
-		speed := msg.Speed
-		if speed <= 0 {
-			speed = tracker.DefaultSpeed
-		}
 		if m.preview.Start(msg.Row, msg.Synth,
-			m.trackerModel().BPM.Value(), speed, m.sampleRate, m.globalVolume) {
+			m.trackerModel().BPM.Value(), m.sampleRate, m.globalVolume) {
 			return m, m.previewTick()
 		}
 		return m, nil
@@ -406,11 +398,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // previewTick returns a command that sends a previewTickMsg after one sub-tick delay.
 func (m *model) previewTick() tea.Cmd {
 	trackerModel := m.trackerModel()
-	speed := trackerModel.Speed
-	if speed <= 0 {
-		speed = tracker.DefaultSpeed
-	}
-	duration := trackerModel.BPMDuration() / time.Duration(speed)
+	ticks := trackerModel.RowTicks(0)
+	duration := trackerModel.BPMDuration() / time.Duration(ticks)
 	return tea.Tick(duration, func(t time.Time) tea.Msg {
 		return previewTickMsg(t)
 	})
@@ -419,11 +408,8 @@ func (m *model) previewTick() tea.Cmd {
 // tick returns a command that sends a tickMsg after one sub-tick delay.
 func (m *model) tick() tea.Cmd {
 	trackerModel := m.trackerModel()
-	speed := trackerModel.Speed
-	if speed <= 0 {
-		speed = tracker.DefaultSpeed
-	}
-	duration := trackerModel.BPMDuration() / time.Duration(speed)
+	ticks := trackerModel.RowTicks(trackerModel.PlaybackRow)
+	duration := trackerModel.BPMDuration() / time.Duration(ticks)
 	return tea.Tick(duration, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})

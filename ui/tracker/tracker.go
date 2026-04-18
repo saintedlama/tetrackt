@@ -50,7 +50,7 @@ type Viewport struct {
 const DefaultBPM = 160
 const minBPM = 40
 const maxBPM = 300
-const DefaultSpeed = 6 // sub-ticks per row
+const DefaultTicks = 6 // sub-ticks per row (default when row ticks is 0)
 const defaultEditStep = 1
 
 // BPM represents beats per minute with validation and duration calculation.
@@ -116,7 +116,6 @@ type TrackerNoteEntered struct {
 	Note  audio.Note
 	Row   TrackRow
 	Synth *audio.Synth
-	Speed int
 }
 
 type trackerClipboard struct {
@@ -146,7 +145,6 @@ type TrackerModel struct {
 	PlaybackRow int
 	Viewport    Viewport
 	BPM         BPM
-	Speed       int // sub-ticks per row; 0 treated as DefaultSpeed
 	Octave      int
 	Mode        trackerEditMode
 	CursorCol   trackerColumn
@@ -160,6 +158,20 @@ func (m *TrackerModel) BPMDuration() time.Duration {
 	return m.BPM.Duration()
 }
 
+// RowTicks returns the number of sub-ticks for the given row.
+// It returns the first non-zero Ticks value across all tracks at that row,
+// falling back to DefaultTicks when none is set.
+func (m *TrackerModel) RowTicks(rowIdx int) int {
+	if rowIdx >= 0 && rowIdx < m.NumRows {
+		for _, track := range m.Tracks {
+			if rowIdx < len(track.Rows) && track.Rows[rowIdx].Ticks > 0 {
+				return track.Rows[rowIdx].Ticks
+			}
+		}
+	}
+	return DefaultTicks
+}
+
 // Track represents a single track in the pattern
 type Track struct {
 	number int
@@ -171,7 +183,7 @@ type Track struct {
 type TrackRow struct {
 	Note       audio.Note
 	Volume     int  // 0-64
-	Speed      int  // per-row tick count; 0 = use global Speed
+	Ticks      int  // sub-ticks to play for this row; 0 = use DefaultTicks
 	Continuous bool // synthesise this row as a continuous stream across ticks
 	Arpeggio   audio.ArpeggioEffect
 	Effect     TrackerEffect
@@ -221,7 +233,6 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 		PlaybackRow: 0,
 		Viewport:    Viewport{Width: viewportWidth, Height: viewportHeight},
 		BPM:         NewBPM(DefaultBPM),
-		Speed:       DefaultSpeed,
 		Octave:      4,
 		Mode:        editMode,
 		CursorCol:   columnNote,
@@ -526,7 +537,7 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 		if base, ok := ui.NoteKeys[key]; ok {
 			note := audio.Note{Base: base, Octave: audio.Octave(m.Octave)}
 			row.Note = note
-			entered := &TrackerNoteEntered{Note: note, Row: *row, Synth: m.Tracks[cursorTrack].Synth, Speed: m.Speed}
+			entered := &TrackerNoteEntered{Note: note, Row: *row, Synth: m.Tracks[cursorTrack].Synth}
 			m.advanceByEditStep()
 			m.clearNibbleBuffer()
 			return entered, true
@@ -593,7 +604,7 @@ func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 	case columnEffect:
 		switch row.Effect.Type {
 		case EffectRowTicks:
-			row.Speed = 0
+			row.Ticks = 0
 		case EffectContinuous:
 			row.Continuous = false
 		case EffectArpPreset:
@@ -702,7 +713,7 @@ func (m *TrackerModel) pasteClipboardEffectsOnly() bool {
 			dst.Volume = src.Volume
 			dst.Continuous = src.Continuous
 			dst.Arpeggio = src.Arpeggio
-			dst.Speed = src.Speed
+			dst.Ticks = src.Ticks
 			dst.Effect = src.Effect
 		}
 	}
@@ -802,14 +813,14 @@ func formatParamPending(hi int) string {
 }
 
 func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {
-	result, ok := effects.Apply(effects.Type(effectType), param, row.Speed, DefaultSpeed)
+	result, ok := effects.Apply(effects.Type(effectType), param, row.Ticks, DefaultTicks)
 	if !ok {
 		return false
 	}
 
 	row.Effect = result.Effect
-	if result.Speed > 0 || effectType == EffectRowTicks {
-		row.Speed = result.Speed
+	if result.Ticks > 0 || effectType == EffectRowTicks {
+		row.Ticks = result.Ticks
 	}
 	if result.Continuous || effectType == EffectContinuous {
 		row.Continuous = result.Continuous

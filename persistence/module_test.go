@@ -56,7 +56,6 @@ func TestModuleToTracksPadsToEightWithDefaults(t *testing.T) {
 		NumRows:   4,
 		NumTracks: 2,
 		BPM:       120,
-		Speed:     6,
 		Tracks: []SavedTrack{
 			{
 				Synth: ToSavedSynth(audio.NewSynth(

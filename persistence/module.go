@@ -263,7 +263,7 @@ type SavedTrackRow struct {
 	Base            string `json:"base"`
 	Octave          int    `json:"octave"`
 	Volume          int    `json:"volume"`
-	RowSpeed        int    `json:"row_speed,omitempty"`
+	Ticks           int    `json:"ticks,omitempty"`
 	Continuous      bool   `json:"continuous,omitempty"`
 	ArpeggioOffsets []int  `json:"arpeggio_offsets,omitempty"`
 	EffectType      int    `json:"effect_type,omitempty"`
@@ -289,7 +289,6 @@ type SavedModule struct {
 	NumRows   int          `json:"num_rows"`
 	NumTracks int          `json:"num_tracks"`
 	BPM       int          `json:"bpm"`
-	Speed     int          `json:"speed,omitempty"`
 	Tracks    []SavedTrack `json:"tracks"`
 }
 
@@ -299,7 +298,6 @@ func TracksToModule(tracker *utracker.TrackerModel) *SavedModule {
 		NumRows:   tracker.NumRows,
 		NumTracks: tracker.NumTracks,
 		BPM:       tracker.BPM.Value(),
-		Speed:     tracker.Speed,
 		Tracks:    make([]SavedTrack, tracker.NumTracks),
 	}
 
@@ -310,7 +308,7 @@ func TracksToModule(tracker *utracker.TrackerModel) *SavedModule {
 				Base:            string(row.Note.Base),
 				Octave:          int(row.Note.Octave),
 				Volume:          row.Volume,
-				RowSpeed:        row.Speed,
+				Ticks:           row.Ticks,
 				Continuous:      row.Continuous,
 				ArpeggioOffsets: row.Arpeggio.Offsets,
 				EffectType:      int(row.Effect.Type),
@@ -352,13 +350,6 @@ func ModuleToTracks(mod *SavedModule, tracker *utracker.TrackerModel) {
 		tracker.BPM = utracker.NewBPM(utracker.DefaultBPM)
 	}
 
-	// Restore Speed; fall back to default for old saves that omit it
-	if mod.Speed > 0 {
-		tracker.Speed = mod.Speed
-	} else {
-		tracker.Speed = utracker.DefaultSpeed
-	}
-
 	// Reset tracks to tracker defaults so any missing tracks/rows after loading
 	// are valid and playable (default synth + empty note rows).
 	defaults := utracker.NewTracker(tracker.NumTracks, tracker.NumRows, tracker.Viewport.Width, tracker.Viewport.Height)
@@ -381,7 +372,7 @@ func ModuleToTracks(mod *SavedModule, tracker *utracker.TrackerModel) {
 				track.Rows[j] = utracker.TrackRow{
 					Note:       audio.Note{Base: audio.Base(row.Base), Octave: audio.Octave(row.Octave)},
 					Volume:     row.Volume,
-					Speed:      row.RowSpeed,
+					Ticks:      row.Ticks,
 					Continuous: row.Continuous,
 					Arpeggio: audio.ArpeggioEffect{
 						Offsets: row.ArpeggioOffsets,
