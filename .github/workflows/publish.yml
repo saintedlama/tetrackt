@@ -41,6 +41,12 @@ jobs:
           - goos: linux
             goarch: arm64
             suffix: ""
+          - goos: freebsd
+            goarch: amd64
+            suffix: ""
+          - goos: freebsd
+            goarch: arm64
+            suffix: ""
           - goos: darwin
             goarch: amd64
             suffix: ""
