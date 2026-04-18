@@ -77,15 +77,26 @@ func (s *SpeakerSink) Play(streamer audio.Streamer, globalVolume float64) {
 type sampleStreamer struct {
 	samples [][2]float64
 	offset  int
+	loop    bool
 }
 
 func (s *sampleStreamer) Stream(buf [][2]float64) (int, bool) {
-	if s.offset >= len(s.samples) {
+	if len(s.samples) == 0 {
 		return 0, false
 	}
-	n := copy(buf, s.samples[s.offset:])
-	s.offset += n
-	return n, s.offset < len(s.samples)
+	total := 0
+	for total < len(buf) {
+		n := copy(buf[total:], s.samples[s.offset:])
+		total += n
+		s.offset += n
+		if s.offset >= len(s.samples) {
+			if !s.loop {
+				return total, false
+			}
+			s.offset = 0
+		}
+	}
+	return total, true
 }
 
 func (s *sampleStreamer) Err() error {

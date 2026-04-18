@@ -17,12 +17,13 @@ type RenderConfig struct {
 	SampleRate   audio.SampleRate
 	GlobalVolume float64
 	LoopCount    int
+	// EndRow is the exclusive end row index for rendering (0 means all rows).
+	EndRow int
 }
 
 type RenderEngine struct {
 	trackerModel    *tracker.TrackerModel
 	cfg             RenderConfig
-	subTickCount    int
 	currentPatches  []*audio.Patch
 	activeVoices    []*audio.Patch
 	prevFrequencies []float64
@@ -52,13 +53,17 @@ func (e *RenderEngine) Run(sink RenderSink) error {
 	}
 
 	e.resetState()
-	e.subTickCount = 0
 	if err := sink.Begin(e.cfg.SampleRate); err != nil {
 		return err
 	}
 
+	endRow := e.trackerModel.NumRows
+	if e.cfg.EndRow > 0 && e.cfg.EndRow < endRow {
+		endRow = e.cfg.EndRow
+	}
+
 	for loopIdx := 0; loopIdx < e.cfg.LoopCount; loopIdx++ {
-		for rowIdx := 0; rowIdx < e.trackerModel.NumRows; rowIdx++ {
+		for rowIdx := 0; rowIdx < endRow; rowIdx++ {
 			if err := e.renderRow(rowIdx, sink); err != nil {
 				return err
 			}
@@ -73,38 +78,19 @@ func (e *RenderEngine) Run(sink RenderSink) error {
 	return sink.End()
 }
 
-func (e *RenderEngine) StartLive(sink RenderSink) error {
-	if err := e.validateConfig(); err != nil {
-		return err
+// RenderToStream renders the tracker model fully offline and returns a Streamer
+// ready for playback. If loop is true, the stream will repeat indefinitely.
+// Returns nil, nil when the render produces no audio (e.g. all tracks empty).
+func RenderToStream(m *tracker.TrackerModel, cfg RenderConfig, loop bool) (audio.Streamer, error) {
+	collector := &bufferSink{}
+	engine := NewRenderEngine(m, cfg)
+	if err := engine.Run(collector); err != nil {
+		return nil, err
 	}
-	e.resetState()
-	e.subTickCount = 0
-	return sink.Begin(e.cfg.SampleRate)
-}
-
-func (e *RenderEngine) TickLive(sink RenderSink, globalVolume float64) error {
-	if err := e.validateConfig(); err != nil {
-		return err
+	if len(collector.frames) == 0 {
+		return nil, nil
 	}
-	if globalVolume >= 0 {
-		e.cfg.GlobalVolume = globalVolume
-	}
-	if e.subTickCount == 0 {
-		e.startRow(e.trackerModel.PlaybackRow)
-	}
-
-	rowIdx := e.trackerModel.PlaybackRow
-	e.applyTick(rowIdx, e.subTickCount)
-	if err := e.mixActiveVoices(e.tickSampleCount(rowIdx, e.subTickCount), sink); err != nil {
-		return err
-	}
-	e.advancePlaybackRow()
-	return nil
-}
-
-func (e *RenderEngine) StopLive(sink RenderSink) error {
-	e.releaseCurrentPatches()
-	return sink.End()
+	return &sampleStreamer{samples: collector.frames, loop: loop}, nil
 }
 
 func (e *RenderEngine) validateConfig() error {
@@ -139,7 +125,6 @@ func (e *RenderEngine) resetState() {
 
 func (e *RenderEngine) renderRow(rowIdx int, sink RenderSink) error {
 	e.startRow(rowIdx)
-	e.subTickCount = 0
 	ticks := e.trackerModel.RowTicks(rowIdx)
 
 	for subTick := 0; subTick < ticks; subTick++ {
@@ -297,22 +282,4 @@ func (e *RenderEngine) tickSampleCount(rowIdx, subTick int) int {
 		return baseTickSamples + 1
 	}
 	return baseTickSamples
-}
-
-func (e *RenderEngine) advancePlaybackRow() {
-	e.subTickCount++
-	if e.subTickCount < e.trackerModel.RowTicks(e.trackerModel.PlaybackRow) {
-		return
-	}
-	e.subTickCount = 0
-	e.trackerModel.PlaybackRow++
-	if e.trackerModel.LoopToRow {
-		if e.trackerModel.PlaybackRow > e.trackerModel.LoopEndRow {
-			e.trackerModel.PlaybackRow = 0
-		}
-		return
-	}
-	if e.trackerModel.PlaybackRow >= e.trackerModel.NumRows {
-		e.trackerModel.PlaybackRow = 0
-	}
 }

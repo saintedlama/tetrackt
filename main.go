@@ -51,7 +51,6 @@ type model struct {
 	// quitAfterSave signals that the app should quit once the next save completes.
 	quitAfterSave bool
 
-	playback  *render.RenderEngine
 	speaker   *render.SpeakerSink
 	preview   render.PreviewPlayer
 	mcpActive bool
@@ -138,33 +137,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Toggle play/pause
 			tracker := m.trackerModel()
 			tracker.IsPlaying = !tracker.IsPlaying
-			tracker.LoopToRow = false // normal play toggles off loop mode
+			tracker.LoopToRow = false
 			if tracker.IsPlaying {
 				tracker.PlaybackRow = 0
 				m.speaker.Clear()
 				m.preview.Reset()
-				m.playback = render.NewRenderEngine(tracker, render.RenderConfig{SampleRate: m.sampleRate, GlobalVolume: m.globalVolume, LoopCount: 1})
 
-				// TODO: Loop to row is just a special play mode, that does not use 0..numRows range
+				cfg := render.RenderConfig{
+					SampleRate:   m.sampleRate,
+					GlobalVolume: m.globalVolume,
+					LoopCount:    1,
+				}
+				loop := false
 				if "P" == keyStr {
 					tracker.LoopToRow = true
 					tracker.LoopEndRow = tracker.CursorRow()
+					cfg.EndRow = tracker.LoopEndRow + 1
+					loop = true
 				}
-				if err := m.playback.StartLive(m.speaker); err != nil {
-					fmt.Fprintf(os.Stderr, "Playback start failed: %v\n", err)
+				stream, err := render.RenderToStream(tracker, cfg, loop)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Playback render failed: %v\n", err)
 					tracker.IsPlaying = false
-					m.playback = nil
 					return m, nil
 				}
-
-				// TODO: Refactor to have a play command returned from tracker.Update
+				if stream == nil {
+					tracker.IsPlaying = false
+					return m, nil
+				}
+				m.speaker.Play(stream, 1.0)
 				return m, m.tick()
 			} else {
 				m.speaker.Clear()
-				if m.playback != nil {
-					_ = m.playback.StopLive(m.speaker)
-					m.playback = nil
-				}
 			}
 		case "ctrl+c":
 			if m.dirty {
@@ -195,14 +199,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		tr := m.trackerModel()
-		if !tr.IsPlaying || m.playback == nil {
+		if !tr.IsPlaying {
 			return m, nil
 		}
-		if err := m.playback.TickLive(m.speaker, m.globalVolume); err != nil {
-			fmt.Fprintf(os.Stderr, "Playback failed: %v\n", err)
+		tr.PlaybackRow++
+		if tr.LoopToRow {
+			if tr.PlaybackRow > tr.LoopEndRow {
+				tr.PlaybackRow = 0
+			}
+		} else if tr.PlaybackRow >= tr.NumRows {
 			tr.IsPlaying = false
+			tr.PlaybackRow = 0
 			m.speaker.Clear()
-			m.playback = nil
 			return m, nil
 		}
 		return m, m.tick()
@@ -405,12 +413,9 @@ func (m *model) previewTick() tea.Cmd {
 	})
 }
 
-// tick returns a command that sends a tickMsg after one sub-tick delay.
+// tick returns a command that sends a tickMsg after one full row duration.
 func (m *model) tick() tea.Cmd {
-	trackerModel := m.trackerModel()
-	ticks := trackerModel.RowTicks(trackerModel.PlaybackRow)
-	duration := trackerModel.BPMDuration() / time.Duration(ticks)
-	return tea.Tick(duration, func(t time.Time) tea.Msg {
+	return tea.Tick(m.trackerModel().BPMDuration(), func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
