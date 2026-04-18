@@ -143,7 +143,7 @@ func TestInlineRowTicksCommand(t *testing.T) {
 	_, _ = m.Update(tea.KeyPressMsg{Text: "C"})
 
 	row := m.Tracks[0].Rows[0]
-	assert.Equal(t, 12, row.Ticks, "expected ticks=12")
+	assert.Equal(t, 12, row.Speed, "expected speed=12")
 	assert.Equal(t, 0x0C, row.Effect.Param, "expected effect param 0x0C")
 }
 
@@ -212,7 +212,7 @@ func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 	m.Tracks[0].Rows[0] = TrackRow{
 		Note:       audio.Note{Base: audio.BaseE, Octave: 4},
 		Volume:     48,
-		Ticks:      12,
+		Speed:      12,
 		Continuous: true,
 		Arpeggio:   audio.ArpeggioEffect{Offsets: []int{0, 4, 7}},
 		Effect:     TrackerEffect{Type: EffectVibrato, Param: 0x24},
@@ -234,7 +234,7 @@ func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 	assert.Equal(t, audio.BaseA, got.Note.Base, "expected destination note base A to be preserved")
 	assert.Equal(t, audio.Octave(5), got.Note.Octave, "expected destination note octave 5 to be preserved")
 	assert.Equal(t, 48, got.Volume, "expected volume copied")
-	assert.Equal(t, 12, got.Ticks, "expected ticks copied")
+	assert.Equal(t, 12, got.Speed, "expected speed copied")
 	assert.True(t, got.Continuous, "expected continuous copied")
 	assert.True(t, got.Arpeggio.IsActive(), "expected arp copied")
 	assert.Equal(t, EffectVibrato, got.Effect.Type, "expected effect type copied")

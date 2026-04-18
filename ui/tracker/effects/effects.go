@@ -147,14 +147,14 @@ func (t Type) DecodeParam(param int) (int, bool) {
 // ApplyResult describes what an effect application changed.
 type ApplyResult struct {
 	Effect     Effect
-	Ticks      int  // Row tick override (0 = no override)
+	Speed      int  // Row speed override (0 = no override)
 	Continuous bool // Whether the note should continue
 	Arpeggio   audio.ArpeggioEffect
 }
 
 // Apply applies an effect with the given parameter, returning the changes to make.
-// The defaultSpeed is used for arpeggio preset calculation when row ticks are 0.
-func Apply(effectType Type, param int, currentTicks int, defaultSpeed int) (ApplyResult, bool) {
+// The defaultSpeed is used for arpeggio preset calculation when the row speed is 0.
+func Apply(effectType Type, param int, currentSpeed int, defaultSpeed int) (ApplyResult, bool) {
 	decoded, ok := effectType.DecodeParam(param)
 	if !ok {
 		return ApplyResult{}, false
@@ -179,9 +179,9 @@ func Apply(effectType Type, param int, currentTicks int, defaultSpeed int) (Appl
 
 	case RowTicks:
 		if decoded == 0 {
-			result.Ticks = 0
+			result.Speed = 0
 		} else {
-			result.Ticks = decoded
+			result.Speed = decoded
 		}
 		return result, true
 
@@ -203,7 +203,7 @@ func Apply(effectType Type, param int, currentTicks int, defaultSpeed int) (Appl
 			return ApplyResult{}, false
 		}
 
-		ticks := currentTicks
+		ticks := currentSpeed
 		if ticks <= 0 {
 			ticks = defaultSpeed
 		}

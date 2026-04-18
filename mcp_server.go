@@ -53,7 +53,7 @@ type applyCellEffectArgs struct {
 	Param           *int   `json:"param,omitempty"`
 	VibratoSpeed    *int   `json:"vibrato_speed,omitempty"`
 	VibratoDepth    *int   `json:"vibrato_depth,omitempty"`
-	Ticks           *int   `json:"ticks,omitempty"`
+	Speed           *int   `json:"speed,omitempty"`
 	Continuous      *bool  `json:"continuous,omitempty"`
 	ArpeggioOffsets []int  `json:"arpeggio_offsets,omitempty"`
 }
@@ -334,11 +334,11 @@ func (s *mcpServer) handleApplyCellEffect(ctx context.Context, request mcp.CallT
 
 		row := &tm.Tracks[args.Track].Rows[args.Row]
 
-		if args.Ticks != nil {
-			if *args.Ticks < 1 || *args.Ticks > 32 {
-				return nil, fmt.Errorf("ticks must be in range 1..32")
+		if args.Speed != nil {
+			if *args.Speed < 1 || *args.Speed > 32 {
+				return nil, fmt.Errorf("speed must be in range 1..32")
 			}
-			row.Ticks = *args.Ticks
+			row.Speed = *args.Speed
 		}
 
 		if args.Continuous != nil {
@@ -624,7 +624,7 @@ func mcpToolApplyCellEffect() mcp.Tool {
 		mcp.WithNumber("param", mcp.Description("Generic effect parameter")),
 		mcp.WithNumber("vibrato_speed", mcp.Description("Vibrato speed 1..15"), mcp.Min(1), mcp.Max(15)),
 		mcp.WithNumber("vibrato_depth", mcp.Description("Vibrato depth 0..15"), mcp.Min(0), mcp.Max(15)),
-		mcp.WithNumber("ticks", mcp.Description("Row ticks 1..32"), mcp.Min(1), mcp.Max(32)),
+		mcp.WithNumber("speed", mcp.Description("Row speed (sub-ticks) 1..32"), mcp.Min(1), mcp.Max(32)),
 		mcp.WithBoolean("continuous", mcp.Description("Continuous row synthesis")),
 		mcp.WithArray("arpeggio_offsets", mcp.Description("Optional semitone offsets"), mcp.WithNumberItems()),
 	)

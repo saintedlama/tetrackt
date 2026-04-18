@@ -21,6 +21,11 @@ type BPMChanged struct {
 	BPM int
 }
 
+// SpeedChanged is emitted when the user adjusts global Speed via the settings panel.
+type SpeedChanged struct {
+	Speed int
+}
+
 // TrackerScreen is the pattern editor screen.
 // It wraps TrackerModel and exposes the Tracker field for main to access
 // playback state and perform audio-related mutations.
@@ -29,7 +34,7 @@ type TrackerScreen struct {
 	GlobalVolume  float64
 	volumeBar     common.Bar
 	activePanel   int // 0=tracker, 1=settings
-	settingsFocus int // 0=volume, 1=bpm (within the settings panel)
+	settingsFocus int // 0=volume, 1=bpm, 2=speed (within the settings panel)
 }
 
 const trackerPanelCount = 2
@@ -66,10 +71,10 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 			// Settings panel is active — up/down switches focus, left/right adjusts value
 			switch msg.String() {
 			case "up":
-				t.settingsFocus = (t.settingsFocus - 1 + 2) % 2
+				t.settingsFocus = (t.settingsFocus - 1 + 3) % 3
 				return t, nil
 			case "down":
-				t.settingsFocus = (t.settingsFocus + 1) % 2
+				t.settingsFocus = (t.settingsFocus + 1) % 3
 				return t, nil
 			}
 
@@ -95,18 +100,38 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 				return t, func() tea.Msg { return VolumeChanged{Volume: t.GlobalVolume} }
 			}
 
-			// BPM row focused
+			if t.settingsFocus == 1 {
+				// BPM row focused
+				switch msg.String() {
+				case "left":
+					t.Tracker.BPM = t.Tracker.BPM.Adjust(-1)
+				case "shift+left":
+					t.Tracker.BPM = t.Tracker.BPM.Adjust(-10)
+				case "right":
+					t.Tracker.BPM = t.Tracker.BPM.Adjust(1)
+				case "shift+right":
+					t.Tracker.BPM = t.Tracker.BPM.Adjust(10)
+				}
+				return t, func() tea.Msg { return BPMChanged{BPM: t.Tracker.BPM.Value()} }
+			}
+
+			// Speed row focused
 			switch msg.String() {
 			case "left":
-				t.Tracker.BPM = t.Tracker.BPM.Adjust(-1)
+				t.Tracker.Speed--
 			case "shift+left":
-				t.Tracker.BPM = t.Tracker.BPM.Adjust(-10)
+				t.Tracker.Speed -= 5
 			case "right":
-				t.Tracker.BPM = t.Tracker.BPM.Adjust(1)
+				t.Tracker.Speed++
 			case "shift+right":
-				t.Tracker.BPM = t.Tracker.BPM.Adjust(10)
+				t.Tracker.Speed += 5
 			}
-			return t, func() tea.Msg { return BPMChanged{BPM: t.Tracker.BPM.Value()} }
+			if t.Tracker.Speed < 1 {
+				t.Tracker.Speed = 1
+			} else if t.Tracker.Speed > 32 {
+				t.Tracker.Speed = 32
+			}
+			return t, func() tea.Msg { return SpeedChanged{Speed: t.Tracker.Speed} }
 		}
 
 		// Tracker panel is active
@@ -140,7 +165,9 @@ func (t *TrackerScreen) View() string {
 		fmt.Sprintf("  %s  %3d%%", t.volumeBar.View(), int(t.GlobalVolume*100))
 	bpmRow := render(settingsPanelActive && t.settingsFocus == 1, "BPM") +
 		fmt.Sprintf("     %3d", t.Tracker.BPM.Value())
-	settingsContent := volumeRow + "\n" + bpmRow
+	speedRow := render(settingsPanelActive && t.settingsFocus == 2, "Speed") +
+		fmt.Sprintf("   %3d", t.Tracker.Speed)
+	settingsContent := volumeRow + "\n" + bpmRow + "\n" + speedRow
 
 	currentTrack := t.Tracker.Tracks[t.Tracker.nav.CursorTrack()]
 	synthInfoContent := renderSynthInfo(currentTrack.Synth, currentTrack.PatchName, currentTrack.PatchCategory, currentTrack.PatchTags)

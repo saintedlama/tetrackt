@@ -175,7 +175,7 @@ type Track struct {
 type TrackRow struct {
 	Note       audio.Note
 	Volume     int  // 0-64
-	Ticks      int  // per-row tick count; 0 = use global Speed
+	Speed      int  // per-row tick count; 0 = use global Speed
 	Continuous bool // synthesise this row as a continuous stream across ticks
 	Arpeggio   audio.ArpeggioEffect
 	Effect     TrackerEffect
@@ -600,7 +600,7 @@ func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 	case columnEffect:
 		switch row.Effect.Type {
 		case EffectRowTicks:
-			row.Ticks = 0
+			row.Speed = 0
 		case EffectContinuous:
 			row.Continuous = false
 		case EffectArpPreset:
@@ -707,9 +707,9 @@ func (m *TrackerModel) pasteClipboardEffectsOnly() bool {
 			src := m.clipboard.Cells[r][t]
 			dst := &m.Tracks[dstTrack].Rows[dstRow]
 			dst.Volume = src.Volume
-			dst.Ticks = src.Ticks
 			dst.Continuous = src.Continuous
 			dst.Arpeggio = src.Arpeggio
+			dst.Speed = src.Speed
 			dst.Effect = src.Effect
 		}
 	}
@@ -809,14 +809,14 @@ func formatParamPending(hi int) string {
 }
 
 func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {
-	result, ok := effects.Apply(effects.Type(effectType), param, row.Ticks, DefaultSpeed)
+	result, ok := effects.Apply(effects.Type(effectType), param, row.Speed, DefaultSpeed)
 	if !ok {
 		return false
 	}
 
 	row.Effect = result.Effect
-	if result.Ticks > 0 || effectType == EffectRowTicks {
-		row.Ticks = result.Ticks
+	if result.Speed > 0 || effectType == EffectRowTicks {
+		row.Speed = result.Speed
 	}
 	if result.Continuous || effectType == EffectContinuous {
 		row.Continuous = result.Continuous

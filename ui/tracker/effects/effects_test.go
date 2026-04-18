@@ -101,7 +101,7 @@ func TestType_DecodeParam(t *testing.T) {
 func TestApply_RowTicks(t *testing.T) {
 	result, ok := Apply(RowTicks, 0x0C, 0, 6)
 	require.True(t, ok, "expected apply to succeed")
-	assert.Equal(t, 12, result.Ticks, "expected ticks=12")
+	assert.Equal(t, 12, result.Speed, "expected speed=12")
 	assert.Equal(t, RowTicks, result.Effect.Type, "expected effect type RowTicks")
 }
 

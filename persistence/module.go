@@ -251,7 +251,7 @@ type SavedTrackRow struct {
 	Base            string `json:"base"`
 	Octave          int    `json:"octave"`
 	Volume          int    `json:"volume"`
-	RowTicks        int    `json:"row_ticks,omitempty"`
+	RowSpeed        int    `json:"row_speed,omitempty"`
 	Continuous      bool   `json:"continuous,omitempty"`
 	ArpeggioOffsets []int  `json:"arpeggio_offsets,omitempty"`
 	EffectType      int    `json:"effect_type,omitempty"`
@@ -293,7 +293,7 @@ func TracksToModule(tracker *utracker.TrackerModel) *SavedModule {
 				Base:            string(row.Note.Base),
 				Octave:          int(row.Note.Octave),
 				Volume:          row.Volume,
-				RowTicks:        row.Ticks,
+				RowSpeed:        row.Speed,
 				Continuous:      row.Continuous,
 				ArpeggioOffsets: row.Arpeggio.Offsets,
 				EffectType:      int(row.Effect.Type),
@@ -362,7 +362,7 @@ func ModuleToTracks(mod *SavedModule, tracker *utracker.TrackerModel) {
 				track.Rows[j] = utracker.TrackRow{
 					Note:       audio.Note{Base: audio.Base(row.Base), Octave: audio.Octave(row.Octave)},
 					Volume:     row.Volume,
-					Ticks:      row.RowTicks,
+					Speed:      row.RowSpeed,
 					Continuous: row.Continuous,
 					Arpeggio: audio.ArpeggioEffect{
 						Offsets: row.ArpeggioOffsets,
