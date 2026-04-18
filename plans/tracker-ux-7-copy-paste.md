@@ -1,5 +1,109 @@
 # Tracker UX: Copy / Paste / Batch Editing
 
+**Status: Done**
+
+## Feature Description
+
+A rectangular block clipboard for the tracker grid. The user selects a region with `Shift+Arrows` or `Ctrl+A`, copies or cuts it with `Alt+C` / `Alt+X`, and pastes it with `Alt+V`. An effects-only paste (`Alt+Shift+V`) overwrites all columns except Note.
+
+---
+
+## Implementation
+
+### Clipboard data model
+
+`trackerClipboard` is a package-private struct in `ui/tracker/tracker.go`:
+
+```go
+type trackerClipboard struct {
+    HasData bool
+    Cells   [][]TrackRow // [row][track]
+}
+```
+
+`TrackerModel` holds a single `clipboard trackerClipboard` field (unexported). There is no persistent Clipboard kind enum; the shape of `Cells` determines what was copied (single cell, row, multi-row block, etc.).
+
+### Selection model
+
+Selection is managed entirely by `navigation.Grid` in `ui/tracker/navigation/navigation.go`. Key API:
+
+| Method | Behaviour |
+|---|---|
+| `MoveExtending(dTrack, dRow)` | Starts or extends a rectangular selection while moving |
+| `SelectAll()` | Selects the entire grid (row 0..N-1, track 0..T-1) |
+| `ClearSelection()` | Collapses selection |
+| `SelectionBounds()` | Returns `(minRow, maxRow, minTrack, maxTrack, hasSelection bool)` |
+| `IsSelected(row, track)` | True if the cell is within the current selection |
+| `SelectedCells()` | All `Cell{Row, Track}` in the selection; cursor only if no selection |
+
+`Move()` (plain navigation) always calls `selection.clear()`, so navigating without Shift collapses the selection.
+
+### Key bindings
+
+All clipboard and selection operations are handled in `TrackerModel.handleGlobalEditingKey()` (called from `Update()` before column-specific edit dispatch, in both navigate and edit mode):
+
+| Key | Action |
+|---|---|
+| `Ctrl+A` | `nav.SelectAll()` |
+| `Alt+C` | `copySelectionToClipboard()` |
+| `Alt+X` | `copySelectionToClipboard()` then `clearSelectedCells()` |
+| `Alt+V` | `pasteClipboard()` |
+| `Alt+Shift+V` | `pasteClipboardEffectsOnly()` |
+| `Shift+↑↓←→` | `nav.MoveExtending(...)` — extends rectangular selection |
+| `Insert` | `insertTrackSpace()` |
+| `Shift+Insert` | `insertGlobalRowSpace()` |
+
+Note: the original plan proposed lowercase single-key bindings (`c`, `v`, `d`, `x`, `M`, `F`, etc.). The implementation uses `Alt+` modifier combinations to avoid conflicts with note entry and existing single-key bindings.
+
+### `copySelectionToClipboard()`
+
+Reads `nav.SelectionBounds()` to get `(r0, r1, t0, t1)`, allocates a `[][]TrackRow` of size `(r1-r0+1) × (t1-t0+1)`, then iterates `nav.SelectedCells()` to populate it. Stores the result in `m.clipboard`.
+
+### `clearSelectedCells()`
+
+Iterates `nav.SelectedCells()` and sets each `TrackRow` to `TrackRow{Note: audio.Off()}`.
+
+### `pasteClipboard()`
+
+Pastes `m.clipboard.Cells` starting at the cursor position `(cursorRow, cursorTrack)`, skipping rows/tracks that would fall outside `[0, NumRows)` / `[0, NumTracks)`. Returns `bool` indicating whether anything was pasted. Does **not** advance the cursor after paste.
+
+### `pasteClipboardEffectsOnly()`
+
+Same geometry as `pasteClipboard()` but only copies non-Note fields (Volume, Ticks, Continuous, Arpeggio, Effect) from each source cell, leaving the destination's `Note` unchanged.
+
+### Selection rendering
+
+`nav.IsSelected(row, track)` is called per-cell in `View()`. Selected cells are rendered with `common.StyleSelected` (cyan foreground on dark gray background). This applies to all columns of a selected cell uniformly. The cursor cell overrides the selection style.
+
+Transpose operations (`Alt+↑/↓`, `Shift+Alt+↑/↓`, `F7`/`F8`, `Shift+F7`/`Shift+F8`) also iterate `nav.SelectedCells()` and operate on the selection or cursor cell.
+
+---
+
+## Affected Files
+
+| File | Change |
+|---|---|
+| `ui/tracker/tracker.go` | `trackerClipboard` struct; `clipboard` field on `TrackerModel`; `copySelectionToClipboard`, `clearSelectedCells`, `pasteClipboard`, `pasteClipboardEffectsOnly`, `transposeSelection`, `insertTrackSpace`, `insertGlobalRowSpace` methods; `handleGlobalEditingKey` dispatcher; selection style in `View()` |
+| `ui/tracker/navigation/navigation.go` | `Grid` — `MoveExtending`, `SelectAll`, `ClearSelection`, `SelectionBounds`, `IsSelected`, `SelectedCells`, `HasSelection` |
+| `ui/tracker/navigation/selection.go` | Internal `selection` type implementing the rectangular selection anchor/extent logic |
+| `ui/tracker/screen.go` | Help entries for selection / clipboard keys |
+
+---
+
+## Divergences from Original Plan
+
+The implementation differed from the original plan in several ways:
+
+- **No typed clipboard kinds** — the plan proposed a `ClipboardKind` enum (`ClipboardCell`, `ClipboardRow`, `ClipboardTrack`, `ClipboardSynth`). The implementation uses a single flat `[][]TrackRow` block; the "kind" is implicit in the shape. Synth copy/paste was not implemented.
+- **Key bindings use Alt modifiers** — the plan proposed single lowercase/uppercase keys (`c`, `C`, `v`, `d`, `D`, `x`, `M`, `F`, `X`). The implementation uses `Alt+C`, `Alt+X`, `Alt+V`, `Alt+Shift+V` to avoid conflicts with note entry and existing global bindings.
+- **Selection is rectangular and multi-track** — the plan described a single-track row-range selection with a mark/anchor toggled by `M`. The implementation delegates all selection state to `navigation.Grid`, which manages a full 2D rectangular selection across rows and tracks.
+- **`pasteClipboardEffectsOnly`** — not in the original plan; added as an extra paste mode that preserves notes.
+- **No duplicate / swap / fill operations** — `DuplicateCell`, `DuplicateRow`, `SwapCell`, `FillSelection` from the plan were not implemented.
+- **`Ctrl+A`** selects the entire pattern (all tracks); the plan did not mention a select-all binding.
+- **Transpose on selection** — transpose operations (`Alt+↑/↓`, `F7`/`F8`) act on all selected cells, not just the cursor cell.
+- **Insert/Shift+Insert** — row insertion (`insertTrackSpace`, `insertGlobalRowSpace`) is implemented here, not covered by the original plan.
+# Tracker UX: Copy / Paste / Batch Editing
+
 ## Feature Description
 
 A unified clipboard that holds whatever was last copied. Paste (`v`) inspects the clipboard type and acts accordingly:

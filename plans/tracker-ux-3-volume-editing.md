@@ -1,36 +1,226 @@
 # Plan: Volume Editing Directly in the Grid
 
+**Status: Done**
+
 ## Feature Description
 
-Volume can currently only be set via the row effects dialog (`E` key), which requires opening a separate overlay. In classic trackers the volume column is edited in-place by typing a two-digit decimal value. Adding a volume sub-cursor — cycled to with `V` — lets the composer set per-row volumes without leaving the grid, which is significantly faster during composition.
+Volume can currently only be set via the row effects dialog (`E` key), which requires opening a separate overlay. In classic trackers the volume column is edited in-place by typing a two-digit value. Adding a volume sub-cursor lets the composer set per-row volumes without leaving the grid, which is significantly faster during composition.
+
+This feature was implemented as part of a broader inline editing system that covers five subcolumns per cell: NOTE, VOL, ARP, FX, and PARAM.
 
 ---
 
-## Current State
+## Implementation
 
-- `TrackRow.Volume int` (range 0–64) already exists in the data model (`tracker.go`).
-- `formatVolume` already renders it as `..` (zero) or `%02d` in the cell.
-- The grid cell is rendered as one styled string:
-  `fmt.Sprintf("%-3s %2s %3s", formatNote, formatVolume, formatArpeggio)`
-- `RowEffectsApplied` (the dialog result message) does **not** carry a volume field, so the dialog does not currently write to `TrackRow.Volume` either. The field is present but there is no write path at all.
-- Note entry (`1`–`7`, shifted variants) is intercepted in `main.go` **before** being forwarded to screens, because playing the audio preview requires `main.go`-owned resources (`sampleRate`, `globalVolume`, `player`).
-- `V` is unused; nothing in any footer, key map, or handler references it.
+### Subcolumn model
 
----
-
-## Implementation Approach
-
-### Step 1 — Add sub-cursor state to `TrackerModel`
-
-**File: `ui/tracker/tracker.go`**
-
-Add two exported constants:
+`trackerColumn` is an unexported enum type in `ui/tracker/tracker.go`:
 
 ```go
+type trackerColumn int
+
 const (
-    ColNote   = 0
-    ColVolume = 1
+    columnNote trackerColumn = iota
+    columnVolume
+    columnArpeggio
+    columnEffect
+    columnParam
+    trackerColumnCount
 )
+```
+
+`TrackerModel.CursorCol trackerColumn` tracks which subcolumn is focused. It is exported (capital C) so `main.go` and other callers can read it.
+
+### Nibble buffer
+
+Two-character hex entry for VOL, ARP, and PARAM uses a single generic buffer:
+
+```go
+nibbleHi *int  // nil = no digit buffered; non-nil = first nibble typed
+```
+
+`pushNibble(v int) *int` appends a nibble. On the first call it stores the high nibble and returns `nil`. On the second call it combines `(hi << 4) | lo` and returns the committed byte, then clears the buffer. `clearNibbleBuffer()` sets `nibbleHi = nil`.
+
+### Column navigation
+
+`Tab` / `Shift+Tab` cycle through all columns across all tracks. `moveSubcolumn(delta int)` maps the flat index `track*trackerColumnCount + col` to a (track, column) pair and updates both `nav.CursorTrack()` and `CursorCol`. All navigation keys (`↑↓←→`, Home, End, PgUp, PgDn, Shift+arrows) call `clearNibbleBuffer()` before moving.
+
+### Entry logic — `handleEditInput`
+
+Called from `Update()` when `Mode == editMode`. Dispatches by `CursorCol`:
+
+| Column           | Key input          | Behaviour                                                                                            |
+| ---------------- | ------------------ | ---------------------------------------------------------------------------------------------------- |
+| `columnNote`     | note key from map  | Sets `row.Note`, emits `TrackerNoteEntered`, advances by edit step                                  |
+| `columnVolume`   | hex digit `0`–`F` | Two-nibble entry; commits `min(64, byte)` to `row.Volume`, advances                                 |
+| `columnArpeggio` | hex digit          | Two-nibble entry; commits as `ArpeggioEffect{Offsets: [0, hi, lo]}` + `Continuous = true`, advances |
+| `columnEffect`   | effect key alias   | Sets `row.Effect.Type` via `effects.ParseKey`, no advance                                            |
+| `columnParam`    | hex digit          | Two-nibble entry; calls `applyInlineEffect(row, type, param)`, advances                              |
+| any              | `delete`           | `clearCurrentCellField(row)` clears only the focused subcolumn's data                               |
+
+### Volume format
+
+`formatVolume(volume int) string` renders `0` as `".."` and positive values as `"%02X"` (hex). Volume is stored as `int` in range 0–64 (hex `00`–`40`).
+
+`formatVolumePending(hi int) string` renders the first nibble as `"X."` (e.g. `"3."`), shown while the user has typed one digit and is awaiting the second.
+
+### Pending state display
+
+In `View()`, when a nibble is buffered for the cursor cell (`nibbleHi != nil && Mode == editMode`), the relevant column's text is replaced with the pending form and rendered with `nibblePendingCellStyle` (yellow foreground, surface background). All other column styling uses `cursorCellStyle` (cyan on surface) for the focused subcolumn, `cellStyle` for everything else.
+
+### Note key guard
+
+In `main.go`, note keys are only used for global synth preview when `m.activeScreen != trackerScreenIdx`. When the tracker screen is active, note keys fall through to `TrackerScreen.Update` → `Tracker.Update` → `handleEditInput`, which routes them only if `CursorCol == columnNote`.
+
+### `delete` key
+
+`clearCurrentCellField(row)` handles delete per column:
+
+- `columnNote` → `row.Note = audio.Off()`
+- `columnVolume` → `row.Volume = 0`
+- `columnArpeggio` → clear `Arpeggio`, `Continuous = false`
+- `columnEffect` → clear type, param, and any linked row fields
+- `columnParam` → call `applyInlineEffect(row, type, 0)`
+
+### Status line
+
+The tracker status line shows `Col: <label>` where the label comes from `cursorColumnLabel()` in `ui/tracker/tracker_cursor_column.go` (`"NOTE"`, `"VOL"`, `"ARP"`, `"FX"`, `"PARAM"`).
+
+---
+
+## Affected Files
+
+| File                                  | Change                                                                                                                                                                                                                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ui/tracker/tracker.go`               | `trackerColumn` enum; `CursorCol`, `nibbleHi` fields; `handleEditInput`; `pushNibble`/`clearNibbleBuffer`; `moveSubcolumn`; `clearCurrentCellField`; `formatVolume`, `formatVolumePending`, `formatArpPending`, `formatParamPending`; nibble-pending rendering in `View()` |
+| `ui/tracker/tracker_cursor_column.go` | `cursorColumnLabel()` helper                                                                                                                                                                                                                                                    |
+| `ui/tracker/tracker_parse_utils.go`   | `parseHexNibble()` utility                                                                                                                                                                                                                                                      |
+| `main.go`                             | Note-key block guarded with `m.activeScreen != trackerScreenIdx` (tracker routes internally)                                                                                                                                                                                    |
+
+---
+
+## Divergences from Original Plan
+
+The implementation differed from the original plan in several ways:
+
+- **Five columns** (NOTE, VOL, ARP, FX, PARAM) rather than two (NOTE + VOL). The broader set was built as part of the inline effects plan (`tracker-ux-8-inline-effects`).
+- **Tab/Shift+Tab** for column cycling rather than a `V` toggle key.
+- **Hex entry** (two nibbles, `%02X`) for volume rather than decimal two-digit entry.
+- **Generic nibble buffer** (`nibbleHi *int`) rather than volume-specific `volDigitPending`/`volFirstDigit` fields.
+- **Single shared cursor styles** (`cursorCellStyle` + `nibblePendingCellStyle`) for all columns rather than a dedicated `volCursorStyle`.
+- Note-key guard is `activeScreen != trackerScreenIdx` (screen-level), not `CursorCol == columnNote` (within-tracker). The tracker's `handleEditInput` handles column routing.
+# Plan: Volume Editing Directly in the Grid
+
+**Status: Done**
+
+## Feature Description
+
+Volume can currently only be set via the row effects dialog (`E` key), which requires opening a separate overlay. In classic trackers the volume column is edited in-place by typing a two-digit value. Adding a volume sub-cursor lets the composer set per-row volumes without leaving the grid, which is significantly faster during composition.
+
+This feature was implemented as part of a broader inline editing system that covers five subcolumns per cell: NOTE, VOL, ARP, FX, and PARAM.
+
+---
+
+## Implementation
+
+### Subcolumn model
+
+`trackerColumn` is an unexported enum type in `ui/tracker/tracker.go`:
+
+```go
+type trackerColumn int
+
+const (
+    columnNote trackerColumn = iota
+    columnVolume
+    columnArpeggio
+    columnEffect
+    columnParam
+    trackerColumnCount
+)
+```
+
+`TrackerModel.CursorCol trackerColumn` tracks which subcolumn is focused. It is exported (capital C) so `main.go` and other callers can read it.
+
+### Nibble buffer
+
+Two-character hex entry for VOL, ARP, and PARAM uses a single generic buffer:
+
+```go
+nibbleHi *int  // nil = no digit buffered; non-nil = first nibble typed
+```
+
+`pushNibble(v int) *int` appends a nibble. On the first call it stores the high nibble and returns `nil`. On the second call it combines `(hi << 4) | lo` and returns the committed byte, then clears the buffer. `clearNibbleBuffer()` sets `nibbleHi = nil`.
+
+### Column navigation
+
+`Tab` / `Shift+Tab` cycle through all columns across all tracks. `moveSubcolumn(delta int)` maps the flat index `track*trackerColumnCount + col` to a (track, column) pair and updates both `nav.CursorTrack()` and `CursorCol`. All navigation keys (`↑↓←→`, Home, End, PgUp, PgDn, Shift+arrows) call `clearNibbleBuffer()` before moving.
+
+### Entry logic — `handleEditInput`
+
+Called from `Update()` when `Mode == editMode`. Dispatches by `CursorCol`:
+
+| Column        | Key input           | Behaviour                                                                                         |
+| ------------- | ------------------- | ------------------------------------------------------------------------------------------------- |
+| `columnNote`  | note key from map   | Sets `row.Note`, emits `TrackerNoteEntered`, advances by edit step                               |
+| `columnVolume`| hex digit `0`–`F`  | Two-nibble entry; commits `min(64, byte)` to `row.Volume`, advances                              |
+| `columnArpeggio`| hex digit       | Two-nibble entry; commits as `ArpeggioEffect{Offsets: [0, hi, lo]}` + `Continuous = true`, advances |
+| `columnEffect`| effect key alias    | Sets `row.Effect.Type` via `effects.ParseKey`, no advance                                        |
+| `columnParam` | hex digit           | Two-nibble entry; calls `applyInlineEffect(row, type, param)`, advances                          |
+| any           | `delete`            | `clearCurrentCellField(row)` clears only the focused subcolumn's data                            |
+
+### Volume format
+
+`formatVolume(volume int) string` renders `0` as `".."` and positive values as `"%02X"` (hex). Volume is stored as `int` in range 0–64 (hex `00`–`40`).
+
+`formatVolumePending(hi int) string` renders the first nibble as `"X."` (e.g. `"3."`), shown while the user has typed one digit and is awaiting the second.
+
+### Pending state display
+
+In `View()`, when a nibble is buffered for the cursor cell (`nibbleHi != nil && Mode == editMode`), the relevant column's text is replaced with the pending form and rendered with `nibblePendingCellStyle` (yellow foreground, surface background). All other column styling uses `cursorCellStyle` (cyan on surface) for the focused subcolumn, `cellStyle` for everything else.
+
+### Note key guard
+
+In `main.go`, note keys are only used for global synth preview when `m.activeScreen != trackerScreenIdx`. When the tracker screen is active, note keys fall through to `TrackerScreen.Update` → `Tracker.Update` → `handleEditInput`, which routes them only if `CursorCol == columnNote`.
+
+### `delete` key
+
+`clearCurrentCellField(row)` handles delete per column:
+
+- `columnNote` → `row.Note = audio.Off()`
+- `columnVolume` → `row.Volume = 0`
+- `columnArpeggio` → clear `Arpeggio`, `Continuous = false`
+- `columnEffect` → clear type, param, and any linked row fields
+- `columnParam` → call `applyInlineEffect(row, type, 0)`
+
+### Status line
+
+The tracker status line shows `Col: <label>` where the label comes from `cursorColumnLabel()` in `ui/tracker/tracker_cursor_column.go` (`"NOTE"`, `"VOL"`, `"ARP"`, `"FX"`, `"PARAM"`).
+
+---
+
+## Affected Files
+
+| File                               | Change                                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `ui/tracker/tracker.go`            | `trackerColumn` enum; `CursorCol`, `nibbleHi` fields; `handleEditInput`; `pushNibble`/`clearNibbleBuffer`; `moveSubcolumn`; `clearCurrentCellField`; `formatVolume`, `formatVolumePending`, `formatArpPending`, `formatParamPending`; nibble-pending rendering in `View()` |
+| `ui/tracker/tracker_cursor_column.go` | `cursorColumnLabel()` helper                                                                   |
+| `ui/tracker/tracker_parse_utils.go`| `parseHexNibble()` utility                                                                        |
+| `main.go`                          | Note-key block guarded with `m.activeScreen != trackerScreenIdx` (tracker routes internally)      |
+
+---
+
+## Divergences from Original Plan
+
+The implementation differed from the original plan in several ways:
+
+- **Five columns** (NOTE, VOL, ARP, FX, PARAM) rather than two (NOTE + VOL). The broader set was built as part of the inline effects plan (`tracker-ux-8-inline-effects`).
+- **Tab/Shift+Tab** for column cycling rather than a `V` toggle key.
+- **Hex entry** (two nibbles, `%02X`) for volume rather than decimal two-digit entry.
+- **Generic nibble buffer** (`nibbleHi *int`) rather than volume-specific `volDigitPending`/`volFirstDigit` fields.
+- **Single shared cursor styles** (`cursorCellStyle` + `nibblePendingCellStyle`) for all columns rather than a dedicated `volCursorStyle`.
+- Note-key guard is `activeScreen != trackerScreenIdx` (screen-level), not `CursorCol == columnNote` (within-tracker). The tracker's `handleEditInput` handles column routing.
+
 ```
 
 Add three fields to `TrackerModel`:
