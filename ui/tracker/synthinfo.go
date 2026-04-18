@@ -18,20 +18,16 @@ func lbl(s string) string { return synthInfoLabelStyle.Render(s) }
 
 // renderSynthInfo returns a compact multi-line summary of the synth patch
 // assigned to the current track.
-func renderSynthInfo(synth *audio.Synth, patchName, patchCategory string, patchTags []string) string {
+func renderSynthInfo(synth *audio.Synth) string {
 	if synth == nil {
 		return "(no synth)"
 	}
 	var sb strings.Builder
-	if patchName != "" {
-		sb.WriteString(fmt.Sprintf("%s %s", lbl("Patch:"), patchName))
+	if synth.Meta.Name != "" {
+		sb.WriteString(fmt.Sprintf("%s %s", lbl("Patch:"), synth.Meta.Name))
 		sb.WriteString("\n")
-		if patchCategory != "" {
-			sb.WriteString(fmt.Sprintf("%s %s", lbl("Category:"), patchCategory))
-			sb.WriteString("\n")
-		}
-		if len(patchTags) > 0 {
-			sb.WriteString(fmt.Sprintf("%s %s", lbl("Tags:"), strings.Join(patchTags, ", ")))
+		if synth.Meta.Bank != "" {
+			sb.WriteString(fmt.Sprintf("%s %s", lbl("Bank:"), synth.Meta.Bank))
 			sb.WriteString("\n")
 		}
 		sb.WriteString("\n")

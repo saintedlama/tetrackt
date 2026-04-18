@@ -87,6 +87,17 @@ func (s *SynthScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 	case ui.SynthUpdated:
 		s.ApplyTrackChange(ui.TrackChanged{Synth: msg.Synth})
 		return s, nil
+
+	case WavetablePickedMsg:
+		osc := s.activeOscillator()
+		if osc != nil {
+			osc.wtBank = msg.BankIdx
+			osc.wtIndex = msg.EntryIdx
+			osc.Oscillator.Wavetable = msg.Entry.Data
+			osc.Oscillator.Meta = audio.Metadata{Bank: msg.Entry.Bank, Name: msg.Entry.Name}
+			return s, func() tea.Msg { return ui.SynthUpdated{Synth: s.GetSynth()} }
+		}
+		return s, nil
 	}
 
 	return s, nil
@@ -256,6 +267,17 @@ func (s *SynthScreen) Help() []ui.HelpSection {
 			},
 		},
 	}
+}
+
+// activeOscillator returns the active panel as an *OscillatorModel if it is one,
+// otherwise nil.
+func (s *SynthScreen) activeOscillator() *OscillatorModel {
+	child := s.panels[s.ActivePanel].Child
+	osc, ok := child.(*OscillatorModel)
+	if !ok {
+		return nil
+	}
+	return osc
 }
 
 // GetSynth builds and returns an audio.Synth from the current panel state.

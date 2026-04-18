@@ -31,10 +31,10 @@ func TestPatchBankRoundTrip(t *testing.T) {
 		Version: 1,
 		SynthPatches: []SavedPatch{
 			{
-				Name:     "Cool Bass",
-				Category: "Bass",
-				Tags:     []string{"Custom", "C64"},
-				Synth:    ToSavedSynth(synth),
+				Name:  "Cool Bass",
+				Bank:  "Bass",
+				Tags:  []string{"Custom", "C64"},
+				Synth: ToSavedSynth(synth),
 			},
 		},
 	}
@@ -56,7 +56,7 @@ func TestPatchBankRoundTrip(t *testing.T) {
 
 	p := loaded.SynthPatches[0]
 	assert.Equal(t, "Cool Bass", p.Name, "expected Name='Cool Bass'")
-	assert.Equal(t, "Bass", p.Category, "expected Category='Bass'")
+	assert.Equal(t, "Bass", p.Bank, "expected Bank='Bass'")
 	assert.True(t, p.IsCustom(), "expected IsCustom()=true")
 	assert.Len(t, p.Tags, 2, "expected 2 tags")
 

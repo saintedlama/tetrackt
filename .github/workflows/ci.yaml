@@ -21,6 +21,9 @@ jobs:
       - name: Setup build prerequisites
         run: sudo apt install libasound2-dev
 
+      - name: Generate wavetable archive
+        run: make compress
+
       - name: Build
         run: go build -v
 

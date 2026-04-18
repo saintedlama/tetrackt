@@ -32,7 +32,8 @@ type Synth struct {
 	LFO1           LFO
 	LFO2           LFO
 	LFO3           LFO
-	Portamento     float64 // glide duration in seconds; 0 = snap
+	Portamento     float64  // glide duration in seconds; 0 = snap
+	Meta           Metadata // display-level patch metadata (Bank, Name, Tags)
 }
 
 // NewSynth creates a new synthesis engine

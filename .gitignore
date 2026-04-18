@@ -10,6 +10,9 @@
 main
 tetrackt
 
+# Generated AKWF wavetable archive (regenerate with: make compress)
+persistence/akwf/akwf.tar.gz
+
 # Test binary, built with `go test -c`
 *.test
 

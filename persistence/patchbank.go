@@ -20,10 +20,10 @@ type PatchBank struct {
 
 // SavedPatch is one entry in the patch bank.
 type SavedPatch struct {
-	Name     string     `json:"name"`
-	Category string     `json:"category,omitempty"`
-	Tags     []string   `json:"tags,omitempty"`
-	Synth    SavedSynth `json:"synth"`
+	Name  string     `json:"name"`
+	Bank  string     `json:"bank,omitempty"`
+	Tags  []string   `json:"tags,omitempty"`
+	Synth SavedSynth `json:"synth"`
 }
 
 // IsCustom reports whether this patch was saved by the user.

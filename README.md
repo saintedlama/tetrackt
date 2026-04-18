@@ -147,3 +147,7 @@ make run
 ## Contributing
 
 New tracker trick, meaner bass patch, cleaner render path, more cursed sound effect — pull requests are welcome.
+
+## Acknowledgements
+
+The wavetable bank includes single-cycle waveforms from the [Adventure Kid Waveform (AKWF)](https://www.adventurekid.se/akrt/waveforms/) collection by Kristoffer Ekstrom (Adventure Kid). These are freely available for use in any project.

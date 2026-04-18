@@ -13,10 +13,10 @@ import (
 
 // SynthPatch represents a complete synth patch configuration.
 type SynthPatch struct {
-	Name     string
-	Category string
-	Tags     []string // e.g. ["Custom", "NES", "C64"]
-	Synth    *audio.Synth
+	Name  string
+	Bank  string
+	Tags  []string // e.g. ["Custom", "NES", "C64"]
+	Synth *audio.Synth
 }
 
 // IsCustom reports whether this patch was saved by the user.
@@ -28,9 +28,9 @@ func (p SynthPatch) IsCustom() bool {
 type focusRow int
 
 const (
-	focusCategory focusRow = iota // category filter row
-	focusTag                      // tag filter row
-	focusList                     // patch list
+	focusBank focusRow = iota // bank filter row
+	focusTag                  // tag filter row
+	focusList                 // patch list
 )
 
 // SynthPatchBankView is the UI component for browsing and managing synth patches.
@@ -39,10 +39,10 @@ type SynthPatchBankView struct {
 	SelectedPatch int
 	MaxHeight     int
 
-	// Category filter
-	Categories     []string
-	CategoryIndex  int
-	CategoryCounts map[string]int
+	// Bank filter
+	Banks      []string
+	BankIndex  int
+	BankCounts map[string]int
 
 	// Tag filter
 	Tags      []string
@@ -59,15 +59,18 @@ func NewSynthPatchBankView() *SynthPatchBankView {
 	slices.SortFunc(patches, func(i, j SynthPatch) int {
 		return strings.Compare(i.Name, j.Name)
 	})
-	categories, categoryCounts := buildCategories(patches)
+	for i := range patches {
+		populateSynthMeta(&patches[i])
+	}
+	banks, bankCounts := buildBanks(patches)
 	tags, tagCounts := buildTags(patches)
 
 	return &SynthPatchBankView{
-		Patches:        patches,
-		Categories:     categories,
-		CategoryCounts: categoryCounts,
-		Tags:           tags,
-		TagCounts:      tagCounts,
+		Patches:    patches,
+		Banks:      banks,
+		BankCounts: bankCounts,
+		Tags:       tags,
+		TagCounts:  tagCounts,
 	}
 }
 
@@ -79,14 +82,26 @@ func (v *SynthPatchBankView) SetUserPatches(patches []SynthPatch) {
 			filtered = append(filtered, p)
 		}
 	}
+	for i := range patches {
+		populateSynthMeta(&patches[i])
+	}
 	filtered = append(filtered, patches...)
 	slices.SortFunc(filtered, func(i, j SynthPatch) int {
 		return strings.Compare(i.Name, j.Name)
 	})
 	v.Patches = filtered
-	v.Categories, v.CategoryCounts = buildCategories(v.Patches)
+	v.Banks, v.BankCounts = buildBanks(v.Patches)
 	v.Tags, v.TagCounts = buildTags(v.Patches)
 	v.snapSelectionToFilter()
+}
+
+// populateSynthMeta copies patch-level display metadata into the synth so
+// the metadata travels with the synth when it is assigned to a track.
+func populateSynthMeta(p *SynthPatch) {
+	if p.Synth == nil {
+		return
+	}
+	p.Synth.Meta = audio.Metadata{Bank: p.Bank, Name: p.Name, Tags: p.Tags}
 }
 
 // GetPatch returns the patch at the specified index.
@@ -126,13 +141,13 @@ func (v *SynthPatchBankView) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 	return v, nil
 }
 
-// moveUp moves focus up: list → tag filter → category filter.
+// moveUp moves focus up: list → tag filter → bank filter.
 func (v *SynthPatchBankView) moveUp() {
 	switch v.focus {
-	case focusCategory:
+	case focusBank:
 		// already at top
 	case focusTag:
-		v.focus = focusCategory
+		v.focus = focusBank
 	case focusList:
 		indexes := v.filteredIndexes()
 		if len(indexes) == 0 {
@@ -148,10 +163,10 @@ func (v *SynthPatchBankView) moveUp() {
 	}
 }
 
-// moveDown moves focus down: category filter → tag filter → patch list.
+// moveDown moves focus down: bank filter → tag filter → patch list.
 func (v *SynthPatchBankView) moveDown() {
 	switch v.focus {
-	case focusCategory:
+	case focusBank:
 		v.focus = focusTag
 	case focusTag:
 		if len(v.filteredIndexes()) > 0 {
@@ -172,9 +187,9 @@ func (v *SynthPatchBankView) moveDown() {
 
 func (v *SynthPatchBankView) filterLeft() {
 	switch v.focus {
-	case focusCategory:
-		if len(v.Categories) > 0 {
-			v.CategoryIndex = (v.CategoryIndex - 1 + len(v.Categories)) % len(v.Categories)
+	case focusBank:
+		if len(v.Banks) > 0 {
+			v.BankIndex = (v.BankIndex - 1 + len(v.Banks)) % len(v.Banks)
 			v.snapSelectionToFilter()
 		}
 	case focusTag:
@@ -187,9 +202,9 @@ func (v *SynthPatchBankView) filterLeft() {
 
 func (v *SynthPatchBankView) filterRight() {
 	switch v.focus {
-	case focusCategory:
-		if len(v.Categories) > 0 {
-			v.CategoryIndex = (v.CategoryIndex + 1) % len(v.Categories)
+	case focusBank:
+		if len(v.Banks) > 0 {
+			v.BankIndex = (v.BankIndex + 1) % len(v.Banks)
 			v.snapSelectionToFilter()
 		}
 	case focusTag:
@@ -200,22 +215,22 @@ func (v *SynthPatchBankView) filterRight() {
 	}
 }
 
-// buildCategories returns ["All", ...unique categories] with counts.
-func buildCategories(patches []SynthPatch) ([]string, map[string]int) {
-	categories := []string{"All"}
+// buildBanks returns ["All", ...unique banks] with counts.
+func buildBanks(patches []SynthPatch) ([]string, map[string]int) {
+	banks := []string{"All"}
 	seen := map[string]bool{"All": true}
 	counts := map[string]int{"All": len(patches)}
 	for _, p := range patches {
-		if p.Category == "" {
+		if p.Bank == "" {
 			continue
 		}
-		counts[p.Category]++
-		if !seen[p.Category] {
-			categories = append(categories, p.Category)
-			seen[p.Category] = true
+		counts[p.Bank]++
+		if !seen[p.Bank] {
+			banks = append(banks, p.Bank)
+			seen[p.Bank] = true
 		}
 	}
-	return categories, counts
+	return banks, counts
 }
 
 // buildTags returns ["All", ...unique tags] with counts.
@@ -235,14 +250,14 @@ func buildTags(patches []SynthPatch) ([]string, map[string]int) {
 	return tags, counts
 }
 
-func (v *SynthPatchBankView) currentCategory() string {
-	if v.CategoryIndex < 0 || v.CategoryIndex >= len(v.Categories) {
-		v.CategoryIndex = 0
+func (v *SynthPatchBankView) currentBank() string {
+	if v.BankIndex < 0 || v.BankIndex >= len(v.Banks) {
+		v.BankIndex = 0
 	}
-	if len(v.Categories) == 0 {
+	if len(v.Banks) == 0 {
 		return "All"
 	}
-	return v.Categories[v.CategoryIndex]
+	return v.Banks[v.BankIndex]
 }
 
 func (v *SynthPatchBankView) currentTag() string {
@@ -260,14 +275,14 @@ func (v *SynthPatchBankView) filteredIndexes() []int {
 	if len(v.Patches) == 0 {
 		return nil
 	}
-	category := v.currentCategory()
+	bank := v.currentBank()
 	tag := v.currentTag()
 	indexes := make([]int, 0, len(v.Patches))
 	for i, p := range v.Patches {
 		if tag != "All" && !slices.Contains(p.Tags, tag) {
 			continue
 		}
-		if category != "All" && p.Category != category {
+		if bank != "All" && p.Bank != bank {
 			continue
 		}
 		indexes = append(indexes, i)
@@ -301,13 +316,13 @@ func (v *SynthPatchBankView) snapSelectionToFilter() {
 func (v *SynthPatchBankView) View() string {
 	var b strings.Builder
 
-	// Category filter row
-	cat := v.currentCategory()
-	catLine := fmt.Sprintf("Category: ◀ %s ▶", cat)
-	if v.focus == focusCategory {
-		catLine = common.StyleSelected.Render(catLine)
+	// Bank filter row
+	bank := v.currentBank()
+	bankLine := fmt.Sprintf("Bank:     ◀ %s ▶", bank)
+	if v.focus == focusBank {
+		bankLine = common.StyleSelected.Render(bankLine)
 	}
-	fmt.Fprintln(&b, catLine)
+	fmt.Fprintln(&b, bankLine)
 
 	// Tag filter row
 	tag := v.currentTag()

@@ -37,29 +37,41 @@ func fromSavedEnvelope(s SavedEnvelope) audio.Envelope {
 }
 
 // SavedOscillator is the JSON-serializable form of audio.Oscillator.
+// WavetableBank, WavetableName, and WavetableData carry the wavetable inline.
 type SavedOscillator struct {
-	Type       string  `json:"type"`
-	Phase      float64 `json:"phase,omitempty"`
-	PulseWidth float64 `json:"pulse_width,omitempty"`
-	Detune     float64 `json:"detune,omitempty"`
+	Type          string    `json:"type"`
+	Phase         float64   `json:"phase,omitempty"`
+	PulseWidth    float64   `json:"pulse_width,omitempty"`
+	Detune        float64   `json:"detune,omitempty"`
+	WavetableBank string    `json:"wavetable_bank,omitempty"`
+	WavetableName string    `json:"wavetable_name,omitempty"`
+	WavetableData []float64 `json:"wavetable_data,omitempty"`
 }
 
 func toSavedOscillator(o audio.Oscillator) SavedOscillator {
 	return SavedOscillator{
-		Type:       string(o.Type),
-		Phase:      o.Phase,
-		PulseWidth: o.PulseWidth,
-		Detune:     o.Detune,
+		Type:          string(o.Type),
+		Phase:         o.Phase,
+		PulseWidth:    o.PulseWidth,
+		Detune:        o.Detune,
+		WavetableBank: o.Meta.Bank,
+		WavetableName: o.Meta.Name,
+		WavetableData: o.Wavetable,
 	}
 }
 
 func fromSavedOscillator(s SavedOscillator) audio.Oscillator {
-	return audio.Oscillator{
+	o := audio.Oscillator{
 		Type:       audio.OscillatorType(s.Type),
 		Phase:      s.Phase,
 		PulseWidth: s.PulseWidth,
 		Detune:     s.Detune,
 	}
+	if len(s.WavetableData) > 0 {
+		o.Wavetable = s.WavetableData
+		o.Meta = audio.Metadata{Bank: s.WavetableBank, Name: s.WavetableName}
+	}
+	return o
 }
 
 // SavedLFO is the JSON-serializable form of audio.LFO.
@@ -258,13 +270,18 @@ type SavedTrackRow struct {
 	EffectParam     int    `json:"effect_param,omitempty"`
 }
 
+// SavedMeta holds optional display metadata for a patch loaded from the bank.
+type SavedMeta struct {
+	Bank string   `json:"bank,omitempty"`
+	Name string   `json:"name,omitempty"`
+	Tags []string `json:"tags,omitempty"`
+}
+
 // SavedTrack is the JSON-serializable form of Track
 type SavedTrack struct {
-	Synth         SavedSynth      `json:"synth"`
-	PatchName     string          `json:"patch_name,omitempty"`
-	PatchCategory string          `json:"patch_category,omitempty"`
-	PatchTags     []string        `json:"patch_tags,omitempty"`
-	Rows          []SavedTrackRow `json:"rows"`
+	Synth SavedSynth      `json:"synth"`
+	Meta  *SavedMeta      `json:"meta,omitempty"`
+	Rows  []SavedTrackRow `json:"rows"`
 }
 
 // SavedModule is the complete module structure for JSON serialization
@@ -300,13 +317,15 @@ func TracksToModule(tracker *utracker.TrackerModel) *SavedModule {
 				EffectParam:     row.Effect.Param,
 			}
 		}
-		saved.Tracks[i] = SavedTrack{
-			Synth:         toSavedSynth(track.Synth),
-			PatchName:     track.PatchName,
-			PatchCategory: track.PatchCategory,
-			PatchTags:     append([]string(nil), track.PatchTags...),
-			Rows:          rows,
+		st := SavedTrack{
+			Synth: toSavedSynth(track.Synth),
+			Rows:  rows,
 		}
+		if track.Synth != nil && track.Synth.Meta.Name != "" {
+			m := track.Synth.Meta
+			st.Meta = &SavedMeta{Bank: m.Bank, Name: m.Name, Tags: m.Tags}
+		}
+		saved.Tracks[i] = st
 	}
 	return saved
 }
@@ -352,9 +371,9 @@ func ModuleToTracks(mod *SavedModule, tracker *utracker.TrackerModel) {
 		}
 		track := &tracker.Tracks[i]
 		track.Synth = fromSavedSynth(savedTrack.Synth)
-		track.PatchName = savedTrack.PatchName
-		track.PatchCategory = savedTrack.PatchCategory
-		track.PatchTags = append([]string(nil), savedTrack.PatchTags...)
+		if savedTrack.Meta != nil {
+			track.Synth.Meta = audio.Metadata{Bank: savedTrack.Meta.Bank, Name: savedTrack.Meta.Name, Tags: savedTrack.Meta.Tags}
+		}
 
 		// Update each row with saved data
 		for j, row := range savedTrack.Rows {

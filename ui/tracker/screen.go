@@ -141,11 +141,6 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 	case ui.SynthUpdated:
 		track := &t.Tracker.Tracks[t.Tracker.nav.CursorTrack()]
 		track.Synth = msg.Synth
-		if msg.HasPatchMeta {
-			track.PatchName = msg.PatchName
-			track.PatchCategory = msg.PatchCategory
-			track.PatchTags = append([]string(nil), msg.PatchTags...)
-		}
 		return t, nil
 	}
 	return t, nil
@@ -170,7 +165,7 @@ func (t *TrackerScreen) View() string {
 	settingsContent := volumeRow + "\n" + bpmRow + "\n" + speedRow
 
 	currentTrack := t.Tracker.Tracks[t.Tracker.nav.CursorTrack()]
-	synthInfoContent := renderSynthInfo(currentTrack.Synth, currentTrack.PatchName, currentTrack.PatchCategory, currentTrack.PatchTags)
+	synthInfoContent := renderSynthInfo(currentTrack.Synth)
 
 	trackerPanel := ui.RenderPanel("Tracker", common.ColorAccentPrimary, t.Tracker.View(), t.activePanel == 0)
 	settingsPanel := ui.RenderPanel("Settings", common.ColorAccentModulation, settingsContent, t.activePanel == 1)

@@ -19,35 +19,19 @@ const (
 	oscillatorPhase
 	oscillatorPulseWidth
 	oscillatorDetune
-	oscillatorWavetable
+	oscillatorWavetableCategory
+	oscillatorWavetableEntry
 	oscillatorNoisePeriod
 	oscillatorFieldCount
 )
-
-type wavetablePreset struct {
-	name string
-	data []float64
-}
-
-var builtinWavetables = []wavetablePreset{
-	{"SoftSaw", audio.WavetableSoftSaw},
-	{"SoftSquare", audio.WavetableSoftSquare},
-	{"Organ", audio.WavetableOrgan},
-	{"Glass", audio.WavetableGlass},
-	{"Bass", audio.WavetableBass},
-	{"Strings", audio.WavetableStrings},
-	{"Flute", audio.WavetableFlute},
-	{"Brass", audio.WavetableBrass},
-	{"Chime", audio.WavetableChime},
-	{"Voice", audio.WavetableVoice},
-}
 
 type OscillatorModel struct {
 	Oscillator          audio.Oscillator
 	oscillatorList      []audio.OscillatorType
 	oscillatorTypeStyle lipgloss.Style
 	editField           editField
-	wavetableIdx        int // index into builtinWavetables
+	wtBank              int // index into WavetableBanksInOrder()
+	wtIndex             int // index within the category
 }
 
 type OscillatorUpdated struct {
@@ -68,21 +52,59 @@ func NewOscillatorModel(oscillator audio.Oscillator) *OscillatorModel {
 
 	oscillatorTypeStyle := lipgloss.NewStyle().Width(calcOscWidth(oscillatorList))
 
-	// match wavetableIdx to current Oscillator.Wavetable if possible
-	wtIdx := 0
-	for i, p := range builtinWavetables {
-		if len(oscillator.Wavetable) == len(p.data) {
-			wtIdx = i
-			break
-		}
-	}
+	// Match wtBank / wtIndex to the oscillator's current wavetable via Meta.
+	bankIdx, wIdx := resolveWavetablePosition(oscillator.Meta.Bank, oscillator.Meta.Name)
 
 	return &OscillatorModel{
 		Oscillator:          oscillator,
 		oscillatorList:      oscillatorList,
 		oscillatorTypeStyle: oscillatorTypeStyle,
-		wavetableIdx:        wtIdx,
+		wtBank:              bankIdx,
+		wtIndex:             wIdx,
 	}
+}
+
+// resolveWavetablePosition finds the bank and within-bank index for
+// the given wavetable bank and name. Returns (0, 0) if not found.
+func resolveWavetablePosition(bank, name string) (bankIdx, wIdx int) {
+	if bank == "" && name == "" {
+		return 0, 0
+	}
+	banks := WavetableBanksInOrder()
+	for bi, b := range banks {
+		if b != bank {
+			continue
+		}
+		entries := WavetableEntriesForBank(b)
+		for ei, e := range entries {
+			if e.Name == name {
+				return bi, ei
+			}
+		}
+	}
+	return 0, 0
+}
+
+// currentEntry returns the WavetableEntry at (wtBank, wtIndex).
+func (m *OscillatorModel) currentEntry() WavetableEntry {
+	banks := WavetableBanksInOrder()
+	if len(banks) == 0 {
+		return WavetableEntry{}
+	}
+	bi := m.wtBank % len(banks)
+	entries := WavetableEntriesForBank(banks[bi])
+	if len(entries) == 0 {
+		return WavetableEntry{}
+	}
+	wi := m.wtIndex % len(entries)
+	return entries[wi]
+}
+
+// applyCurrentWavetable copies the current entry's data and metadata into the Oscillator.
+func (m *OscillatorModel) applyCurrentWavetable() {
+	e := m.currentEntry()
+	m.Oscillator.Wavetable = e.Data
+	m.Oscillator.Meta = audio.Metadata{Bank: e.Bank, Name: e.Name}
 }
 
 func (m *OscillatorModel) Init() tea.Cmd {
@@ -109,9 +131,33 @@ func (m *OscillatorModel) View() string {
 
 	switch m.Oscillator.Type {
 	case audio.Wavetable:
-		wt := builtinWavetables[m.wavetableIdx]
+		banks := WavetableBanksInOrder()
+		bankCount := len(banks)
+		var bankName, wavName string
+		var wIdx, wCount int
+		if bankCount > 0 {
+			bi := m.wtBank % bankCount
+			bankName = banks[bi]
+			entries := WavetableEntriesForBank(bankName)
+			wCount = len(entries)
+			if wCount > 0 {
+				wIdx = (m.wtIndex % wCount) + 1
+				wavName = entries[wIdx-1].Name
+			}
+		}
+		displayBank := bankName
+		displayWav := strings.TrimPrefix(wavName, "AKWF_")
+		const maxBank, maxWav = 16, 16
+		if len(displayBank) > maxBank {
+			displayBank = displayBank[:maxBank]
+		}
+		if len(displayWav) > maxWav {
+			displayWav = displayWav[:maxWav]
+		}
 		oscillatorView.WriteString("\n")
-		oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("Wave: %-10s", wt.name), m.editField == oscillatorWavetable))
+		oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("%-16s", displayBank), m.editField == oscillatorWavetableCategory))
+		oscillatorView.WriteString("\n")
+		oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("%-16s", displayWav), m.editField == oscillatorWavetableEntry))
 	case audio.NoisePeriodic:
 		periodStr := "Auto"
 		if m.Oscillator.NoisePeriod > 0 {
@@ -119,8 +165,10 @@ func (m *OscillatorModel) View() string {
 		}
 		oscillatorView.WriteString("\n")
 		oscillatorView.WriteString(renderFieldSelected(fmt.Sprintf("Period:%-6s", periodStr), m.editField == oscillatorNoisePeriod))
+		oscillatorView.WriteString("\n")
 	default:
-		// Blank 5th line keeps all oscillator panels the same height.
+		// Two blank lines keep all oscillator panels the same height.
+		oscillatorView.WriteString("\n")
 		oscillatorView.WriteString("\n")
 	}
 
@@ -133,26 +181,28 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "up":
-			// Move to previous oscillator field; skip oscillatorWavetable unless type is Wavetable
 			m.editField = m.prevField()
 		case "down":
-			// Move to next oscillator field; skip oscillatorWavetable unless type is Wavetable
 			m.editField = m.nextField()
+		case "enter":
+			if m.editField == oscillatorWavetableCategory || m.editField == oscillatorWavetableEntry {
+				cmd = func() tea.Msg { return OpenWavetableDialogMsg{BankIdx: m.wtBank, EntryIdx: m.wtIndex} }
+			}
 		case "left":
 			switch m.editField {
 			case oscillatorType:
 				m.Oscillator.Type = cycle(m.oscillatorList, m.Oscillator.Type, -1)
 				if m.Oscillator.Type == audio.Wavetable {
-					m.Oscillator.Wavetable = builtinWavetables[m.wavetableIdx].data
+					m.applyCurrentWavetable()
 					m.Oscillator.NoisePeriod = 0
 				} else {
 					m.Oscillator.Wavetable = nil
+					m.Oscillator.Meta = audio.Metadata{}
 				}
 				if m.Oscillator.Type != audio.NoisePeriodic {
 					m.Oscillator.NoisePeriod = 0
 				}
 			case oscillatorPhase:
-				// decrease phase
 				m.Oscillator.Phase -= 0.05
 				if m.Oscillator.Phase < 0.0 {
 					m.Oscillator.Phase = 0.0
@@ -165,9 +215,23 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 				m.Oscillator.PulseWidth = max(0.01, pw-0.05)
 			case oscillatorDetune:
 				m.Oscillator.Detune = clampDetune(m.Oscillator.Detune - 1)
-			case oscillatorWavetable:
-				m.wavetableIdx = (m.wavetableIdx - 1 + len(builtinWavetables)) % len(builtinWavetables)
-				m.Oscillator.Wavetable = builtinWavetables[m.wavetableIdx].data
+			case oscillatorWavetableCategory:
+				banks := WavetableBanksInOrder()
+				if len(banks) > 0 {
+					m.wtBank = (m.wtBank - 1 + len(banks)) % len(banks)
+					m.wtIndex = 0
+					m.applyCurrentWavetable()
+				}
+			case oscillatorWavetableEntry:
+				banks := WavetableBanksInOrder()
+				if len(banks) > 0 {
+					bi := m.wtBank % len(banks)
+					entries := WavetableEntriesForBank(banks[bi])
+					if len(entries) > 0 {
+						m.wtIndex = (m.wtIndex - 1 + len(entries)) % len(entries)
+						m.applyCurrentWavetable()
+					}
+				}
 			case oscillatorNoisePeriod:
 				if m.Oscillator.NoisePeriod > 0 {
 					m.Oscillator.NoisePeriod--
@@ -186,22 +250,33 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 					m.Oscillator.NoisePeriod = 0
 				}
 				cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
+			case oscillatorWavetableEntry:
+				banks := WavetableBanksInOrder()
+				if len(banks) > 0 {
+					bi := m.wtBank % len(banks)
+					entries := WavetableEntriesForBank(banks[bi])
+					if len(entries) > 0 {
+						m.wtIndex = max(0, m.wtIndex-10)
+						m.applyCurrentWavetable()
+						cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
+					}
+				}
 			}
 		case "right":
 			switch m.editField {
 			case oscillatorType:
 				m.Oscillator.Type = cycle(m.oscillatorList, m.Oscillator.Type, 1)
 				if m.Oscillator.Type == audio.Wavetable {
-					m.Oscillator.Wavetable = builtinWavetables[m.wavetableIdx].data
+					m.applyCurrentWavetable()
 					m.Oscillator.NoisePeriod = 0
 				} else {
 					m.Oscillator.Wavetable = nil
+					m.Oscillator.Meta = audio.Metadata{}
 				}
 				if m.Oscillator.Type != audio.NoisePeriodic {
 					m.Oscillator.NoisePeriod = 0
 				}
 			case oscillatorPhase:
-				// decrease phase
 				m.Oscillator.Phase += 0.05
 				if m.Oscillator.Phase > 1.0 {
 					m.Oscillator.Phase = 1.0
@@ -214,9 +289,23 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 				m.Oscillator.PulseWidth = min(0.99, pw+0.05)
 			case oscillatorDetune:
 				m.Oscillator.Detune = clampDetune(m.Oscillator.Detune + 1)
-			case oscillatorWavetable:
-				m.wavetableIdx = (m.wavetableIdx + 1) % len(builtinWavetables)
-				m.Oscillator.Wavetable = builtinWavetables[m.wavetableIdx].data
+			case oscillatorWavetableCategory:
+				banks := WavetableBanksInOrder()
+				if len(banks) > 0 {
+					m.wtBank = (m.wtBank + 1) % len(banks)
+					m.wtIndex = 0
+					m.applyCurrentWavetable()
+				}
+			case oscillatorWavetableEntry:
+				banks := WavetableBanksInOrder()
+				if len(banks) > 0 {
+					bi := m.wtBank % len(banks)
+					entries := WavetableEntriesForBank(banks[bi])
+					if len(entries) > 0 {
+						m.wtIndex = (m.wtIndex + 1) % len(entries)
+						m.applyCurrentWavetable()
+					}
+				}
 			case oscillatorNoisePeriod:
 				if m.Oscillator.NoisePeriod < 2048 {
 					m.Oscillator.NoisePeriod++
@@ -231,6 +320,17 @@ func (m *OscillatorModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			case oscillatorNoisePeriod:
 				m.Oscillator.NoisePeriod = min(2048, m.Oscillator.NoisePeriod+10)
 				cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
+			case oscillatorWavetableEntry:
+				banks := WavetableBanksInOrder()
+				if len(banks) > 0 {
+					bi := m.wtBank % len(banks)
+					entries := WavetableEntriesForBank(banks[bi])
+					if len(entries) > 0 {
+						m.wtIndex = min(len(entries)-1, m.wtIndex+10)
+						m.applyCurrentWavetable()
+						cmd = func() tea.Msg { return OscillatorUpdated{Oscillator: m.Oscillator} }
+					}
+				}
 			}
 		}
 	}
@@ -276,7 +376,10 @@ func clampDetune(v float64) float64 {
 
 func (m *OscillatorModel) nextField() editField {
 	f := (m.editField + 1) % oscillatorFieldCount
-	if f == oscillatorWavetable && m.Oscillator.Type != audio.Wavetable {
+	if f == oscillatorWavetableCategory && m.Oscillator.Type != audio.Wavetable {
+		f = (f + 2) % oscillatorFieldCount
+	}
+	if f == oscillatorWavetableEntry && m.Oscillator.Type != audio.Wavetable {
 		f = (f + 1) % oscillatorFieldCount
 	}
 	if f == oscillatorNoisePeriod && m.Oscillator.Type != audio.NoisePeriodic {
@@ -287,7 +390,10 @@ func (m *OscillatorModel) nextField() editField {
 
 func (m *OscillatorModel) prevField() editField {
 	f := (m.editField - 1 + oscillatorFieldCount) % oscillatorFieldCount
-	if f == oscillatorWavetable && m.Oscillator.Type != audio.Wavetable {
+	if f == oscillatorWavetableEntry && m.Oscillator.Type != audio.Wavetable {
+		f = (f - 2 + oscillatorFieldCount) % oscillatorFieldCount
+	}
+	if f == oscillatorWavetableCategory && m.Oscillator.Type != audio.Wavetable {
 		f = (f - 1 + oscillatorFieldCount) % oscillatorFieldCount
 	}
 	if f == oscillatorNoisePeriod && m.Oscillator.Type != audio.NoisePeriodic {

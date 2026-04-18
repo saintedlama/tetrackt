@@ -320,6 +320,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case synth.OpenPatchBankMsg:
 		return ui.NewDialogModel(synth.NewSynthPatchBankDialog(m.synth().PatchBankView(), m.octave, m.synth().GetSynth()), m, m.width, m.height), nil
 
+	case synth.OpenWavetableDialogMsg:
+		return ui.NewDialogModel(synth.NewWavetableDialog(msg.BankIdx, msg.EntryIdx), m, m.width, m.height), nil
+
+	case synth.WavetablePickedMsg:
+		var cmd tea.Cmd
+		m.screens[synthScreenIdx], cmd = m.screens[synthScreenIdx].Update(msg)
+		return m, cmd
+
 	case synth.PlayPatchNoteMsg:
 		m.playNoteWithSynthPatch(msg.Note, msg.Patch)
 		return m, nil
@@ -327,10 +335,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case synth.PatchSaveRequestedMsg:
 		tags := append([]string{"Custom"}, msg.Tags...)
 		patch := persistence.SavedPatch{
-			Name:     msg.Name,
-			Category: msg.Category,
-			Tags:     tags,
-			Synth:    persistence.ToSavedSynth(msg.Synth),
+			Name:  msg.Name,
+			Bank:  msg.Bank,
+			Tags:  tags,
+			Synth: persistence.ToSavedSynth(msg.Synth),
 		}
 		m.bank.SynthPatches = append(m.bank.SynthPatches, patch)
 		if err := m.bank.Save(); err != nil {
@@ -436,11 +444,13 @@ func (m *model) playNoteWithSynthPatch(note audio.Note, patch synth.SynthPatch) 
 func bankToPatches(bank *persistence.PatchBank) []synth.SynthPatch {
 	patches := make([]synth.SynthPatch, len(bank.SynthPatches))
 	for i, p := range bank.SynthPatches {
+		s := persistence.SynthFromSavedPatch(p)
+		s.Meta = audio.Metadata{Bank: p.Bank, Name: p.Name, Tags: p.Tags}
 		patches[i] = synth.SynthPatch{
-			Name:     p.Name,
-			Category: p.Category,
-			Tags:     p.Tags,
-			Synth:    persistence.SynthFromSavedPatch(p),
+			Name:  p.Name,
+			Bank:  p.Bank,
+			Tags:  p.Tags,
+			Synth: s,
 		}
 	}
 	return patches

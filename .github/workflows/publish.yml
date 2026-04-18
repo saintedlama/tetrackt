@@ -62,6 +62,9 @@ jobs:
         if: matrix.goos == 'linux'
         run: sudo apt install libasound2-dev
 
+      - name: Generate wavetable archive
+        run: make compress
+
       - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}

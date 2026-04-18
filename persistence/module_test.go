@@ -180,9 +180,7 @@ func TestSaveAndLoad(t *testing.T) {
 
 func TestTrackPatchMetadataRoundTrip(t *testing.T) {
 	trackerModel := tracker.NewTracker(8, 16, 0, 0)
-	trackerModel.Tracks[0].PatchName = "Square Lead"
-	trackerModel.Tracks[0].PatchCategory = "Lead"
-	trackerModel.Tracks[0].PatchTags = []string{"NES", "Custom"}
+	trackerModel.Tracks[0].Synth.Meta = audio.Metadata{Name: "Square Lead", Bank: "Lead"}
 	trackerModel.Tracks[0].Synth.Oscillator1 = audio.Oscillator{Type: audio.Square, PulseWidth: 0.25, Detune: 5}
 
 	tmpFile := "test_patch_meta_module.json"
@@ -198,9 +196,8 @@ func TestTrackPatchMetadataRoundTrip(t *testing.T) {
 	newTracker := tracker.NewTracker(8, 64, 0, 0)
 	ModuleToTracks(loadedMod, newTracker)
 
-	require.Equal(t, "Square Lead", newTracker.Tracks[0].PatchName, "expected patch name to round-trip")
-	require.Equal(t, "Lead", newTracker.Tracks[0].PatchCategory, "expected patch category to round-trip")
-	require.Equal(t, []string{"NES", "Custom"}, newTracker.Tracks[0].PatchTags, "expected patch tags to round-trip")
+	require.Equal(t, "Square Lead", newTracker.Tracks[0].Synth.Meta.Name, "expected patch name to round-trip")
+	require.Equal(t, "Lead", newTracker.Tracks[0].Synth.Meta.Bank, "expected patch bank to round-trip")
 
 	osc := newTracker.Tracks[0].Synth.Oscillator1
 	require.Equal(t, audio.Square, osc.Type, "expected oscillator type to round-trip")

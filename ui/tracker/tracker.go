@@ -165,10 +165,6 @@ type Track struct {
 	number int
 	Synth  *audio.Synth
 	Rows   []TrackRow
-	// Optional informational metadata for synth patches selected from patch bank.
-	PatchName     string
-	PatchCategory string
-	PatchTags     []string
 }
 
 // TrackRow represents a single row in a track
@@ -441,10 +437,7 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			currentTrack := m.Tracks[m.nav.CursorTrack()]
 			cmd = func() tea.Msg {
 				return ui.TrackChanged{
-					Synth:         currentTrack.Synth,
-					PatchName:     currentTrack.PatchName,
-					PatchCategory: currentTrack.PatchCategory,
-					PatchTags:     append([]string(nil), currentTrack.PatchTags...),
+					Synth: currentTrack.Synth,
 				}
 			}
 		}

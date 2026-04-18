@@ -1,4 +1,4 @@
-.PHONY: build lint test run clean
+.PHONY: build lint test run clean compress
 
 BINARY := tetrackt
 
@@ -17,3 +17,6 @@ run:
 clean:
 	go clean
 	rm -f $(BINARY)
+
+compress:
+	cd persistence/akwf && tar -czf akwf.tar.gz *.json

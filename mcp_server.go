@@ -35,10 +35,10 @@ type noteUpdate struct {
 }
 
 type createPatchArgs struct {
-	Name     string          `json:"name"`
-	Category string          `json:"category,omitempty"`
-	Tags     []string        `json:"tags,omitempty"`
-	Synth    json.RawMessage `json:"synth"`
+	Name  string          `json:"name"`
+	Bank  string          `json:"bank,omitempty"`
+	Tags  []string        `json:"tags,omitempty"`
+	Synth json.RawMessage `json:"synth"`
 }
 
 type assignPatchArgs struct {
@@ -183,10 +183,10 @@ func (s *mcpServer) handleCreatePatch(ctx context.Context, request mcp.CallToolR
 
 	result, err := s.bridge.apply(ctx, func(m *model) (any, error) {
 		patch := persistence.SavedPatch{
-			Name:     strings.TrimSpace(args.Name),
-			Category: strings.TrimSpace(args.Category),
-			Tags:     ensureCustomTag(args.Tags),
-			Synth:    synthPayload,
+			Name:  strings.TrimSpace(args.Name),
+			Bank:  strings.TrimSpace(args.Bank),
+			Tags:  ensureCustomTag(args.Tags),
+			Synth: synthPayload,
 		}
 
 		replaced := false
@@ -210,7 +210,7 @@ func (s *mcpServer) handleCreatePatch(ctx context.Context, request mcp.CallToolR
 
 		return map[string]any{
 			"name":      patch.Name,
-			"category":  patch.Category,
+			"bank":      patch.Bank,
 			"tags":      patch.Tags,
 			"is_custom": true,
 		}, nil
@@ -238,7 +238,7 @@ func (s *mcpServer) handleListPatches(ctx context.Context, request mcp.CallToolR
 
 			patches = append(patches, map[string]any{
 				"name":      p.Name,
-				"category":  p.Category,
+				"bank":      p.Bank,
 				"tags":      p.Tags,
 				"is_custom": p.IsCustom(),
 			})
@@ -273,7 +273,7 @@ func (s *mcpServer) handleAssignPatch(ctx context.Context, request mcp.CallToolR
 		return map[string]any{
 			"track":      args.Track,
 			"patch_name": patch.Name,
-			"category":   patch.Category,
+			"bank":       patch.Bank,
 			"tags":       patch.Tags,
 		}, nil
 	})
@@ -304,7 +304,7 @@ func (s *mcpServer) handleSelectBuiltinPatch(ctx context.Context, request mcp.Ca
 		return map[string]any{
 			"track":      args.Track,
 			"patch_name": patch.Name,
-			"category":   patch.Category,
+			"bank":       patch.Bank,
 			"tags":       patch.Tags,
 		}, nil
 	})

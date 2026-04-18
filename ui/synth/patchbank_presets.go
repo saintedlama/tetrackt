@@ -14,6 +14,7 @@ func builtinPatches() []SynthPatch {
 		arpPatches(),
 		percussivePatches(),
 		sfxPatches(),
+		wavetablePatches(),
 	}
 
 	var joined []SynthPatch
@@ -27,35 +28,35 @@ func builtinPatches() []SynthPatch {
 func leadPatches() []SynthPatch {
 	ms := time.Millisecond
 	return []SynthPatch{
-		{Name: "Square Lead", Category: "Lead", Tags: []string{"NES"},
+		{Name: "Square Lead", Bank: "Lead", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Decay: 20 * ms, Sustain: 0.8, Release: 60 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Pulse Lead 25%", Category: "Lead", Tags: []string{"NES"},
+		{Name: "Pulse Lead 25%", Bank: "Lead", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.25},
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Decay: 15 * ms, Sustain: 0.8, Release: 60 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Thin Pulse", Category: "Lead", Tags: []string{"NES"},
+		{Name: "Thin Pulse", Bank: "Lead", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.125},
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Decay: 15 * ms, Sustain: 0.75, Release: 50 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Triangle Lead", Category: "Lead", Tags: []string{"NES"},
+		{Name: "Triangle Lead", Bank: "Lead", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Triangle},
 				Envelope1:   audio.Envelope{Attack: 5 * ms, Sustain: 1.0, Release: 40 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Vibrato Square", Category: "Lead", Tags: []string{"NES"},
+		{Name: "Vibrato Square", Bank: "Lead", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 10 * ms, Decay: 20 * ms, Sustain: 0.8, Release: 80 * ms},
@@ -63,7 +64,7 @@ func leadPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				LFO1:        audio.LFO{Waveform: audio.LFOSine, Rate: 6.0, Depth: 0.015, Delay: 0.2, Dest: audio.ModPitch},
 			}},
-		{Name: "Portamento Lead", Category: "Lead", Tags: []string{"NES"},
+		{Name: "Portamento Lead", Bank: "Lead", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Decay: 20 * ms, Sustain: 0.8, Release: 60 * ms},
@@ -71,21 +72,21 @@ func leadPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				Portamento:  0.04,
 			}},
-		{Name: "DMG Lead", Category: "Lead", Tags: []string{"Gameboy"},
+		{Name: "DMG Lead", Bank: "Lead", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 30 * ms, Sustain: 0.75, Release: 50 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Gameboy Crush", Category: "Lead", Tags: []string{"Gameboy"},
+		{Name: "Gameboy Crush", Bank: "Lead", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.25},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 20 * ms, Sustain: 0.7, Release: 40 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "PWM Lead", Category: "Lead", Tags: []string{"Gameboy"},
+		{Name: "PWM Lead", Bank: "Lead", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 5 * ms, Decay: 30 * ms, Sustain: 0.8, Release: 80 * ms},
@@ -93,7 +94,7 @@ func leadPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				LFO1:        audio.LFO{Waveform: audio.LFOTriangle, Rate: 1.5, Depth: 0.4, Dest: audio.ModPulseWidth},
 			}},
-		{Name: "SID Sawtooth", Category: "Lead", Tags: []string{"C64"},
+		{Name: "SID Sawtooth", Bank: "Lead", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:      audio.Envelope{Attack: 5 * ms, Decay: 40 * ms, Sustain: 0.7, Release: 80 * ms},
@@ -101,7 +102,7 @@ func leadPatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.45, Resonance: 0.3},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 5 * ms, Decay: 80 * ms, Sustain: 0.3, Release: 80 * ms, Depth: 0.4},
 			}},
-		{Name: "SID Pulse Lead", Category: "Lead", Tags: []string{"C64"},
+		{Name: "SID Pulse Lead", Bank: "Lead", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:      audio.Envelope{Attack: 5 * ms, Decay: 30 * ms, Sustain: 0.75, Release: 100 * ms},
@@ -109,7 +110,7 @@ func leadPatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.5, Resonance: 0.35},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 5 * ms, Decay: 60 * ms, Sustain: 0.2, Release: 100 * ms, Depth: 0.35},
 			}},
-		{Name: "SID Hard Lead", Category: "Lead", Tags: []string{"C64"},
+		{Name: "SID Hard Lead", Bank: "Lead", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:      audio.Envelope{Attack: 3 * ms, Decay: 50 * ms, Sustain: 0.6, Release: 100 * ms},
@@ -117,28 +118,28 @@ func leadPatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.3, Resonance: 0.6},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 3 * ms, Decay: 100 * ms, Sustain: 0.1, Release: 100 * ms, Depth: 0.5},
 			}},
-		{Name: "YM Lead", Category: "Lead", Tags: []string{"Arcade"},
+		{Name: "YM Lead", Bank: "Lead", Tags: []string{"Arcade"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 30 * ms, Sustain: 0.8, Release: 50 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "AY Square Lead", Category: "Lead", Tags: []string{"Arcade"},
+		{Name: "AY Square Lead", Bank: "Lead", Tags: []string{"Arcade"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 20 * ms, Sustain: 0.85, Release: 50 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Sine Lead", Category: "Lead",
+		{Name: "Sine Lead", Bank: "Lead",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sine},
 				Envelope1:   audio.Envelope{Attack: 15 * ms, Decay: 40 * ms, Sustain: 0.8, Release: 150 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Detuned Lead", Category: "Lead",
+		{Name: "Detuned Lead", Bank: "Lead",
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sawtooth, Detune: -8},
 				Envelope1:      audio.Envelope{Attack: 5 * ms, Decay: 40 * ms, Sustain: 0.75, Release: 120 * ms},
@@ -148,7 +149,7 @@ func leadPatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.5, Resonance: 0.15},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 5 * ms, Decay: 60 * ms, Sustain: 0.2, Release: 120 * ms, Depth: 0.35},
 			}},
-		{Name: "Bright Saw Lead", Category: "Lead",
+		{Name: "Bright Saw Lead", Bank: "Lead",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 50 * ms, Sustain: 0.8, Release: 100 * ms},
@@ -161,28 +162,28 @@ func leadPatches() []SynthPatch {
 func bassPatches() []SynthPatch {
 	ms := time.Millisecond
 	return []SynthPatch{
-		{Name: "Triangle Bass", Category: "Bass", Tags: []string{"NES"},
+		{Name: "Triangle Bass", Bank: "Bass", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Triangle},
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Sustain: 1.0, Release: 30 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Square Bass", Category: "Bass", Tags: []string{"NES"},
+		{Name: "Square Bass", Bank: "Bass", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Decay: 30 * ms, Sustain: 0.7, Release: 50 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Chip Bass", Category: "Bass", Tags: []string{"NES"},
+		{Name: "Chip Bass", Bank: "Bass", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 60 * ms, Sustain: 0.5, Release: 40 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "NES Glide Bass", Category: "Bass", Tags: []string{"NES"},
+		{Name: "NES Glide Bass", Bank: "Bass", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Triangle},
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Sustain: 1.0, Release: 30 * ms},
@@ -190,14 +191,14 @@ func bassPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				Portamento:  0.06,
 			}},
-		{Name: "DMG Bass", Category: "Bass", Tags: []string{"Gameboy"},
+		{Name: "DMG Bass", Bank: "Bass", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.25},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 40 * ms, Sustain: 0.65, Release: 40 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Gameboy Rumble", Category: "Bass", Tags: []string{"Gameboy"},
+		{Name: "Gameboy Rumble", Bank: "Bass", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Decay: 50 * ms, Sustain: 0.75, Release: 60 * ms},
@@ -205,7 +206,7 @@ func bassPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				LFO1:        audio.LFO{Waveform: audio.LFOSine, Rate: 0.5, Depth: 0.3, Dest: audio.ModPulseWidth},
 			}},
-		{Name: "SID Bass", Category: "Bass", Tags: []string{"C64"},
+		{Name: "SID Bass", Bank: "Bass", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:      audio.Envelope{Attack: 5 * ms, Decay: 80 * ms, Sustain: 0.6, Release: 100 * ms},
@@ -213,7 +214,7 @@ func bassPatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.3, Resonance: 0.3},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 5 * ms, Decay: 120 * ms, Sustain: 0.2, Release: 100 * ms, Depth: 0.45},
 			}},
-		{Name: "SID Wobble Bass", Category: "Bass", Tags: []string{"C64"},
+		{Name: "SID Wobble Bass", Bank: "Bass", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:   audio.Envelope{Attack: 5 * ms, Decay: 50 * ms, Sustain: 0.7, Release: 100 * ms},
@@ -221,7 +222,7 @@ func bassPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.5, Resonance: 0.4},
 				LFO1:        audio.LFO{Waveform: audio.LFOSine, Rate: 3.0, Depth: 0.3, Dest: audio.ModCutoff},
 			}},
-		{Name: "SID Acid Bass", Category: "Bass", Tags: []string{"C64"},
+		{Name: "SID Acid Bass", Bank: "Bass", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:      audio.Envelope{Attack: 3 * ms, Decay: 120 * ms, Sustain: 0.3, Release: 80 * ms},
@@ -229,21 +230,21 @@ func bassPatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.2, Resonance: 0.75},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 3 * ms, Decay: 150 * ms, Sustain: 0.0, Release: 80 * ms, Depth: 0.6},
 			}},
-		{Name: "YM Bass", Category: "Bass", Tags: []string{"Arcade"},
+		{Name: "YM Bass", Bank: "Bass", Tags: []string{"Arcade"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 60 * ms, Sustain: 0.7, Release: 60 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "AY Bass", Category: "Bass", Tags: []string{"Arcade"},
+		{Name: "AY Bass", Bank: "Bass", Tags: []string{"Arcade"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 50 * ms, Sustain: 0.7, Release: 50 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Hard Bass", Category: "Bass",
+		{Name: "Hard Bass", Bank: "Bass",
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:      audio.Envelope{Attack: 2 * ms, Decay: 80 * ms, Sustain: 0.5, Release: 60 * ms},
@@ -251,21 +252,21 @@ func bassPatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.25, Resonance: 0.25},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 2 * ms, Decay: 100 * ms, Sustain: 0.15, Release: 60 * ms, Depth: 0.4},
 			}},
-		{Name: "Growl Bass", Category: "Bass",
+		{Name: "Growl Bass", Bank: "Bass",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Decay: 60 * ms, Sustain: 0.6, Release: 80 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixSoftClip},
 				Filter:      audio.Filter{Type: audio.FilterBandPass, Cutoff: 0.4, Resonance: 0.5},
 			}},
-		{Name: "Sub Bass", Category: "Bass", Tags: []string{"Analog"},
+		{Name: "Sub Bass", Bank: "Bass", Tags: []string{"Analog"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sine},
 				Envelope1:   audio.Envelope{Attack: 10 * ms, Decay: 100 * ms, Sustain: 0.8, Release: 200 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Moog Bass", Category: "Bass", Tags: []string{"Analog"},
+		{Name: "Moog Bass", Bank: "Bass", Tags: []string{"Analog"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:      audio.Envelope{Attack: 5 * ms, Decay: 150 * ms, Sustain: 0.4, Release: 200 * ms},
@@ -274,7 +275,7 @@ func bassPatches() []SynthPatch {
 				FilterEnvelope: audio.FilterEnvelope{Attack: 5 * ms, Decay: 200 * ms, Sustain: 0.1, Release: 200 * ms, Depth: 0.5},
 				Portamento:     0.05,
 			}},
-		{Name: "Acid Techno", Category: "Bass", Tags: []string{"Analog"},
+		{Name: "Acid Techno", Bank: "Bass", Tags: []string{"Analog"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:      audio.Envelope{Attack: 3 * ms, Decay: 200 * ms, Sustain: 0.2, Release: 100 * ms},
@@ -289,21 +290,21 @@ func bassPatches() []SynthPatch {
 func padPatches() []SynthPatch {
 	ms := time.Millisecond
 	return []SynthPatch{
-		{Name: "Tri Pad", Category: "Pad", Tags: []string{"NES"},
+		{Name: "Tri Pad", Bank: "Pad", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Triangle},
 				Envelope1:   audio.Envelope{Attack: 60 * ms, Sustain: 1.0, Release: 200 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Pulse Pad", Category: "Pad", Tags: []string{"NES"},
+		{Name: "Pulse Pad", Bank: "Pad", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 80 * ms, Decay: 40 * ms, Sustain: 0.85, Release: 200 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "NES Chord", Category: "Pad", Tags: []string{"NES"},
+		{Name: "NES Chord", Bank: "Pad", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Triangle},
 				Envelope1:   audio.Envelope{Attack: 40 * ms, Sustain: 0.9, Release: 150 * ms},
@@ -312,14 +313,14 @@ func padPatches() []SynthPatch {
 				Mixer:       audio.Mixer{Volume1: 0.7, Volume2: 0.5, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Gameboy Pad", Category: "Pad", Tags: []string{"Gameboy"},
+		{Name: "Gameboy Pad", Bank: "Pad", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.25},
 				Envelope1:   audio.Envelope{Attack: 50 * ms, Decay: 30 * ms, Sustain: 0.8, Release: 150 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Retro Pad", Category: "Pad", Tags: []string{"Gameboy"},
+		{Name: "Retro Pad", Bank: "Pad", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Triangle},
 				Envelope1:   audio.Envelope{Attack: 100 * ms, Sustain: 1.0, Release: 300 * ms},
@@ -327,7 +328,7 @@ func padPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				LFO1:        audio.LFO{Waveform: audio.LFOSine, Rate: 0.3, Depth: 0.02, Delay: 0.5, Dest: audio.ModPitch},
 			}},
-		{Name: "SID Pad", Category: "Pad", Tags: []string{"C64"},
+		{Name: "SID Pad", Bank: "Pad", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:      audio.Envelope{Attack: 60 * ms, Decay: 60 * ms, Sustain: 0.7, Release: 200 * ms},
@@ -335,7 +336,7 @@ func padPatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.4, Resonance: 0.2},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 80 * ms, Decay: 150 * ms, Sustain: 0.3, Release: 200 * ms, Depth: 0.35},
 			}},
-		{Name: "SID Atmosphere", Category: "Pad", Tags: []string{"C64"},
+		{Name: "SID Atmosphere", Bank: "Pad", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:   audio.Envelope{Attack: 120 * ms, Decay: 80 * ms, Sustain: 0.6, Release: 400 * ms},
@@ -343,7 +344,7 @@ func padPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.5, Resonance: 0.3},
 				LFO1:        audio.LFO{Waveform: audio.LFOSine, Rate: 0.4, Depth: 0.25, Dest: audio.ModCutoff},
 			}},
-		{Name: "SID Detune Pad", Category: "Pad", Tags: []string{"C64"},
+		{Name: "SID Detune Pad", Bank: "Pad", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth, Detune: -10},
 				Envelope1:   audio.Envelope{Attack: 80 * ms, Decay: 60 * ms, Sustain: 0.7, Release: 300 * ms},
@@ -352,14 +353,14 @@ func padPatches() []SynthPatch {
 				Mixer:       audio.Mixer{Volume1: 0.6, Volume2: 0.6, Mode: audio.MixSoftClip},
 				Filter:      audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.6, Resonance: 0.2},
 			}},
-		{Name: "Arcade Pad", Category: "Pad", Tags: []string{"Arcade"},
+		{Name: "Arcade Pad", Bank: "Pad", Tags: []string{"Arcade"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:   audio.Envelope{Attack: 40 * ms, Decay: 50 * ms, Sustain: 0.75, Release: 150 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "PWM Pad", Category: "Pad",
+		{Name: "PWM Pad", Bank: "Pad",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 80 * ms, Decay: 50 * ms, Sustain: 0.8, Release: 250 * ms},
@@ -367,7 +368,7 @@ func padPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				LFO1:        audio.LFO{Waveform: audio.LFOTriangle, Rate: 0.8, Depth: 0.5, Dest: audio.ModPulseWidth},
 			}},
-		{Name: "Space Wash", Category: "Pad",
+		{Name: "Space Wash", Bank: "Pad",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 150 * ms, Decay: 80 * ms, Sustain: 0.7, Release: 400 * ms},
@@ -375,7 +376,7 @@ func padPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				LFO1:        audio.LFO{Waveform: audio.LFOSine, Rate: 0.25, Depth: 0.4, Dest: audio.ModVolume},
 			}},
-		{Name: "String Ensemble", Category: "Pad", Tags: []string{"Analog"},
+		{Name: "String Ensemble", Bank: "Pad", Tags: []string{"Analog"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sawtooth, Detune: -12},
 				Envelope1:      audio.Envelope{Attack: 80 * ms, Decay: 60 * ms, Sustain: 0.75, Release: 400 * ms},
@@ -387,7 +388,7 @@ func padPatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.55, Resonance: 0.1},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 100 * ms, Decay: 200 * ms, Sustain: 0.4, Release: 400 * ms, Depth: 0.3},
 			}},
-		{Name: "Warm Synth Pad", Category: "Pad", Tags: []string{"Analog"},
+		{Name: "Warm Synth Pad", Bank: "Pad", Tags: []string{"Analog"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Triangle},
 				Envelope1:      audio.Envelope{Attack: 200 * ms, Decay: 100 * ms, Sustain: 0.8, Release: 600 * ms},
@@ -396,7 +397,7 @@ func padPatches() []SynthPatch {
 				FilterEnvelope: audio.FilterEnvelope{Attack: 250 * ms, Decay: 300 * ms, Sustain: 0.4, Release: 600 * ms, Depth: 0.35},
 				LFO1:           audio.LFO{Waveform: audio.LFOSine, Rate: 0.3, Depth: 0.1, Delay: 0.5, Dest: audio.ModVolume},
 			}},
-		{Name: "Shimmer Pad", Category: "Pad", Tags: []string{"Analog"},
+		{Name: "Shimmer Pad", Bank: "Pad", Tags: []string{"Analog"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sawtooth, Detune: -5},
 				Envelope1:      audio.Envelope{Attack: 150 * ms, Decay: 100 * ms, Sustain: 0.7, Release: 500 * ms},
@@ -407,7 +408,7 @@ func padPatches() []SynthPatch {
 				FilterEnvelope: audio.FilterEnvelope{Attack: 200 * ms, Decay: 250 * ms, Sustain: 0.35, Release: 500 * ms, Depth: 0.35},
 				LFO1:           audio.LFO{Waveform: audio.LFOSine, Rate: 0.5, Depth: 0.15, Dest: audio.ModPitch},
 			}},
-		{Name: "Dream Pad", Category: "Pad",
+		{Name: "Dream Pad", Bank: "Pad",
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sine},
 				Envelope1:      audio.Envelope{Attack: 120 * ms, Decay: 80 * ms, Sustain: 0.9, Release: 500 * ms},
@@ -423,91 +424,91 @@ func padPatches() []SynthPatch {
 func arpPatches() []SynthPatch {
 	ms := time.Millisecond
 	return []SynthPatch{
-		{Name: "Chip Arp", Category: "Arp", Tags: []string{"NES"},
+		{Name: "Chip Arp", Bank: "Arp", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 30 * ms, Sustain: 0.7, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Tri Arp", Category: "Arp", Tags: []string{"NES"},
+		{Name: "Tri Arp", Bank: "Arp", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Triangle},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 40 * ms, Sustain: 0.8, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Pulse Arp 25%", Category: "Arp", Tags: []string{"NES"},
+		{Name: "Pulse Arp 25%", Bank: "Arp", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.25},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 25 * ms, Sustain: 0.7, Release: 15 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "DMG Arp", Category: "Arp", Tags: []string{"Gameboy"},
+		{Name: "DMG Arp", Bank: "Arp", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 35 * ms, Sustain: 0.65, Release: 15 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "GB Fast Arp", Category: "Arp", Tags: []string{"Gameboy"},
+		{Name: "GB Fast Arp", Bank: "Arp", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.25},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 20 * ms, Sustain: 0.5, Release: 10 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "SID Arp", Category: "Arp", Tags: []string{"C64"},
+		{Name: "SID Arp", Bank: "Arp", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Decay: 50 * ms, Sustain: 0.5, Release: 30 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixSoftClip},
 				Filter:      audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.6, Resonance: 0.3},
 			}},
-		{Name: "SID Hard Arp", Category: "Arp", Tags: []string{"C64"},
+		{Name: "SID Hard Arp", Bank: "Arp", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 40 * ms, Sustain: 0.6, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixSoftClip},
 				Filter:      audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.55, Resonance: 0.5},
 			}},
-		{Name: "YM Arp", Category: "Arp", Tags: []string{"Arcade"},
+		{Name: "YM Arp", Bank: "Arp", Tags: []string{"Arcade"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 40 * ms, Sustain: 0.6, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Pluck Arp", Category: "Arp",
+		{Name: "Pluck Arp", Bank: "Arp",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 80 * ms, Sustain: 0.0, Release: 10 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Bell Arp", Category: "Arp",
+		{Name: "Bell Arp", Bank: "Arp",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Triangle},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 120 * ms, Sustain: 0.0, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Bubble Arp", Category: "Arp",
+		{Name: "Bubble Arp", Bank: "Arp",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sine},
 				Envelope1:   audio.Envelope{Attack: 5 * ms, Decay: 60 * ms, Sustain: 0.3, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.6, Resonance: 0.4},
 			}},
-		{Name: "Crystal Arp", Category: "Arp",
+		{Name: "Crystal Arp", Bank: "Arp",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sine},
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Decay: 100 * ms, Sustain: 0.0, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterBandPass, Cutoff: 0.65, Resonance: 0.3},
 			}},
-		{Name: "String Arp", Category: "Arp", Tags: []string{"Analog"},
+		{Name: "String Arp", Bank: "Arp", Tags: []string{"Analog"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth, Detune: -6},
 				Envelope1:   audio.Envelope{Attack: 10 * ms, Decay: 60 * ms, Sustain: 0.4, Release: 40 * ms},
@@ -516,14 +517,14 @@ func arpPatches() []SynthPatch {
 				Mixer:       audio.Mixer{Volume1: 0.6, Volume2: 0.6},
 				Filter:      audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.7, Resonance: 0.1},
 			}},
-		{Name: "Harp Arp", Category: "Arp", Tags: []string{"Analog"},
+		{Name: "Harp Arp", Bank: "Arp", Tags: []string{"Analog"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sine},
 				Envelope1:   audio.Envelope{Attack: 5 * ms, Decay: 200 * ms, Sustain: 0.0, Release: 30 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Piano Arp", Category: "Arp", Tags: []string{"Analog"},
+		{Name: "Piano Arp", Bank: "Arp", Tags: []string{"Analog"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Triangle},
 				Envelope1:   audio.Envelope{Attack: 5 * ms, Decay: 150 * ms, Sustain: 0.2, Release: 50 * ms},
@@ -538,7 +539,7 @@ func arpPatches() []SynthPatch {
 func percussivePatches() []SynthPatch {
 	ms := time.Millisecond
 	return []SynthPatch{
-		{Name: "NES Kick", Category: "Percussive", Tags: []string{"NES"},
+		{Name: "NES Kick", Bank: "Percussive", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Triangle},
 				Envelope1:      audio.Envelope{Attack: 1 * ms, Decay: 80 * ms, Sustain: 0.0, Release: 20 * ms},
@@ -546,42 +547,42 @@ func percussivePatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.3, Resonance: 0.1},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 1 * ms, Decay: 50 * ms, Sustain: 0.0, Release: 20 * ms, Depth: 0.55},
 			}},
-		{Name: "NES Snare", Category: "Percussive", Tags: []string{"NES"},
+		{Name: "NES Snare", Bank: "Percussive", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 120 * ms, Sustain: 0.0, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "NES Hi-Hat", Category: "Percussive", Tags: []string{"NES"},
+		{Name: "NES Hi-Hat", Bank: "Percussive", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 30 * ms, Sustain: 0.0, Release: 5 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "NES Crash", Category: "Percussive", Tags: []string{"NES"},
+		{Name: "NES Crash", Bank: "Percussive", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 500 * ms, Sustain: 0.0, Release: 50 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Triangle Tom", Category: "Percussive", Tags: []string{"NES"},
+		{Name: "Triangle Tom", Bank: "Percussive", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Triangle},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 150 * ms, Sustain: 0.0, Release: 30 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Noise Tom", Category: "Percussive", Tags: []string{"NES"},
+		{Name: "Noise Tom", Bank: "Percussive", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 100 * ms, Sustain: 0.0, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.3, Resonance: 0.2},
 			}},
-		{Name: "Gameboy Kick", Category: "Percussive", Tags: []string{"Gameboy"},
+		{Name: "Gameboy Kick", Bank: "Percussive", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 60 * ms, Sustain: 0.0, Release: 10 * ms},
@@ -590,49 +591,49 @@ func percussivePatches() []SynthPatch {
 				Mixer:       audio.Mixer{Volume1: 0.6, Volume2: 0.8},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Gameboy Snare", Category: "Percussive", Tags: []string{"Gameboy"},
+		{Name: "Gameboy Snare", Bank: "Percussive", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 100 * ms, Sustain: 0.0, Release: 15 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Gameboy Hi-Hat", Category: "Percussive", Tags: []string{"Gameboy"},
+		{Name: "Gameboy Hi-Hat", Bank: "Percussive", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 20 * ms, Sustain: 0.0, Release: 5 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "SID Noise Hit", Category: "Percussive", Tags: []string{"C64"},
+		{Name: "SID Noise Hit", Bank: "Percussive", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 80 * ms, Sustain: 0.0, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixSoftClip},
 				Filter:      audio.Filter{Type: audio.FilterBandPass, Cutoff: 0.4, Resonance: 0.3},
 			}},
-		{Name: "Arcade Hit", Category: "Percussive", Tags: []string{"Arcade"},
+		{Name: "Arcade Hit", Bank: "Percussive", Tags: []string{"Arcade"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 100 * ms, Sustain: 0.0, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.5, Resonance: 0.2},
 			}},
-		{Name: "Clap", Category: "Percussive",
+		{Name: "Clap", Bank: "Percussive",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Decay: 80 * ms, Sustain: 0.0, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterHighPass, Cutoff: 0.45, Resonance: 0.2},
 			}},
-		{Name: "Metallic", Category: "Percussive",
+		{Name: "Metallic", Bank: "Percussive",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.NoisePeriodic},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 150 * ms, Sustain: 0.0, Release: 30 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterBandPass, Cutoff: 0.55, Resonance: 0.4},
 			}},
-		{Name: "Sub Kick", Category: "Percussive", Tags: []string{"Analog"},
+		{Name: "Sub Kick", Bank: "Percussive", Tags: []string{"Analog"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sine},
 				Envelope1:      audio.Envelope{Attack: 2 * ms, Decay: 200 * ms, Sustain: 0.0, Release: 30 * ms},
@@ -641,7 +642,7 @@ func percussivePatches() []SynthPatch {
 				FilterEnvelope: audio.FilterEnvelope{Attack: 2 * ms, Decay: 80 * ms, Sustain: 0.0, Release: 30 * ms, Depth: 0.5},
 				LFO1:           audio.LFO{Waveform: audio.LFOSine, Rate: 0.8, Depth: 0.8, Dest: audio.ModPitch},
 			}},
-		{Name: "808 Kick", Category: "Percussive", Tags: []string{"Analog", "808"},
+		{Name: "808 Kick", Bank: "Percussive", Tags: []string{"Analog", "808"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sine},
 				Envelope1:      audio.Envelope{Attack: 2 * ms, Decay: 400 * ms, Sustain: 0.0, Release: 50 * ms},
@@ -649,7 +650,7 @@ func percussivePatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.25, Resonance: 0.1},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 2 * ms, Decay: 150 * ms, Sustain: 0.0, Release: 50 * ms, Depth: 0.55},
 			}},
-		{Name: "Snare", Category: "Percussive", Tags: []string{"Analog"},
+		{Name: "Snare", Bank: "Percussive", Tags: []string{"Analog"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 150 * ms, Sustain: 0.0, Release: 30 * ms},
@@ -658,7 +659,7 @@ func percussivePatches() []SynthPatch {
 				Mixer:       audio.Mixer{Volume1: 0.7, Volume2: 0.4},
 				Filter:      audio.Filter{Type: audio.FilterHighPass, Cutoff: 0.35, Resonance: 0.1},
 			}},
-		{Name: "808 Snare", Category: "Percussive", Tags: []string{"808"},
+		{Name: "808 Snare", Bank: "Percussive", Tags: []string{"808"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Noise},
 				Envelope1:      audio.Envelope{Attack: 2 * ms, Decay: 200 * ms, Sustain: 0.0, Release: 30 * ms},
@@ -668,14 +669,14 @@ func percussivePatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterBandPass, Cutoff: 0.35, Resonance: 0.2},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 2 * ms, Decay: 60 * ms, Sustain: 0.0, Release: 30 * ms, Depth: 0.4},
 			}},
-		{Name: "808 Closed Hat", Category: "Percussive", Tags: []string{"808"},
+		{Name: "808 Closed Hat", Bank: "Percussive", Tags: []string{"808"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.NoisePeriodic},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 40 * ms, Sustain: 0.0, Release: 8 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterHighPass, Cutoff: 0.65, Resonance: 0.1},
 			}},
-		{Name: "808 Open Hat", Category: "Percussive", Tags: []string{"808"},
+		{Name: "808 Open Hat", Bank: "Percussive", Tags: []string{"808"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.NoisePeriodic},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 400 * ms, Sustain: 0.0, Release: 60 * ms},
@@ -684,7 +685,7 @@ func percussivePatches() []SynthPatch {
 				Mixer:       audio.Mixer{Volume1: 0.8, Volume2: 0.3},
 				Filter:      audio.Filter{Type: audio.FilterHighPass, Cutoff: 0.6, Resonance: 0.1},
 			}},
-		{Name: "808 Tom", Category: "Percussive", Tags: []string{"808"},
+		{Name: "808 Tom", Bank: "Percussive", Tags: []string{"808"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sine},
 				Envelope1:      audio.Envelope{Attack: 2 * ms, Decay: 500 * ms, Sustain: 0.0, Release: 50 * ms},
@@ -693,7 +694,7 @@ func percussivePatches() []SynthPatch {
 				FilterEnvelope: audio.FilterEnvelope{Attack: 2 * ms, Decay: 100 * ms, Sustain: 0.0, Release: 50 * ms, Depth: 0.5},
 				LFO1:           audio.LFO{Waveform: audio.LFOSine, Rate: 2.5, Depth: 0.6, Dest: audio.ModPitch},
 			}},
-		{Name: "808 Cowbell", Category: "Percussive", Tags: []string{"808"},
+		{Name: "808 Cowbell", Bank: "Percussive", Tags: []string{"808"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5, Detune: -15},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 250 * ms, Sustain: 0.0, Release: 30 * ms},
@@ -702,7 +703,7 @@ func percussivePatches() []SynthPatch {
 				Mixer:       audio.Mixer{Volume1: 0.6, Volume2: 0.6},
 				Filter:      audio.Filter{Type: audio.FilterBandPass, Cutoff: 0.62, Resonance: 0.5},
 			}},
-		{Name: "808 Clap", Category: "Percussive", Tags: []string{"808"},
+		{Name: "808 Clap", Bank: "Percussive", Tags: []string{"808"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Noise},
 				Envelope1:      audio.Envelope{Attack: 3 * ms, Decay: 200 * ms, Sustain: 0.0, Release: 30 * ms},
@@ -710,14 +711,14 @@ func percussivePatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterBandPass, Cutoff: 0.4, Resonance: 0.2},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 3 * ms, Decay: 80 * ms, Sustain: 0.0, Release: 30 * ms, Depth: 0.35},
 			}},
-		{Name: "808 Cymbal", Category: "Percussive", Tags: []string{"808"},
+		{Name: "808 Cymbal", Bank: "Percussive", Tags: []string{"808"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.NoisePeriodic},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 800 * ms, Sustain: 0.0, Release: 100 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterHighPass, Cutoff: 0.55, Resonance: 0.15},
 			}},
-		{Name: "909 Kick", Category: "Percussive", Tags: []string{"909"},
+		{Name: "909 Kick", Bank: "Percussive", Tags: []string{"909"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sine},
 				Envelope1:      audio.Envelope{Attack: 2 * ms, Decay: 220 * ms, Sustain: 0.0, Release: 30 * ms},
@@ -728,7 +729,7 @@ func percussivePatches() []SynthPatch {
 				FilterEnvelope: audio.FilterEnvelope{Attack: 2 * ms, Decay: 80 * ms, Sustain: 0.0, Release: 30 * ms, Depth: 0.5},
 				LFO1:           audio.LFO{Waveform: audio.LFOSine, Rate: 5.0, Depth: 0.6, Dest: audio.ModPitch},
 			}},
-		{Name: "909 Snare", Category: "Percussive", Tags: []string{"909"},
+		{Name: "909 Snare", Bank: "Percussive", Tags: []string{"909"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Noise},
 				Envelope1:      audio.Envelope{Attack: 1 * ms, Decay: 150 * ms, Sustain: 0.0, Release: 20 * ms},
@@ -738,21 +739,21 @@ func percussivePatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterBandPass, Cutoff: 0.45, Resonance: 0.3},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 1 * ms, Decay: 40 * ms, Sustain: 0.0, Release: 20 * ms, Depth: 0.45},
 			}},
-		{Name: "909 Closed Hat", Category: "Percussive", Tags: []string{"909"},
+		{Name: "909 Closed Hat", Bank: "Percussive", Tags: []string{"909"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.NoisePeriodic},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 15 * ms, Sustain: 0.0, Release: 5 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterHighPass, Cutoff: 0.75, Resonance: 0.1},
 			}},
-		{Name: "909 Open Hat", Category: "Percussive", Tags: []string{"909"},
+		{Name: "909 Open Hat", Bank: "Percussive", Tags: []string{"909"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.NoisePeriodic},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 250 * ms, Sustain: 0.0, Release: 40 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterHighPass, Cutoff: 0.72, Resonance: 0.1},
 			}},
-		{Name: "909 Clap", Category: "Percussive", Tags: []string{"909"},
+		{Name: "909 Clap", Bank: "Percussive", Tags: []string{"909"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Noise},
 				Envelope1:      audio.Envelope{Attack: 3 * ms, Decay: 100 * ms, Sustain: 0.0, Release: 20 * ms},
@@ -760,7 +761,7 @@ func percussivePatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterBandPass, Cutoff: 0.5, Resonance: 0.25},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 3 * ms, Decay: 50 * ms, Sustain: 0.0, Release: 20 * ms, Depth: 0.4},
 			}},
-		{Name: "909 Tom", Category: "Percussive", Tags: []string{"909"},
+		{Name: "909 Tom", Bank: "Percussive", Tags: []string{"909"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sine},
 				Envelope1:      audio.Envelope{Attack: 2 * ms, Decay: 300 * ms, Sustain: 0.0, Release: 30 * ms},
@@ -769,14 +770,14 @@ func percussivePatches() []SynthPatch {
 				FilterEnvelope: audio.FilterEnvelope{Attack: 2 * ms, Decay: 70 * ms, Sustain: 0.0, Release: 30 * ms, Depth: 0.45},
 				LFO1:           audio.LFO{Waveform: audio.LFOSine, Rate: 4.0, Depth: 0.5, Dest: audio.ModPitch},
 			}},
-		{Name: "909 Cymbal", Category: "Percussive", Tags: []string{"909"},
+		{Name: "909 Cymbal", Bank: "Percussive", Tags: []string{"909"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.NoisePeriodic},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 700 * ms, Sustain: 0.0, Release: 100 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterHighPass, Cutoff: 0.6, Resonance: 0.15},
 			}},
-		{Name: "909 Rim", Category: "Percussive", Tags: []string{"909"},
+		{Name: "909 Rim", Bank: "Percussive", Tags: []string{"909"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.NoisePeriodic},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 50 * ms, Sustain: 0.0, Release: 8 * ms},
@@ -791,7 +792,7 @@ func percussivePatches() []SynthPatch {
 func sfxPatches() []SynthPatch {
 	ms := time.Millisecond
 	return []SynthPatch{
-		{Name: "Power Up", Category: "SFX", Tags: []string{"NES"},
+		{Name: "Power Up", Bank: "SFX", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 300 * ms, Sustain: 0.0, Release: 20 * ms},
@@ -799,14 +800,14 @@ func sfxPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				LFO1:        audio.LFO{Waveform: audio.LFOSawtooth, Rate: 8.0, Depth: 0.5, Dest: audio.ModPitch},
 			}},
-		{Name: "Coin", Category: "SFX", Tags: []string{"NES"},
+		{Name: "Coin", Bank: "SFX", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 80 * ms, Sustain: 0.0, Release: 10 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Jump", Category: "SFX", Tags: []string{"NES"},
+		{Name: "Jump", Bank: "SFX", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 150 * ms, Sustain: 0.0, Release: 20 * ms},
@@ -814,7 +815,7 @@ func sfxPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				LFO1:        audio.LFO{Waveform: audio.LFOSine, Rate: 12.0, Depth: 0.3, Dest: audio.ModPitch},
 			}},
-		{Name: "Explosion", Category: "SFX", Tags: []string{"NES"},
+		{Name: "Explosion", Bank: "SFX", Tags: []string{"NES"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Noise},
 				Envelope1:      audio.Envelope{Attack: 1 * ms, Decay: 400 * ms, Sustain: 0.0, Release: 50 * ms},
@@ -822,7 +823,7 @@ func sfxPatches() []SynthPatch {
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.2, Resonance: 0.1},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 1 * ms, Decay: 200 * ms, Sustain: 0.0, Release: 50 * ms, Depth: 0.5},
 			}},
-		{Name: "SID Laser", Category: "SFX", Tags: []string{"C64"},
+		{Name: "SID Laser", Bank: "SFX", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1:    audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:      audio.Envelope{Attack: 1 * ms, Decay: 200 * ms, Sustain: 0.0, Release: 20 * ms},
@@ -831,21 +832,21 @@ func sfxPatches() []SynthPatch {
 				FilterEnvelope: audio.FilterEnvelope{Attack: 1 * ms, Decay: 150 * ms, Sustain: 0.0, Release: 20 * ms, Depth: 0.55},
 				LFO1:           audio.LFO{Waveform: audio.LFOSawtooth, Rate: 10.0, Depth: 0.6, Dest: audio.ModPitch},
 			}},
-		{Name: "SID Zap", Category: "SFX", Tags: []string{"C64"},
+		{Name: "SID Zap", Bank: "SFX", Tags: []string{"C64"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 100 * ms, Sustain: 0.0, Release: 15 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixSoftClip},
 				Filter:      audio.Filter{Type: audio.FilterBandPass, Cutoff: 0.55, Resonance: 0.5},
 			}},
-		{Name: "Arcade Beep", Category: "SFX", Tags: []string{"Arcade"},
+		{Name: "Arcade Beep", Bank: "SFX", Tags: []string{"Arcade"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 60 * ms, Sustain: 0.0, Release: 10 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "UFO", Category: "SFX", Tags: []string{"Arcade"},
+		{Name: "UFO", Bank: "SFX", Tags: []string{"Arcade"},
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Triangle},
 				Envelope1:   audio.Envelope{Attack: 20 * ms, Decay: 50 * ms, Sustain: 0.8, Release: 100 * ms},
@@ -853,7 +854,7 @@ func sfxPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				LFO1:        audio.LFO{Waveform: audio.LFOSine, Rate: 15.0, Depth: 0.15, Dest: audio.ModPitch},
 			}},
-		{Name: "Sweep Up", Category: "SFX",
+		{Name: "Sweep Up", Bank: "SFX",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:   audio.Envelope{Attack: 2 * ms, Decay: 300 * ms, Sustain: 0.0, Release: 20 * ms},
@@ -861,7 +862,7 @@ func sfxPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				LFO1:        audio.LFO{Waveform: audio.LFOSawtooth, Rate: 5.0, Depth: 0.4, Dest: audio.ModPitch},
 			}},
-		{Name: "Alarm", Category: "SFX",
+		{Name: "Alarm", Bank: "SFX",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 5 * ms, Sustain: 0.8, Release: 50 * ms},
@@ -869,41 +870,158 @@ func sfxPatches() []SynthPatch {
 				Filter:      audio.Filter{Type: audio.FilterOff},
 				LFO1:        audio.LFO{Waveform: audio.LFOSquare, Rate: 4.0, Depth: 0.8, Dest: audio.ModVolume},
 			}},
-		{Name: "Blip", Category: "SFX",
+		{Name: "Blip", Bank: "SFX",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Square, PulseWidth: 0.5},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 40 * ms, Sustain: 0.0, Release: 5 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "White Noise", Category: "SFX",
+		{Name: "White Noise", Bank: "SFX",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 10 * ms, Sustain: 0.8, Release: 100 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterOff},
 			}},
-		{Name: "Static Buzz", Category: "SFX",
+		{Name: "Static Buzz", Bank: "SFX",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Noise},
 				Envelope1:   audio.Envelope{Attack: 5 * ms, Sustain: 0.7, Release: 80 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterHighPass, Cutoff: 0.5, Resonance: 0.1},
 			}},
-		{Name: "Glitch Hit", Category: "SFX",
+		{Name: "Glitch Hit", Bank: "SFX",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.NoisePeriodic},
 				Envelope1:   audio.Envelope{Attack: 1 * ms, Decay: 120 * ms, Sustain: 0.0, Release: 20 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.5, Resonance: 0.3},
 			}},
-		{Name: "Wobble SFX", Category: "SFX",
+		{Name: "Wobble SFX", Bank: "SFX",
 			Synth: &audio.Synth{
 				Oscillator1: audio.Oscillator{Type: audio.Sawtooth},
 				Envelope1:   audio.Envelope{Attack: 5 * ms, Decay: 200 * ms, Sustain: 0.0, Release: 30 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0},
 				Filter:      audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.6, Resonance: 0.4},
 				LFO1:        audio.LFO{Waveform: audio.LFOSine, Rate: 8.0, Depth: 0.4, Dest: audio.ModCutoff},
+			}},
+	}
+}
+
+func wavetablePatches() []SynthPatch {
+	ms := time.Millisecond
+	return []SynthPatch{
+		{Name: "WT Flute", Bank: "Wavetable", Tags: []string{"AKWF"},
+			Synth: &audio.Synth{
+				Oscillator1: audio.Oscillator{
+					Type:      audio.Wavetable,
+					Wavetable: resolveWavetable("akwf:AKWF_flute/AKWF_flute_0001"),
+					Meta:      resolveWavetableMeta("akwf:AKWF_flute/AKWF_flute_0001"),
+				},
+				Envelope1: audio.Envelope{Attack: 20 * ms, Decay: 30 * ms, Sustain: 0.85, Release: 200 * ms},
+				Mixer:     audio.Mixer{Volume1: 1.0},
+				Filter:    audio.Filter{Type: audio.FilterOff},
+			}},
+		{Name: "WT E-Piano", Bank: "Wavetable", Tags: []string{"AKWF"},
+			Synth: &audio.Synth{
+				Oscillator1: audio.Oscillator{
+					Type:      audio.Wavetable,
+					Wavetable: resolveWavetable("akwf:AKWF_epiano/AKWF_epiano_0001"),
+					Meta:      resolveWavetableMeta("akwf:AKWF_epiano/AKWF_epiano_0001"),
+				},
+				Envelope1: audio.Envelope{Attack: 5 * ms, Decay: 200 * ms, Sustain: 0.4, Release: 300 * ms},
+				Mixer:     audio.Mixer{Volume1: 1.0},
+				Filter:    audio.Filter{Type: audio.FilterOff},
+			}},
+		{Name: "WT E-Organ", Bank: "Wavetable", Tags: []string{"AKWF"},
+			Synth: &audio.Synth{
+				Oscillator1: audio.Oscillator{
+					Type:      audio.Wavetable,
+					Wavetable: resolveWavetable("akwf:AKWF_eorgan/AKWF_eorgan_0001"),
+					Meta:      resolveWavetableMeta("akwf:AKWF_eorgan/AKWF_eorgan_0001"),
+				},
+				Envelope1: audio.Envelope{Attack: 10 * ms, Sustain: 1.0, Release: 50 * ms},
+				Mixer:     audio.Mixer{Volume1: 1.0},
+				Filter:    audio.Filter{Type: audio.FilterOff},
+			}},
+		{Name: "WT Violin", Bank: "Wavetable", Tags: []string{"AKWF"},
+			Synth: &audio.Synth{
+				Oscillator1: audio.Oscillator{
+					Type:      audio.Wavetable,
+					Wavetable: resolveWavetable("akwf:AKWF_violin/AKWF_violin_0001"),
+					Meta:      resolveWavetableMeta("akwf:AKWF_violin/AKWF_violin_0001"),
+				},
+				Envelope1: audio.Envelope{Attack: 60 * ms, Sustain: 0.9, Release: 200 * ms},
+				Mixer:     audio.Mixer{Volume1: 1.0},
+				Filter:    audio.Filter{Type: audio.FilterOff},
+				LFO1:      audio.LFO{Waveform: audio.LFOSine, Rate: 5.5, Depth: 0.012, Delay: 0.3, Dest: audio.ModPitch},
+			}},
+		{Name: "WT Cello", Bank: "Wavetable", Tags: []string{"AKWF"},
+			Synth: &audio.Synth{
+				Oscillator1: audio.Oscillator{
+					Type:      audio.Wavetable,
+					Wavetable: resolveWavetable("akwf:AKWF_cello/AKWF_cello_0001"),
+					Meta:      resolveWavetableMeta("akwf:AKWF_cello/AKWF_cello_0001"),
+				},
+				Envelope1: audio.Envelope{Attack: 80 * ms, Sustain: 0.85, Release: 300 * ms},
+				Mixer:     audio.Mixer{Volume1: 1.0},
+				Filter:    audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.6, Resonance: 0.1},
+			}},
+		{Name: "WT Human Voice", Bank: "Wavetable", Tags: []string{"AKWF"},
+			Synth: &audio.Synth{
+				Oscillator1: audio.Oscillator{
+					Type:      audio.Wavetable,
+					Wavetable: resolveWavetable("akwf:AKWF_hvoice/AKWF_hvoice_0001"),
+					Meta:      resolveWavetableMeta("akwf:AKWF_hvoice/AKWF_hvoice_0001"),
+				},
+				Envelope1: audio.Envelope{Attack: 40 * ms, Sustain: 0.9, Release: 200 * ms},
+				Mixer:     audio.Mixer{Volume1: 1.0},
+				Filter:    audio.Filter{Type: audio.FilterOff},
+			}},
+		{Name: "WT Soft Saw", Bank: "Wavetable", Tags: []string{"AKWF"},
+			Synth: &audio.Synth{
+				Oscillator1: audio.Oscillator{
+					Type:      audio.Wavetable,
+					Wavetable: resolveWavetable("akwf:AKWF_bw_saw/AKWF_bw_saw_0001"),
+					Meta:      resolveWavetableMeta("akwf:AKWF_bw_saw/AKWF_bw_saw_0001"),
+				},
+				Envelope1: audio.Envelope{Attack: 5 * ms, Decay: 40 * ms, Sustain: 0.8, Release: 100 * ms},
+				Mixer:     audio.Mixer{Volume1: 1.0},
+				Filter:    audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.5, Resonance: 0.15},
+			}},
+		{Name: "WT FM Synth", Bank: "Wavetable", Tags: []string{"AKWF"},
+			Synth: &audio.Synth{
+				Oscillator1: audio.Oscillator{
+					Type:      audio.Wavetable,
+					Wavetable: resolveWavetable("akwf:AKWF_fmsynth/AKWF_fmsynth_0001"),
+					Meta:      resolveWavetableMeta("akwf:AKWF_fmsynth/AKWF_fmsynth_0001"),
+				},
+				Envelope1: audio.Envelope{Attack: 3 * ms, Decay: 60 * ms, Sustain: 0.7, Release: 80 * ms},
+				Mixer:     audio.Mixer{Volume1: 1.0},
+				Filter:    audio.Filter{Type: audio.FilterOff},
+			}},
+		{Name: "WT Vgame Lead", Bank: "Wavetable", Tags: []string{"AKWF"},
+			Synth: &audio.Synth{
+				Oscillator1: audio.Oscillator{
+					Type:      audio.Wavetable,
+					Wavetable: resolveWavetable("akwf:AKWF_vgame/AKWF_vgame_0001"),
+					Meta:      resolveWavetableMeta("akwf:AKWF_vgame/AKWF_vgame_0001"),
+				},
+				Envelope1: audio.Envelope{Attack: 2 * ms, Decay: 20 * ms, Sustain: 0.8, Release: 60 * ms},
+				Mixer:     audio.Mixer{Volume1: 1.0},
+				Filter:    audio.Filter{Type: audio.FilterOff},
+			}},
+		{Name: "WT Acoustic Guitar", Bank: "Wavetable", Tags: []string{"AKWF"},
+			Synth: &audio.Synth{
+				Oscillator1: audio.Oscillator{
+					Type:      audio.Wavetable,
+					Wavetable: resolveWavetable("akwf:AKWF_aguitar/AKWF_aguitar_0001"),
+					Meta:      resolveWavetableMeta("akwf:AKWF_aguitar/AKWF_aguitar_0001"),
+				},
+				Envelope1: audio.Envelope{Attack: 3 * ms, Decay: 300 * ms, Sustain: 0.2, Release: 400 * ms},
+				Mixer:     audio.Mixer{Volume1: 1.0},
+				Filter:    audio.Filter{Type: audio.FilterOff},
 			}},
 	}
 }

@@ -14,6 +14,7 @@ type Oscillator struct {
 	Detune      float64   // fine tuning in cents (±1200 = ±1 octave); 0 = no detune
 	Wavetable   []float64 // one cycle of samples; only used by Wavetable type; nil = silent
 	NoisePeriod int       // LFSR clock period in samples; 0 = derive from frequency; only used by NoisePeriodic
+	Meta        Metadata  // wavetable display metadata (Bank, Name); Tags unused for oscillators
 }
 
 // OscillatorType represents the type of oscillator waveform to generate
