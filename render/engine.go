@@ -5,7 +5,6 @@ import (
 	"math"
 
 	"github.com/tetrackt/tetrackt/audio"
-	"github.com/tetrackt/tetrackt/ui/tracker"
 )
 
 type channelEffectState struct {
@@ -22,7 +21,7 @@ type RenderConfig struct {
 }
 
 type RenderEngine struct {
-	trackerModel    *tracker.TrackerModel
+	song            *Pattern
 	cfg             RenderConfig
 	currentPatches  []*audio.Patch
 	activeVoices    []*audio.Patch
@@ -31,16 +30,16 @@ type RenderEngine struct {
 	effectStates    []channelEffectState
 }
 
-func NewRenderEngine(m *tracker.TrackerModel, cfg RenderConfig) *RenderEngine {
-	return &RenderEngine{trackerModel: m, cfg: cfg}
+func NewRenderEngine(song *Pattern, cfg RenderConfig) *RenderEngine {
+	return &RenderEngine{song: song, cfg: cfg}
 }
 
 func (e *RenderEngine) Run(sink RenderSink) error {
-	if e.trackerModel == nil {
-		return fmt.Errorf("render: tracker model is nil")
+	if e.song == nil {
+		return fmt.Errorf("render: song is nil")
 	}
-	if e.trackerModel.NumRows <= 0 || e.trackerModel.NumTracks <= 0 {
-		return fmt.Errorf("render: tracker is empty")
+	if e.song.NumRows <= 0 || e.song.NumTracks <= 0 {
+		return fmt.Errorf("render: song is empty")
 	}
 	if e.cfg.SampleRate <= 0 {
 		return fmt.Errorf("render: invalid sample rate %d", e.cfg.SampleRate)
@@ -57,7 +56,7 @@ func (e *RenderEngine) Run(sink RenderSink) error {
 		return err
 	}
 
-	endRow := e.trackerModel.NumRows
+	endRow := e.song.NumRows
 	if e.cfg.EndRow > 0 && e.cfg.EndRow < endRow {
 		endRow = e.cfg.EndRow
 	}
@@ -78,12 +77,12 @@ func (e *RenderEngine) Run(sink RenderSink) error {
 	return sink.End()
 }
 
-// RenderToStream renders the tracker model fully offline and returns a Streamer
-// ready for playback. If loop is true, the stream will repeat indefinitely.
+// RenderToStream renders the song fully offline and returns a Streamer ready
+// for playback. If loop is true, the stream will repeat indefinitely.
 // Returns nil, nil when the render produces no audio (e.g. all tracks empty).
-func RenderToStream(m *tracker.TrackerModel, cfg RenderConfig, loop bool) (audio.Streamer, error) {
+func RenderToStream(song *Pattern, cfg RenderConfig, loop bool) (audio.Streamer, error) {
 	collector := &bufferSink{}
-	engine := NewRenderEngine(m, cfg)
+	engine := NewRenderEngine(song, cfg)
 	if err := engine.Run(collector); err != nil {
 		return nil, err
 	}
@@ -93,31 +92,12 @@ func RenderToStream(m *tracker.TrackerModel, cfg RenderConfig, loop bool) (audio
 	return &sampleStreamer{samples: collector.frames, loop: loop}, nil
 }
 
-func (e *RenderEngine) validateConfig() error {
-	if e.trackerModel == nil {
-		return fmt.Errorf("render: tracker model is nil")
-	}
-	if e.trackerModel.NumRows <= 0 || e.trackerModel.NumTracks <= 0 {
-		return fmt.Errorf("render: tracker is empty")
-	}
-	if e.cfg.SampleRate <= 0 {
-		return fmt.Errorf("render: invalid sample rate %d", e.cfg.SampleRate)
-	}
-	if e.cfg.LoopCount <= 0 {
-		e.cfg.LoopCount = 1
-	}
-	if e.cfg.GlobalVolume < 0 {
-		e.cfg.GlobalVolume = 1.0
-	}
-	return nil
-}
-
 func (e *RenderEngine) resetState() {
-	e.currentPatches = make([]*audio.Patch, e.trackerModel.NumTracks)
+	e.currentPatches = make([]*audio.Patch, e.song.NumTracks)
 	e.activeVoices = nil
-	e.prevFrequencies = make([]float64, e.trackerModel.NumTracks)
-	e.arpTickIdx = make([]int, e.trackerModel.NumTracks)
-	e.effectStates = make([]channelEffectState, e.trackerModel.NumTracks)
+	e.prevFrequencies = make([]float64, e.song.NumTracks)
+	e.arpTickIdx = make([]int, e.song.NumTracks)
+	e.effectStates = make([]channelEffectState, e.song.NumTracks)
 	for i := range e.arpTickIdx {
 		e.arpTickIdx[i] = -1
 	}
@@ -125,7 +105,7 @@ func (e *RenderEngine) resetState() {
 
 func (e *RenderEngine) renderRow(rowIdx int, sink RenderSink) error {
 	e.startRow(rowIdx)
-	ticks := e.trackerModel.RowTicks(rowIdx)
+	ticks := e.song.RowTicks(rowIdx)
 
 	for subTick := 0; subTick < ticks; subTick++ {
 		tickSamples := e.tickSampleCount(rowIdx, subTick)
@@ -139,34 +119,33 @@ func (e *RenderEngine) renderRow(rowIdx int, sink RenderSink) error {
 }
 
 func (e *RenderEngine) startRow(rowIdx int) {
-	noteSamples := int(e.cfg.SampleRate.N(e.trackerModel.BPMDuration()))
+	noteSamples := int(e.cfg.SampleRate.N(e.song.RowDuration))
 	e.releaseCurrentPatches()
 
-	for trackIdx := 0; trackIdx < e.trackerModel.NumTracks; trackIdx++ {
-		track := e.trackerModel.Tracks[trackIdx]
-		trackRow := track.Rows[rowIdx]
+	for trackIdx := 0; trackIdx < e.song.NumTracks; trackIdx++ {
+		track := e.song.Tracks[trackIdx]
+		row := track.Rows[rowIdx]
 
 		e.currentPatches[trackIdx] = nil
-		if audio.IsOff(trackRow.Note) {
+		if row.Frequency == 0 {
 			e.prevFrequencies[trackIdx] = 0
 			e.arpTickIdx[trackIdx] = -1
 			e.effectStates[trackIdx] = channelEffectState{volume: 1.0}
 			continue
 		}
 
-		targetFrequency := trackRow.Note.Frequency()
-		patch := track.Synth.NewGatedPatch(e.cfg.SampleRate, targetFrequency)
-		if trackRow.Volume > 0 {
-			patch.SetVolume(float64(trackRow.Volume) / 64.0)
+		patch := track.Synth.NewGatedPatch(e.cfg.SampleRate, row.Frequency)
+		if row.Volume > 0 {
+			patch.SetVolume(row.Volume)
 		}
 		if track.Synth.Portamento > 0 && e.prevFrequencies[trackIdx] > 0 {
 			ticks := int(math.Round(track.Synth.Portamento * float64(e.cfg.SampleRate) / float64(noteSamples)))
-			patch.StartPortamento(e.prevFrequencies[trackIdx], targetFrequency, ticks)
+			patch.StartPortamento(e.prevFrequencies[trackIdx], row.Frequency, ticks)
 		}
-		e.prevFrequencies[trackIdx] = targetFrequency
+		e.prevFrequencies[trackIdx] = row.Frequency
 		e.arpTickIdx[trackIdx] = -1
 		e.effectStates[trackIdx] = channelEffectState{volume: 1.0}
-		if trackRow.Effect.Type != tracker.EffectNoteDelay {
+		if row.Effect.Type != EffectNoteDelay {
 			patch.NoteOn()
 		}
 		e.currentPatches[trackIdx] = patch
@@ -186,42 +165,42 @@ func (e *RenderEngine) releaseCurrentPatches() {
 
 func (e *RenderEngine) applyTick(rowIdx, subTick int) {
 	for trackIdx, patch := range e.currentPatches {
-		if patch == nil || trackIdx >= len(e.trackerModel.Tracks) {
+		if patch == nil || trackIdx >= len(e.song.Tracks) {
 			continue
 		}
-		trackRow := e.trackerModel.Tracks[trackIdx].Rows[rowIdx]
+		row := e.song.Tracks[trackIdx].Rows[rowIdx]
 
-		if trackRow.Arpeggio.IsActive() {
+		if row.Arpeggio.IsActive() {
 			e.arpTickIdx[trackIdx]++
-			idx := e.arpTickIdx[trackIdx] % len(trackRow.Arpeggio.Offsets)
-			mult := math.Pow(2, float64(trackRow.Arpeggio.Offsets[idx])/12)
+			idx := e.arpTickIdx[trackIdx] % len(row.Arpeggio.Offsets)
+			mult := math.Pow(2, float64(row.Arpeggio.Offsets[idx])/12)
 			patch.SetFrequency(e.prevFrequencies[trackIdx] * mult)
 		}
 
 		state := &e.effectStates[trackIdx]
-		switch trackRow.Effect.Type {
-		case tracker.EffectVibrato:
-			vibratoSpeed := (trackRow.Effect.Param >> 4) & 0xF
-			vibratoDepth := float64(trackRow.Effect.Param & 0xF)
+		switch row.Effect.Type {
+		case EffectVibrato:
+			vibratoSpeed := (row.Effect.Param >> 4) & 0xF
+			vibratoDepth := float64(row.Effect.Param & 0xF)
 			if vibratoSpeed > 0 {
 				state.vibratoPhase += (2 * math.Pi) / float64(vibratoSpeed)
 			}
 			semitones := (vibratoDepth / 4.0) * math.Sin(state.vibratoPhase)
 			mult := math.Pow(2, semitones/12)
 			patch.SetFrequency(e.prevFrequencies[trackIdx] * mult)
-		case tracker.EffectVolumeSlide:
-			delta := trackRow.Effect.Param
+		case EffectVolumeSlide:
+			delta := row.Effect.Param
 			if delta > 127 {
 				delta = int(int8(uint8(delta)))
 			}
 			state.volume = math.Max(0, math.Min(1, state.volume+float64(delta)/64.0))
 			patch.SetVolume(state.volume)
-		case tracker.EffectNoteCut:
-			if subTick == trackRow.Effect.Param {
+		case EffectNoteCut:
+			if subTick == row.Effect.Param {
 				patch.SetVolume(0)
 			}
-		case tracker.EffectNoteDelay:
-			if subTick == trackRow.Effect.Param {
+		case EffectNoteDelay:
+			if subTick == row.Effect.Param {
 				patch.NoteOn()
 			}
 		}
@@ -274,8 +253,8 @@ func (e *RenderEngine) drainVoices(sink RenderSink) error {
 }
 
 func (e *RenderEngine) tickSampleCount(rowIdx, subTick int) int {
-	ticks := e.trackerModel.RowTicks(rowIdx)
-	rowSamples := int(e.cfg.SampleRate.N(e.trackerModel.BPMDuration()))
+	ticks := e.song.RowTicks(rowIdx)
+	rowSamples := int(e.cfg.SampleRate.N(e.song.RowDuration))
 	baseTickSamples := rowSamples / ticks
 	remainder := rowSamples % ticks
 	if subTick < remainder {

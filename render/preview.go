@@ -1,8 +1,9 @@
 package render
 
 import (
+	"time"
+
 	"github.com/tetrackt/tetrackt/audio"
-	"github.com/tetrackt/tetrackt/ui/tracker"
 )
 
 type PreviewPlayer struct {
@@ -15,19 +16,21 @@ func NewPreviewPlayer(sink *SpeakerSink) PreviewPlayer {
 
 func (p *PreviewPlayer) Reset() {}
 
-func (p *PreviewPlayer) Start(row tracker.TrackRow, synth *audio.Synth, bpm int, sampleRate audio.SampleRate, globalVolume float64) bool {
-	if audio.IsOff(row.Note) || synth == nil {
+func (p *PreviewPlayer) Start(row Row, synth *audio.Synth, rowDuration time.Duration, sampleRate audio.SampleRate, globalVolume float64) bool {
+	if row.Frequency == 0 || synth == nil {
 		return false
 	}
 
-	// TODO: This is a bit hacky
-	tm := tracker.NewTracker(1, 1, 0, 0)
-	tm.BPM = tracker.NewBPM(bpm)
-	tm.Tracks[0].Synth = synth
-	tm.Tracks[0].Rows[0] = row
+	song := &Pattern{
+		Tracks:       []Track{{Synth: synth, Rows: []Row{row}}},
+		NumRows:      1,
+		NumTracks:    1,
+		RowDuration:  rowDuration,
+		DefaultTicks: 6,
+	}
 
 	collector := &bufferSink{}
-	engine := NewRenderEngine(tm, RenderConfig{
+	engine := NewRenderEngine(song, RenderConfig{
 		SampleRate:   sampleRate,
 		GlobalVolume: globalVolume,
 		LoopCount:    1,

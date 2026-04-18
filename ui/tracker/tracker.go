@@ -153,11 +153,6 @@ type TrackerModel struct {
 	nibbleHi    *int
 }
 
-// BPMDuration returns the duration of one row at the current BPM.
-func (m *TrackerModel) BPMDuration() time.Duration {
-	return m.BPM.Duration()
-}
-
 // RowTicks returns the number of sub-ticks for the given row.
 // It returns the first non-zero Ticks value across all tracks at that row,
 // falling back to DefaultTicks when none is set.

@@ -155,7 +155,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cfg.EndRow = tracker.LoopEndRow + 1
 					loop = true
 				}
-				stream, err := render.RenderToStream(tracker, cfg, loop)
+				stream, err := render.RenderToStream(tracker.ToRenderPattern(), cfg, loop)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Playback render failed: %v\n", err)
 					tracker.IsPlaying = false
@@ -251,7 +251,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case ui.ModeSave:
 			var err error
 			if strings.HasSuffix(strings.ToLower(filename), ".wav") {
-				err = render.ExportWAVFromTracks(m.trackerModel(), filename, render.WavExportOptions{
+				err = render.ExportWAV(m.trackerModel().ToRenderPattern(), filename, render.WavExportOptions{
 					SampleRate:   audio.SampleRate(msg.WavSampleRate),
 					GlobalVolume: msg.WavExportGain,
 					LoopCount:    msg.WavLoopCount,
@@ -311,8 +311,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tracker.TrackerNoteEntered:
 		m.dirty = true
-		if m.preview.Start(msg.Row, msg.Synth,
-			m.trackerModel().BPM.Value(), m.sampleRate, m.globalVolume) {
+		if m.preview.Start(tracker.ToRenderRow(msg.Row), msg.Synth,
+			m.trackerModel().BPM.Duration(), m.sampleRate, m.globalVolume) {
 			return m, m.previewTick()
 		}
 		return m, nil
@@ -407,7 +407,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) previewTick() tea.Cmd {
 	trackerModel := m.trackerModel()
 	ticks := trackerModel.RowTicks(0)
-	duration := trackerModel.BPMDuration() / time.Duration(ticks)
+	duration := trackerModel.BPM.Duration() / time.Duration(ticks)
 	return tea.Tick(duration, func(t time.Time) tea.Msg {
 		return previewTickMsg(t)
 	})
@@ -415,14 +415,14 @@ func (m *model) previewTick() tea.Cmd {
 
 // tick returns a command that sends a tickMsg after one full row duration.
 func (m *model) tick() tea.Cmd {
-	return tea.Tick(m.trackerModel().BPMDuration(), func(t time.Time) tea.Msg {
+	return tea.Tick(m.trackerModel().BPM.Duration(), func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
 
 // playNoteWithSynthPatch plays a note using the given patch's synth parameters.
 func (m *model) playNoteWithSynthPatch(note audio.Note, patch synth.SynthPatch) {
-	duration := m.trackerModel().BPMDuration()
+	duration := m.trackerModel().BPM.Duration()
 	noteSamples := m.sampleRate.N(duration)
 	audioPatch := patch.Synth.NewPatch(m.sampleRate, note.Frequency(), noteSamples)
 	m.speaker.Play(
@@ -449,7 +449,7 @@ func bankToPatches(bank *persistence.PatchBank) []synth.SynthPatch {
 
 // playNote plays a note at the given frequency using the current oscillator
 func (m *model) playNote(note audio.Note) {
-	duration := m.trackerModel().BPMDuration()
+	duration := m.trackerModel().BPM.Duration()
 	synth := m.synth().GetSynth()
 	noteSamples := m.sampleRate.N(duration)
 	patch := synth.NewPatch(m.sampleRate, note.Frequency(), noteSamples)

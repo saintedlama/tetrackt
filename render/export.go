@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/tetrackt/tetrackt/audio"
-	"github.com/tetrackt/tetrackt/ui/tracker"
 )
 
 type WavExportOptions struct {
@@ -19,7 +18,7 @@ type WAVSink struct {
 	outputPath string
 }
 
-func ExportWAVFromTracks(model *tracker.TrackerModel, wavPath string, opts WavExportOptions) error {
+func ExportWAV(song *Pattern, wavPath string, opts WavExportOptions) error {
 	if wavPath == "" {
 		return fmt.Errorf("render: output path is empty")
 	}
@@ -33,7 +32,7 @@ func ExportWAVFromTracks(model *tracker.TrackerModel, wavPath string, opts WavEx
 		opts.LoopCount = 1
 	}
 
-	engine := NewRenderEngine(model, RenderConfig{
+	engine := NewRenderEngine(song, RenderConfig{
 		SampleRate:   opts.SampleRate,
 		GlobalVolume: opts.GlobalVolume,
 		LoopCount:    opts.LoopCount,
