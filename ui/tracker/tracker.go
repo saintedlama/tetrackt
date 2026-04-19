@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 	"github.com/tetrackt/tetrackt/ui/tracker/effects"
@@ -113,7 +114,7 @@ type TrackerEdited struct{}
 
 // TrackerNoteEntered is emitted when a note is entered in the tracker grid.
 type TrackerNoteEntered struct {
-	Note  audio.Note
+	Note  notes.Note
 	Row   TrackRow
 	Synth *audio.Synth
 }
@@ -177,7 +178,7 @@ type Track struct {
 
 // TrackRow represents a single row in a track
 type TrackRow struct {
-	Note       audio.Note
+	Note       notes.Note
 	Volume     int  // 0-64
 	Ticks      int  // sub-ticks to play for this row; 0 = no subdivision
 	Continuous bool // synthesise this row as a continuous stream across ticks
@@ -209,7 +210,7 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 		// Initialize all rows with empty data
 		for j := range numRows {
 			tracks[i].Rows[j] = TrackRow{
-				Note:   audio.Off(),
+				Note:   notes.Off(),
 				Volume: 0,
 			}
 		}
@@ -553,7 +554,7 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 	switch m.CursorCol {
 	case columnNote:
 		if base, ok := ui.NoteKeys[key]; ok {
-			note := audio.Note{Base: base, Octave: audio.Octave(m.Octave)}
+			note := notes.Note{Base: base, Octave: notes.Octave(m.Octave)}
 			row.Note = note
 			entered := &TrackerNoteEntered{Note: note, Row: *row, Synth: m.Tracks[cursorTrack].Synth}
 			m.advanceByEditStep()
@@ -613,7 +614,7 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 	switch m.CursorCol {
 	case columnNote:
-		row.Note = audio.Off()
+		row.Note = notes.Off()
 	case columnVolume:
 		row.Volume = 0
 	case columnArpeggio:
@@ -684,7 +685,7 @@ func (m *TrackerModel) copySelectionToClipboard() {
 
 func (m *TrackerModel) clearSelectedCells() {
 	for _, c := range m.nav.SelectedCells() {
-		m.Tracks[c.Track].Rows[c.Row] = TrackRow{Note: audio.Off()}
+		m.Tracks[c.Track].Rows[c.Row] = TrackRow{Note: notes.Off()}
 	}
 }
 
@@ -742,7 +743,7 @@ func (m *TrackerModel) transposeSelection(semitones int) bool {
 	edited := false
 	for _, c := range m.nav.SelectedCells() {
 		r := &m.Tracks[c.Track].Rows[c.Row]
-		if r.Note.Base == audio.BaseOff {
+		if r.Note.Base == notes.BaseOff {
 			continue
 		}
 		if n, ok := r.Note.Transpose(semitones); ok {
@@ -759,7 +760,7 @@ func (m *TrackerModel) insertTrackSpace() {
 	for row := m.NumRows - 1; row > cursorRow; row-- {
 		m.Tracks[t].Rows[row] = m.Tracks[t].Rows[row-1]
 	}
-	m.Tracks[t].Rows[cursorRow] = TrackRow{Note: audio.Off()}
+	m.Tracks[t].Rows[cursorRow] = TrackRow{Note: notes.Off()}
 }
 
 func (m *TrackerModel) insertGlobalRowSpace() {
@@ -768,7 +769,7 @@ func (m *TrackerModel) insertGlobalRowSpace() {
 		for row := m.NumRows - 1; row > cursorRow; row-- {
 			m.Tracks[t].Rows[row] = m.Tracks[t].Rows[row-1]
 		}
-		m.Tracks[t].Rows[cursorRow] = TrackRow{Note: audio.Off()}
+		m.Tracks[t].Rows[cursorRow] = TrackRow{Note: notes.Off()}
 	}
 }
 
@@ -792,8 +793,8 @@ func (m *TrackerModel) visibleRows() int {
 	return m.Viewport.Height - chromeRows
 }
 
-func formatNote(note audio.Note) string {
-	if note.Base == audio.BaseOff {
+func formatNote(note notes.Note) string {
+	if note.Base == notes.BaseOff {
 		return "---"
 	}
 

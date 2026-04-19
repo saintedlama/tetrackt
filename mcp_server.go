@@ -13,6 +13,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 	"github.com/tetrackt/tetrackt/persistence"
 	"github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/synth"
@@ -64,19 +65,19 @@ type listPatchesArgs struct {
 
 var trackerNotePattern = regexp.MustCompile(`^([A-G])(#?)-?([0-8])$`)
 
-var noteBaseLookup = map[string]audio.Base{
-	"C":  audio.BaseC,
-	"C#": audio.BaseCs,
-	"D":  audio.BaseD,
-	"D#": audio.BaseDs,
-	"E":  audio.BaseE,
-	"F":  audio.BaseF,
-	"F#": audio.BaseFs,
-	"G":  audio.BaseG,
-	"G#": audio.BaseGs,
-	"A":  audio.BaseA,
-	"A#": audio.BaseAs,
-	"B":  audio.BaseB,
+var noteBaseLookup = map[string]notes.Base{
+	"C":  notes.BaseC,
+	"C#": notes.BaseCs,
+	"D":  notes.BaseD,
+	"D#": notes.BaseDs,
+	"E":  notes.BaseE,
+	"F":  notes.BaseF,
+	"F#": notes.BaseFs,
+	"G":  notes.BaseG,
+	"G#": notes.BaseGs,
+	"A":  notes.BaseA,
+	"A#": notes.BaseAs,
+	"B":  notes.BaseB,
 }
 
 func runMCPServer(address string, bridge *mcpUIBridge) error {
@@ -432,33 +433,33 @@ func ensureCustomTag(tags []string) []string {
 	return out
 }
 
-func parseTrackerNote(value string) (audio.Note, error) {
+func parseTrackerNote(value string) (notes.Note, error) {
 	normalized := strings.ToUpper(strings.TrimSpace(value))
 	if normalized == "" {
-		return audio.Note{}, fmt.Errorf("note is required")
+		return notes.Note{}, fmt.Errorf("note is required")
 	}
 
 	if normalized == "---" || normalized == "OFF" {
-		return audio.Off(), nil
+		return notes.Off(), nil
 	}
 
 	match := trackerNotePattern.FindStringSubmatch(normalized)
 	if len(match) != 4 {
-		return audio.Note{}, fmt.Errorf("invalid note %q (expected C-4, C#4, or ---)", value)
+		return notes.Note{}, fmt.Errorf("invalid note %q (expected C-4, C#4, or ---)", value)
 	}
 
 	baseName := match[1] + match[2]
 	base, ok := noteBaseLookup[baseName]
 	if !ok {
-		return audio.Note{}, fmt.Errorf("invalid note base %q", baseName)
+		return notes.Note{}, fmt.Errorf("invalid note base %q", baseName)
 	}
 
 	octave, err := strconv.Atoi(match[3])
 	if err != nil {
-		return audio.Note{}, fmt.Errorf("invalid octave in %q", value)
+		return notes.Note{}, fmt.Errorf("invalid octave in %q", value)
 	}
 
-	return audio.NewNote(base, audio.Octave(octave)), nil
+	return notes.NewNote(base, notes.Octave(octave)), nil
 }
 
 func parseEffectType(value string) (tracker.EffectType, error) {

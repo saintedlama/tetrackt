@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 	utracker "github.com/tetrackt/tetrackt/ui/tracker"
 )
 
@@ -370,7 +371,7 @@ func ModuleToTracks(mod *SavedModule, tracker *utracker.TrackerModel) {
 		for j, row := range savedTrack.Rows {
 			if j < len(track.Rows) {
 				track.Rows[j] = utracker.TrackRow{
-					Note:       audio.Note{Base: audio.Base(row.Base), Octave: audio.Octave(row.Octave)},
+					Note:       notes.Note{Base: notes.Base(row.Base), Octave: notes.Octave(row.Octave)},
 					Volume:     row.Volume,
 					Ticks:      row.Ticks,
 					Continuous: row.Continuous,

@@ -5,21 +5,21 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 )
 
 func TestInputProfileDefaultsToQWERTY(t *testing.T) {
 	SetInputProfile(InputProfileQWERTY)
 	require.Equal(t, InputProfileQWERTY, CurrentInputProfile(), "expected qwerty profile")
-	assert.Equal(t, audio.Base("C"), NoteKeys["z"], "expected z->C in qwerty")
-	assert.Equal(t, audio.Base("A"), NoteKeys["y"], "expected y->A in qwerty")
+	assert.Equal(t, notes.Base("C"), NoteKeys["z"], "expected z->C in qwerty")
+	assert.Equal(t, notes.Base("A"), NoteKeys["y"], "expected y->A in qwerty")
 }
 
 func TestInputProfileQWERTZSwapsYZRows(t *testing.T) {
 	SetInputProfile(InputProfileQWERTZ)
 	require.Equal(t, InputProfileQWERTZ, CurrentInputProfile(), "expected qwertz profile")
-	assert.Equal(t, audio.Base("C"), NoteKeys["y"], "expected y->C in qwertz")
-	assert.Equal(t, audio.Base("A"), NoteKeys["z"], "expected z->A in qwertz")
+	assert.Equal(t, notes.Base("C"), NoteKeys["y"], "expected y->C in qwertz")
+	assert.Equal(t, notes.Base("A"), NoteKeys["z"], "expected z->A in qwertz")
 }
 
 func TestInputProfileFromStringFallback(t *testing.T) {

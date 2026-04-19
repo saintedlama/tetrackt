@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 )
@@ -17,7 +18,7 @@ type OpenPatchBankMsg struct{}
 // PlayPatchNoteMsg requests that a note be played using a specific patch's
 // parameters rather than the current track's synth settings.
 type PlayPatchNoteMsg struct {
-	Note  audio.Note
+	Note  notes.Note
 	Patch SynthPatch
 }
 
@@ -145,7 +146,7 @@ func (d *SynthPatchBankDialog) updateBrowse(msg tea.KeyPressMsg) (tea.Model, tea
 			if d.view.focus != focusList || len(d.view.Patches) == 0 {
 				return d, nil
 			}
-			note := audio.Note{Base: base, Octave: audio.Octave(d.octave)}
+			note := notes.Note{Base: base, Octave: notes.Octave(d.octave)}
 			patch := d.view.Patches[d.view.SelectedPatch]
 			return d, func() tea.Msg {
 				return ui.PassThroughMsg{Payload: PlayPatchNoteMsg{Note: note, Patch: patch}}

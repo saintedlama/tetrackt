@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 	"github.com/tetrackt/tetrackt/persistence"
 	"github.com/tetrackt/tetrackt/render"
 	"github.com/tetrackt/tetrackt/ui"
@@ -191,7 +192,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Global note playing for synth screen.
 		if base, ok := ui.NoteKeys[msg.String()]; ok && m.activeScreen != trackerScreenIdx {
-			note := audio.Note{Base: base, Octave: audio.Octave(m.octave)}
+			note := notes.Note{Base: base, Octave: notes.Octave(m.octave)}
 
 			m.playNote(note)
 			return m, nil
@@ -436,7 +437,7 @@ func (m *model) tick() tea.Cmd {
 }
 
 // playNoteWithSynthPatch plays a note using the given patch's synth parameters.
-func (m *model) playNoteWithSynthPatch(note audio.Note, patch synth.SynthPatch) {
+func (m *model) playNoteWithSynthPatch(note notes.Note, patch synth.SynthPatch) {
 	duration := m.trackerModel().BPM.Duration()
 	noteSamples := m.sampleRate.N(duration)
 	audioPatch := patch.Synth.NewPatch(m.sampleRate, note.Frequency(), noteSamples)
@@ -463,7 +464,7 @@ func bankToPatches(bank *persistence.PatchBank) []synth.SynthPatch {
 }
 
 // playNote plays a note at the given frequency using the current oscillator
-func (m *model) playNote(note audio.Note) {
+func (m *model) playNote(note notes.Note) {
 	duration := m.trackerModel().BPM.Duration()
 	synth := m.synth().GetSynth()
 	noteSamples := m.sampleRate.N(duration)

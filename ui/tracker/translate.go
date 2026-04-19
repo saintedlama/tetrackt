@@ -1,7 +1,7 @@
 package tracker
 
 import (
-	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 	"github.com/tetrackt/tetrackt/render"
 )
 
@@ -42,7 +42,7 @@ func toRenderRow(row TrackRow) render.Row {
 		},
 		Ticks: row.Ticks,
 	}
-	if !audio.IsOff(row.Note) {
+	if !notes.IsOff(row.Note) {
 		rr.Frequency = row.Note.Frequency()
 		rr.Volume = float64(row.Volume) / 64.0
 	}
