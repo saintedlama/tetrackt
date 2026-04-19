@@ -247,11 +247,6 @@ func (s *SynthScreen) renderVoice(clr color.Color, panelIndices ...int) string {
 	return lipgloss.JoinVertical(lipgloss.Left, rule, withStrip)
 }
 
-// Footer returns the help text shown in the footer bar on the Synth screen.
-func (s *SynthScreen) Footer() string {
-	return "Ctrl+↑↓←→: Switch panel | ↑↓: Select | ←→: Adjust | b: Patch Bank | T: Tracker | ?: Help"
-}
-
 // Help returns screen-specific keyboard shortcut sections for the help dialog.
 func (s *SynthScreen) Help() []ui.HelpSection {
 	return []ui.HelpSection{

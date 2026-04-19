@@ -66,10 +66,10 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 			// Settings panel is active — up/down switches focus, left/right adjusts value
 			switch msg.String() {
 			case "up":
-				t.settingsFocus = (t.settingsFocus - 1 + 2) % 2
+				t.settingsFocus = (t.settingsFocus - 1 + 3) % 3
 				return t, nil
 			case "down":
-				t.settingsFocus = (t.settingsFocus + 1) % 2
+				t.settingsFocus = (t.settingsFocus + 1) % 3
 				return t, nil
 			}
 
@@ -96,17 +96,30 @@ func (t *TrackerScreen) Update(msg tea.Msg) (ui.Screen, tea.Cmd) {
 			}
 
 			// BPM row focused
+			if t.settingsFocus == 1 {
+				switch msg.String() {
+				case "left":
+					t.Tracker.BPM = t.Tracker.BPM.Adjust(-1)
+				case "shift+left":
+					t.Tracker.BPM = t.Tracker.BPM.Adjust(-10)
+				case "right":
+					t.Tracker.BPM = t.Tracker.BPM.Adjust(1)
+				case "shift+right":
+					t.Tracker.BPM = t.Tracker.BPM.Adjust(10)
+				}
+				return t, func() tea.Msg { return BPMChanged{BPM: t.Tracker.BPM.Value()} }
+			}
+
+			// Step row focused
 			switch msg.String() {
 			case "left":
-				t.Tracker.BPM = t.Tracker.BPM.Adjust(-1)
-			case "shift+left":
-				t.Tracker.BPM = t.Tracker.BPM.Adjust(-10)
+				if t.Tracker.EditStep > 0 {
+					t.Tracker.EditStep--
+				}
 			case "right":
-				t.Tracker.BPM = t.Tracker.BPM.Adjust(1)
-			case "shift+right":
-				t.Tracker.BPM = t.Tracker.BPM.Adjust(10)
+				t.Tracker.EditStep++
 			}
-			return t, func() tea.Msg { return BPMChanged{BPM: t.Tracker.BPM.Value()} }
+			return t, nil
 		}
 
 		// Tracker panel is active
@@ -135,7 +148,9 @@ func (t *TrackerScreen) View() string {
 		fmt.Sprintf("  %s  %3d%%", t.volumeBar.View(), int(t.GlobalVolume*100))
 	bpmRow := render(settingsPanelActive && t.settingsFocus == 1, "BPM") +
 		fmt.Sprintf("     %3d", t.Tracker.BPM.Value())
-	settingsContent := volumeRow + "\n" + bpmRow
+	stepRow := render(settingsPanelActive && t.settingsFocus == 2, "Step") +
+		fmt.Sprintf("    %3d", t.Tracker.EditStep)
+	settingsContent := volumeRow + "\n" + bpmRow + "\n" + stepRow
 
 	currentTrack := t.Tracker.Tracks[t.Tracker.nav.CursorTrack()]
 	synthInfoContent := renderSynthInfo(currentTrack.Synth)
@@ -149,15 +164,6 @@ func (t *TrackerScreen) View() string {
 
 // Title returns the tab label for the TrackerScreen.
 func (t *TrackerScreen) Title() string { return "Tracker" }
-
-// Footer returns the help text shown in the footer bar on the Tracker screen.
-func (t *TrackerScreen) Footer() string {
-	mode := "NAV"
-	if t.Tracker.Mode == editMode {
-		mode = "EDIT"
-	}
-	return fmt.Sprintf("%s | Space: Mode | Tab: Column | Ctrl+←→: Panel | Ctrl+E: Effects | p: Play | Ctrl+T: Synth | ?: Help", mode)
-}
 
 // Help returns screen-specific keyboard shortcut sections for the help dialog.
 func (t *TrackerScreen) Help() []ui.HelpSection {

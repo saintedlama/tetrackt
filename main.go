@@ -137,23 +137,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Toggle play/pause
 			tracker := m.trackerModel()
 			tracker.IsPlaying = !tracker.IsPlaying
-			tracker.LoopToRow = false
 			if tracker.IsPlaying {
-				tracker.PlaybackRow = 0
 				m.speaker.Clear()
 				m.preview.Reset()
+
+				if keyStr == "P" {
+					tracker.LoopEndRow = tracker.CursorRow()
+					tracker.LoopEndSet = true
+					if !tracker.LoopStartSet {
+						tracker.LoopStartRow = 0
+						tracker.LoopStartSet = true
+					}
+				}
+
+				loop := tracker.LoopStartSet
+				tracker.PlaybackRow = 0
+				if loop {
+					tracker.PlaybackRow = tracker.LoopStartRow
+				}
 
 				cfg := render.RenderConfig{
 					SampleRate:   m.sampleRate,
 					GlobalVolume: m.globalVolume,
 					LoopCount:    1,
 				}
-				loop := false
-				if "P" == keyStr {
-					tracker.LoopToRow = true
-					tracker.LoopEndRow = tracker.CursorRow()
-					cfg.EndRow = tracker.LoopEndRow + 1
-					loop = true
+				if loop {
+					if tracker.LoopEndSet {
+						cfg.EndRow = tracker.LoopEndRow + 1
+					}
 				}
 				stream, err := render.RenderToStream(tracker.ToRenderPattern(), cfg, loop)
 				if err != nil {
@@ -203,9 +214,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		tr.PlaybackRow++
-		if tr.LoopToRow {
-			if tr.PlaybackRow > tr.LoopEndRow {
-				tr.PlaybackRow = 0
+		if tr.LoopStartSet {
+			effectiveEnd := tr.NumRows - 1
+			if tr.LoopEndSet {
+				effectiveEnd = tr.LoopEndRow
+			}
+			if tr.PlaybackRow > effectiveEnd {
+				tr.PlaybackRow = tr.LoopStartRow
 			}
 		} else if tr.PlaybackRow >= tr.NumRows {
 			tr.IsPlaying = false
@@ -503,7 +518,8 @@ func (m model) View() tea.View {
 	if m.mcpActive {
 		mcpIndicator = lipgloss.NewStyle().Foreground(common.ColorCyan).Render("● MCP") + "  "
 	}
-	right := lipgloss.JoinHorizontal(lipgloss.Top, mcpIndicator, helpHint, "  ", ui.Logo())
+	octaveIndicator := lipgloss.NewStyle().Foreground(common.ColorTextMuted).Render(fmt.Sprintf("Oct:%d", m.octave)) + "  "
+	right := lipgloss.JoinHorizontal(lipgloss.Top, mcpIndicator, octaveIndicator, helpHint, "  ", ui.Logo())
 	spacerWidth := m.width - lipgloss.Width(tabBar) - lipgloss.Width(right)
 	if spacerWidth < 0 {
 		spacerWidth = 0

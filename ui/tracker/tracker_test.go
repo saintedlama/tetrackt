@@ -11,17 +11,8 @@ import (
 	"github.com/tetrackt/tetrackt/ui/tracker/effects"
 )
 
-func TestSpaceTogglesEditMode(t *testing.T) {
-	m := NewTracker(2, 8, 80, 24)
-	require.Equal(t, editMode, m.Mode, "expected default edit mode")
-
-	_, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
-	assert.Equal(t, navigateMode, m.Mode, "expected navigate mode after space")
-}
-
 func TestNoteEntryInEditModeEmitsPreviewMessage(t *testing.T) {
 	m := NewTracker(2, 8, 80, 24)
-	m.Mode = editMode
 	m.Octave = 4
 	m.CursorCol = columnNote
 
@@ -37,7 +28,6 @@ func TestNoteEntryInEditModeEmitsPreviewMessage(t *testing.T) {
 
 func TestEditStepAdvancesCursor(t *testing.T) {
 	m := NewTracker(2, 16, 80, 24)
-	m.Mode = editMode
 	m.Octave = 4
 	m.EditStep = 2
 	m.CursorCol = columnNote
@@ -132,7 +122,6 @@ func TestParseEffectCommandKeyAliases(t *testing.T) {
 
 func TestInlineRowTicksCommand(t *testing.T) {
 	m := NewTracker(1, 8, 80, 24)
-	m.Mode = editMode
 	m.CursorCol = columnEffect
 
 	_, _ = m.Update(tea.KeyPressMsg{Text: "5"})
@@ -149,7 +138,6 @@ func TestInlineRowTicksCommand(t *testing.T) {
 
 func TestInlineContinuousCommandToggle(t *testing.T) {
 	m := NewTracker(1, 8, 80, 24)
-	m.Mode = editMode
 	m.CursorCol = columnEffect
 
 	_, _ = m.Update(tea.KeyPressMsg{Text: "6"})
@@ -171,7 +159,6 @@ func TestInlineContinuousCommandToggle(t *testing.T) {
 
 func TestInlineArpPresetCommand(t *testing.T) {
 	m := NewTracker(1, 8, 80, 24)
-	m.Mode = editMode
 	m.CursorCol = columnEffect
 	_, _ = m.Update(tea.KeyPressMsg{Text: "7"})
 

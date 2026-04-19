@@ -21,6 +21,9 @@ var (
 			Padding(0, 1)
 
 	rowNumStyle = lipgloss.NewStyle().
+			Foreground(common.ColorTextDisabled)
+
+	rowNumBeatStyle = lipgloss.NewStyle().
 			Foreground(common.ColorTextMuted)
 
 	cursorRowStyle = lipgloss.NewStyle().
@@ -30,6 +33,11 @@ var (
 	playbackRowStyle = lipgloss.NewStyle().
 				Foreground(common.ColorAccentPlay).
 				Bold(true)
+
+	loopRowStyle = lipgloss.NewStyle().
+			Background(common.ColorAccentModulation).
+			Foreground(common.ColorWhite).
+			Bold(true)
 
 	cellStyle = lipgloss.NewStyle()
 
@@ -88,14 +96,6 @@ func (b BPM) Adjust(delta int) BPM {
 	return NewBPM(b.value + delta)
 }
 
-// trackerEditMode controls whether typing edits cells or only navigates.
-type trackerEditMode int
-
-const (
-	navigateMode trackerEditMode = iota
-	editMode
-)
-
 // trackerColumn identifies the currently focused in-grid subcolumn.
 type trackerColumn int
 
@@ -139,18 +139,19 @@ type TrackerModel struct {
 	// Navigation grid (manages cursor, viewport, selection)
 	nav *navigation.Grid
 
-	IsPlaying   bool
-	LoopToRow   bool
-	LoopEndRow  int
-	PlaybackRow int
-	Viewport    Viewport
-	BPM         BPM
-	Octave      int
-	Mode        trackerEditMode
-	CursorCol   trackerColumn
-	EditStep    int
-	clipboard   trackerClipboard
-	nibbleHi    *int
+	IsPlaying    bool
+	LoopStartSet bool
+	LoopStartRow int
+	LoopEndSet   bool
+	LoopEndRow   int
+	PlaybackRow  int
+	Viewport     Viewport
+	BPM          BPM
+	Octave       int
+	CursorCol    trackerColumn
+	EditStep     int
+	clipboard    trackerClipboard
+	nibbleHi     *int
 }
 
 // RowTicks returns the number of sub-ticks for the given row.
@@ -224,12 +225,10 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 		NumTracks:   numTracks,
 		nav:         navigation.New(numRows, numTracks, visibleRows),
 		IsPlaying:   false,
-		LoopToRow:   false,
 		PlaybackRow: 0,
 		Viewport:    Viewport{Width: viewportWidth, Height: viewportHeight},
 		BPM:         NewBPM(DefaultBPM),
 		Octave:      4,
-		Mode:        editMode,
 		CursorCol:   columnNote,
 		EditStep:    defaultEditStep,
 	}
@@ -271,14 +270,20 @@ func (m *TrackerModel) View() string {
 	// Render visible rows
 	for row := viewportRow; row < endRow; row++ {
 		// Row number with playback indicator
-		rowNumStr := fmt.Sprintf("%02d  ", row)
+		rowNum := fmt.Sprintf("%02d", row)
+		isLoopMarker := (m.LoopStartSet && row == m.LoopStartRow) || (m.LoopEndSet && row == m.LoopEndRow)
 		if row == m.PlaybackRow && m.IsPlaying {
-			tracks.WriteString(playbackRowStyle.Render(rowNumStr))
+			tracks.WriteString(playbackRowStyle.Render(rowNum))
+		} else if isLoopMarker {
+			tracks.WriteString(loopRowStyle.Render(rowNum))
 		} else if row == m.nav.CursorRow() {
-			tracks.WriteString(cursorRowStyle.Render(rowNumStr))
+			tracks.WriteString(cursorRowStyle.Render(rowNum))
+		} else if row%4 == 0 {
+			tracks.WriteString(rowNumBeatStyle.Render(rowNum))
 		} else {
-			tracks.WriteString(rowNumStyle.Render(rowNumStr))
+			tracks.WriteString(rowNumStyle.Render(rowNum))
 		}
+		tracks.WriteString("  ")
 
 		// Track cells
 		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
@@ -295,7 +300,7 @@ func (m *TrackerModel) View() string {
 			selected := m.nav.IsSelected(row, trackIdx)
 			for colIdx, part := range parts {
 				col := trackerColumn(colIdx)
-				isNibblePending := isCursorCell && m.nibbleHi != nil && m.Mode == editMode &&
+				isNibblePending := isCursorCell && m.nibbleHi != nil &&
 					(col == columnVolume || col == columnArpeggio || col == columnParam)
 
 				if isNibblePending && col == m.CursorCol {
@@ -330,12 +335,24 @@ func (m *TrackerModel) View() string {
 		tracks.WriteString("\n")
 	}
 
-	mode := "NAV"
-	if m.Mode == editMode {
-		mode = "EDIT"
+	loopRange := ""
+	if m.LoopStartSet {
+		if m.LoopEndSet {
+			loopRange = fmt.Sprintf("  Loop: %d-%d", m.LoopStartRow, m.LoopEndRow)
+		} else {
+			loopRange = fmt.Sprintf("  Loop: %d-?", m.LoopStartRow)
+		}
+	}
+	playback := ""
+	if m.IsPlaying {
+		if m.LoopStartSet {
+			playback = "  [LOOP]"
+		} else {
+			playback = "  [PLAY]"
+		}
 	}
 	tracks.WriteString("\n")
-	tracks.WriteString(fmt.Sprintf("Mode: %s  Step: %d  Col: %s", mode, m.EditStep, m.cursorColumnLabel()))
+	tracks.WriteString(fmt.Sprintf("Step: %d  Col: %s%s%s", m.EditStep, m.cursorColumnLabel(), loopRange, playback))
 
 	return tracks.String()
 }
@@ -357,8 +374,24 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 		// Track mode key handling
 		switch keyStr {
 		case "space":
-			m.toggleMode()
-			m.clearNibbleBuffer()
+			row := m.nav.CursorRow()
+			if !m.LoopStartSet {
+				m.LoopStartRow = row
+				m.LoopStartSet = true
+			} else if !m.LoopEndSet {
+				if row == m.LoopStartRow {
+					m.LoopStartSet = false
+				} else {
+					m.LoopEndRow = row
+					m.LoopEndSet = true
+					if m.LoopEndRow < m.LoopStartRow {
+						m.LoopStartRow, m.LoopEndRow = m.LoopEndRow, m.LoopStartRow
+					}
+				}
+			} else {
+				m.LoopStartSet = false
+				m.LoopEndSet = false
+			}
 			return m, nil
 		case "tab":
 			m.moveSubcolumn(1)
@@ -423,16 +456,14 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			m.nav.Move(0, m.nav.ViewportHeight())
 			m.clearNibbleBuffer()
 		default:
-			if m.Mode == editMode {
-				nibbleBefore := m.nibbleHi
-				if msg, didEdit := m.handleEditInput(keyStr); didEdit {
-					edited = true
-					noteEntered = msg
-				} else if nibbleBefore == nil && m.nibbleHi != nil {
-					// First nibble buffered — no cell was committed but view must update
-					// to show the pending digit.
-					return m, nil
-				}
+			nibbleBefore := m.nibbleHi
+			if msg, didEdit := m.handleEditInput(keyStr); didEdit {
+				edited = true
+				noteEntered = msg
+			} else if nibbleBefore == nil && m.nibbleHi != nil {
+				// First nibble buffered — no cell was committed but view must update
+				// to show the pending digit.
+				return m, nil
 			}
 		}
 
@@ -456,14 +487,6 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 	}
 
 	return m, cmd
-}
-
-func (m *TrackerModel) toggleMode() {
-	if m.Mode == editMode {
-		m.Mode = navigateMode
-		return
-	}
-	m.Mode = editMode
 }
 
 func (m *TrackerModel) handleGlobalEditingKey(key string) bool {

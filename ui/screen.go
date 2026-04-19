@@ -8,7 +8,6 @@ import tea "charm.land/bubbletea/v2"
 type Screen interface {
 	Update(tea.Msg) (Screen, tea.Cmd)
 	View() string
-	Footer() string
 	Title() string
 	Help() []HelpSection
 }
