@@ -55,7 +55,6 @@ type applyCellEffectArgs struct {
 	VibratoSpeed    *int   `json:"vibrato_speed,omitempty"`
 	VibratoDepth    *int   `json:"vibrato_depth,omitempty"`
 	Ticks           *int   `json:"ticks,omitempty"`
-	Continuous      *bool  `json:"continuous,omitempty"`
 	ArpeggioOffsets []int  `json:"arpeggio_offsets,omitempty"`
 }
 
@@ -341,10 +340,6 @@ func (s *mcpServer) handleApplyCellEffect(ctx context.Context, request mcp.CallT
 			row.Ticks = *args.Ticks
 		}
 
-		if args.Continuous != nil {
-			row.Continuous = *args.Continuous
-		}
-
 		if args.ArpeggioOffsets != nil {
 			row.Arpeggio = audio.ArpeggioEffect{Offsets: append([]int(nil), args.ArpeggioOffsets...)}
 		}
@@ -625,7 +620,6 @@ func mcpToolApplyCellEffect() mcp.Tool {
 		mcp.WithNumber("vibrato_speed", mcp.Description("Vibrato speed 1..15"), mcp.Min(1), mcp.Max(15)),
 		mcp.WithNumber("vibrato_depth", mcp.Description("Vibrato depth 0..15"), mcp.Min(0), mcp.Max(15)),
 		mcp.WithNumber("ticks", mcp.Description("Row ticks (sub-ticks) 1..32"), mcp.Min(1), mcp.Max(32)),
-		mcp.WithBoolean("continuous", mcp.Description("Continuous row synthesis")),
 		mcp.WithArray("arpeggio_offsets", mcp.Description("Optional semitone offsets"), mcp.WithNumberItems()),
 	)
 }

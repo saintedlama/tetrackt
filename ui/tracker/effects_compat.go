@@ -15,6 +15,5 @@ const (
 	EffectNoteCut     = effects.NoteCut
 	EffectNoteDelay   = effects.NoteDelay
 	EffectRowTicks    = effects.RowTicks
-	EffectContinuous  = effects.Continuous
 	EffectArpPreset   = effects.ArpPreset
 )

@@ -178,12 +178,11 @@ type Track struct {
 
 // TrackRow represents a single row in a track
 type TrackRow struct {
-	Note       notes.Note
-	Volume     int  // 0-64
-	Ticks      int  // sub-ticks to play for this row; 0 = no subdivision
-	Continuous bool // synthesise this row as a continuous stream across ticks
-	Arpeggio   audio.ArpeggioEffect
-	Effect     TrackerEffect
+	Note     notes.Note
+	Volume   int // 0-64
+	Ticks    int // sub-ticks to play for this row; 0 = no subdivision
+	Arpeggio audio.ArpeggioEffect
+	Effect   TrackerEffect
 }
 
 // NewTracker creates a new pattern with the specified number of tracks and rows
@@ -577,7 +576,6 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 				o1 := (*val >> 4) & 0xF
 				o2 := *val & 0xF
 				row.Arpeggio = audio.ArpeggioEffect{Offsets: []int{0, o1, o2}}
-				row.Continuous = true
 				m.advanceByEditStep()
 				return nil, true
 			}
@@ -619,16 +617,12 @@ func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 		row.Volume = 0
 	case columnArpeggio:
 		row.Arpeggio = audio.ArpeggioEffect{}
-		row.Continuous = false
 	case columnEffect:
 		switch row.Effect.Type {
 		case EffectRowTicks:
 			row.Ticks = 0
-		case EffectContinuous:
-			row.Continuous = false
 		case EffectArpPreset:
 			row.Arpeggio = audio.ArpeggioEffect{}
-			row.Continuous = false
 		}
 		row.Effect.Type = EffectNone
 		row.Effect.Param = 0
@@ -730,7 +724,6 @@ func (m *TrackerModel) pasteClipboardEffectsOnly() bool {
 			src := m.clipboard.Cells[r][t]
 			dst := &m.Tracks[dstTrack].Rows[dstRow]
 			dst.Volume = src.Volume
-			dst.Continuous = src.Continuous
 			dst.Arpeggio = src.Arpeggio
 			dst.Ticks = src.Ticks
 			dst.Effect = src.Effect
@@ -840,9 +833,6 @@ func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {
 	row.Effect = result.Effect
 	if result.Ticks > 0 || effectType == EffectRowTicks {
 		row.Ticks = result.Ticks
-	}
-	if result.Continuous || effectType == EffectContinuous {
-		row.Continuous = result.Continuous
 	}
 	if result.Arpeggio.IsActive() || effectType == EffectArpPreset {
 		row.Arpeggio = result.Arpeggio

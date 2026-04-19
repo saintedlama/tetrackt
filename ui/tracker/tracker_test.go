@@ -110,7 +110,6 @@ func TestParseEffectCommandKeyAliases(t *testing.T) {
 		"c": EffectNoteCut,
 		"d": EffectNoteDelay,
 		"t": EffectRowTicks,
-		"o": EffectContinuous,
 		"a": EffectArpPreset,
 	}
 
@@ -137,27 +136,6 @@ func TestInlineRowTicksCommand(t *testing.T) {
 	assert.Equal(t, 0x0C, row.Effect.Param, "expected effect param 0x0C")
 }
 
-func TestInlineContinuousCommandToggle(t *testing.T) {
-	m := NewTracker(1, 8, 80, 24)
-	m.CursorCol = columnEffect
-
-	_, _ = m.Update(tea.KeyPressMsg{Text: "6"})
-	m.CursorCol = columnParam
-	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
-	_, _ = m.Update(tea.KeyPressMsg{Text: "1"})
-
-	assert.True(t, m.Tracks[0].Rows[0].Continuous, "expected continuous to be enabled")
-
-	m.nav.Move(0, 1)
-	m.CursorCol = columnEffect
-	_, _ = m.Update(tea.KeyPressMsg{Text: "6"})
-	m.CursorCol = columnParam
-	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
-	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
-
-	assert.False(t, m.Tracks[0].Rows[1].Continuous, "expected continuous to be disabled")
-}
-
 func TestInlineArpPresetCommand(t *testing.T) {
 	m := NewTracker(1, 8, 80, 24)
 
@@ -165,7 +143,7 @@ func TestInlineArpPresetCommand(t *testing.T) {
 	m.Tracks[0].Rows[0].Ticks = 4
 
 	m.CursorCol = columnEffect
-	_, _ = m.Update(tea.KeyPressMsg{Text: "7"}) // EffectArpPreset
+	_, _ = m.Update(tea.KeyPressMsg{Text: "6"}) // EffectArpPreset
 
 	m.CursorCol = columnParam
 	_, _ = m.Update(tea.KeyPressMsg{Text: "1"})
@@ -174,7 +152,6 @@ func TestInlineArpPresetCommand(t *testing.T) {
 	row := m.Tracks[0].Rows[0]
 	assert.Equal(t, EffectArpPreset, row.Effect.Type, "expected EffectArpPreset")
 	assert.True(t, row.Arpeggio.IsActive(), "expected arp offsets to be generated")
-	assert.True(t, row.Continuous, "expected arp preset command to force continuous")
 	assert.Len(t, row.Arpeggio.Offsets, 4, "expected 4 offsets matching row tick count")
 }
 
@@ -203,12 +180,11 @@ func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 
 	// Source cell contains note + effects payload.
 	m.Tracks[0].Rows[0] = TrackRow{
-		Note:       notes.Note{Base: notes.BaseE, Octave: 4},
-		Volume:     48,
-		Ticks:      12,
-		Continuous: true,
-		Arpeggio:   audio.ArpeggioEffect{Offsets: []int{0, 4, 7}},
-		Effect:     TrackerEffect{Type: EffectVibrato, Param: 0x24},
+		Note:     notes.Note{Base: notes.BaseE, Octave: 4},
+		Volume:   48,
+		Ticks:    12,
+		Arpeggio: audio.ArpeggioEffect{Offsets: []int{0, 4, 7}},
+		Effect:   TrackerEffect{Type: EffectVibrato, Param: 0x24},
 	}
 
 	// Copy source cell.
@@ -228,7 +204,6 @@ func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 	assert.Equal(t, notes.Octave(5), got.Note.Octave, "expected destination note octave 5 to be preserved")
 	assert.Equal(t, 48, got.Volume, "expected volume copied")
 	assert.Equal(t, 12, got.Ticks, "expected ticks copied")
-	assert.True(t, got.Continuous, "expected continuous copied")
 	assert.True(t, got.Arpeggio.IsActive(), "expected arp copied")
 	assert.Equal(t, EffectVibrato, got.Effect.Type, "expected effect type copied")
 	assert.Equal(t, 0x24, got.Effect.Param, "expected effect param copied")
