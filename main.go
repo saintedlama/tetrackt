@@ -281,7 +281,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case ui.EmbeddedDemoToken:
 				if err := m.loadEmbeddedDemo(); err != nil {
-					fmt.Fprintf(os.Stderr, "Load demo song failed: %v\n", err)
+					fmt.Fprintf(os.Stderr, "Load demo module failed: %v\n", err)
 				}
 			default:
 				mod, err := persistence.LoadFromFile(filename)
@@ -478,7 +478,7 @@ func (m *model) loadEmbeddedDemo() error {
 		return err
 	}
 	persistence.ModuleToTracks(mod, m.trackerModel())
-	m.currentFilename = "demo song (embedded)"
+	m.currentFilename = "demo module (embedded)"
 	m.dirty = false
 	return nil
 }

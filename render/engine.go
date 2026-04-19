@@ -21,7 +21,7 @@ type RenderConfig struct {
 }
 
 type RenderEngine struct {
-	song            *Pattern
+	pattern         *Pattern
 	cfg             RenderConfig
 	currentPatches  []*audio.Patch
 	activeVoices    []*audio.Patch
@@ -30,16 +30,16 @@ type RenderEngine struct {
 	effectStates    []channelEffectState
 }
 
-func NewRenderEngine(song *Pattern, cfg RenderConfig) *RenderEngine {
-	return &RenderEngine{song: song, cfg: cfg}
+func NewRenderEngine(pattern *Pattern, cfg RenderConfig) *RenderEngine {
+	return &RenderEngine{pattern: pattern, cfg: cfg}
 }
 
 func (e *RenderEngine) Run(sink RenderSink) error {
-	if e.song == nil {
-		return fmt.Errorf("render: song is nil")
+	if e.pattern == nil {
+		return fmt.Errorf("render: pattern is nil")
 	}
-	if e.song.NumRows <= 0 || e.song.NumTracks <= 0 {
-		return fmt.Errorf("render: song is empty")
+	if e.pattern.NumRows <= 0 || e.pattern.NumTracks <= 0 {
+		return fmt.Errorf("render: pattern is empty")
 	}
 	if e.cfg.SampleRate <= 0 {
 		return fmt.Errorf("render: invalid sample rate %d", e.cfg.SampleRate)
@@ -56,7 +56,7 @@ func (e *RenderEngine) Run(sink RenderSink) error {
 		return err
 	}
 
-	endRow := e.song.NumRows
+	endRow := e.pattern.NumRows
 	if e.cfg.EndRow > 0 && e.cfg.EndRow < endRow {
 		endRow = e.cfg.EndRow
 	}
@@ -77,12 +77,12 @@ func (e *RenderEngine) Run(sink RenderSink) error {
 	return sink.End()
 }
 
-// RenderToStream renders the song fully offline and returns a Streamer ready
+// RenderToStream renders the pattern fully offline and returns a Streamer ready
 // for playback. If loop is true, the stream will repeat indefinitely.
 // Returns nil, nil when the render produces no audio (e.g. all tracks empty).
-func RenderToStream(song *Pattern, cfg RenderConfig, loop bool) (audio.Streamer, error) {
+func RenderToStream(pattern *Pattern, cfg RenderConfig, loop bool) (audio.Streamer, error) {
 	collector := &bufferSink{}
-	engine := NewRenderEngine(song, cfg)
+	engine := NewRenderEngine(pattern, cfg)
 	if err := engine.Run(collector); err != nil {
 		return nil, err
 	}
@@ -93,11 +93,11 @@ func RenderToStream(song *Pattern, cfg RenderConfig, loop bool) (audio.Streamer,
 }
 
 func (e *RenderEngine) resetState() {
-	e.currentPatches = make([]*audio.Patch, e.song.NumTracks)
+	e.currentPatches = make([]*audio.Patch, e.pattern.NumTracks)
 	e.activeVoices = nil
-	e.prevFrequencies = make([]float64, e.song.NumTracks)
-	e.arpTickIdx = make([]int, e.song.NumTracks)
-	e.effectStates = make([]channelEffectState, e.song.NumTracks)
+	e.prevFrequencies = make([]float64, e.pattern.NumTracks)
+	e.arpTickIdx = make([]int, e.pattern.NumTracks)
+	e.effectStates = make([]channelEffectState, e.pattern.NumTracks)
 	for i := range e.arpTickIdx {
 		e.arpTickIdx[i] = -1
 	}
@@ -105,7 +105,7 @@ func (e *RenderEngine) resetState() {
 
 func (e *RenderEngine) renderRow(rowIdx int, sink RenderSink) error {
 	e.startRow(rowIdx)
-	ticks := e.song.RowTicks(rowIdx)
+	ticks := e.pattern.RowTicks(rowIdx)
 
 	for subTick := range ticks {
 		tickSamples := e.tickSampleCount(rowIdx, subTick)
@@ -119,11 +119,11 @@ func (e *RenderEngine) renderRow(rowIdx int, sink RenderSink) error {
 }
 
 func (e *RenderEngine) startRow(rowIdx int) {
-	noteSamples := int(e.cfg.SampleRate.N(e.song.RowDuration))
+	noteSamples := int(e.cfg.SampleRate.N(e.pattern.RowDuration))
 	e.releaseCurrentPatches()
 
-	for trackIdx := 0; trackIdx < e.song.NumTracks; trackIdx++ {
-		track := e.song.Tracks[trackIdx]
+	for trackIdx := 0; trackIdx < e.pattern.NumTracks; trackIdx++ {
+		track := e.pattern.Tracks[trackIdx]
 		row := track.Rows[rowIdx]
 
 		e.currentPatches[trackIdx] = nil
@@ -165,10 +165,10 @@ func (e *RenderEngine) releaseCurrentPatches() {
 
 func (e *RenderEngine) applyTick(rowIdx, subTick int) {
 	for trackIdx, patch := range e.currentPatches {
-		if patch == nil || trackIdx >= len(e.song.Tracks) {
+		if patch == nil || trackIdx >= len(e.pattern.Tracks) {
 			continue
 		}
-		row := e.song.Tracks[trackIdx].Rows[rowIdx]
+		row := e.pattern.Tracks[trackIdx].Rows[rowIdx]
 
 		if row.Arpeggio.IsActive() {
 			e.arpTickIdx[trackIdx]++
@@ -253,8 +253,8 @@ func (e *RenderEngine) drainVoices(sink RenderSink) error {
 }
 
 func (e *RenderEngine) tickSampleCount(rowIdx, subTick int) int {
-	ticks := e.song.RowTicks(rowIdx)
-	rowSamples := int(e.cfg.SampleRate.N(e.song.RowDuration))
+	ticks := e.pattern.RowTicks(rowIdx)
+	rowSamples := int(e.cfg.SampleRate.N(e.pattern.RowDuration))
 	baseTickSamples := rowSamples / ticks
 	remainder := rowSamples % ticks
 	if subTick < remainder {

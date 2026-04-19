@@ -86,7 +86,7 @@ func runMCPServer(address string, bridge *mcpUIBridge) error {
 		"tetrackt",
 		"0.1.0",
 		server.WithToolCapabilities(false),
-		server.WithInstructions("Controls the live TeTrackT UI session. MCP operations and user edits mutate the same in-memory tracker state. This server does not load or save song modules."),
+		server.WithInstructions("Controls the live TeTrackT UI session. MCP operations and user edits mutate the same in-memory tracker state. This server does not load or save modules."),
 	)
 
 	s.AddTool(mcpToolTrackerInfo(), impl.handleTrackerInfo)

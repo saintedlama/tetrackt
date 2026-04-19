@@ -17,7 +17,7 @@ Or via Make: `make test`, `make build`, `make lint`, `make run`.
 - **bubbletea/v2** — TUI framework (Elm-style: Model/Update/View)
 - **lipgloss/v2** — terminal styling
 - **beep/v2** — audio streaming and synthesis
-- **go-yaml** — song file serialization
+- **go-yaml** — module file serialization
 
 ## Layout
 
@@ -26,7 +26,7 @@ audio/          synthesis engine (oscillators, envelopes, LFO, filter, synth)
 ui/             TUI components (screens, panels, dialogs, tracker)
   common/       shared styles and colours
   stateless/    stateless rendering helpers
-persistence/    save/load YAML song files
+persistence/    save/load YAML module files
 main.go         app entry point, message routing, audio playback
 plans/          design docs (not code)
 ```

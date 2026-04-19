@@ -21,7 +21,7 @@ func (p *PreviewPlayer) Start(row Row, synth *audio.Synth, rowDuration time.Dura
 		return false
 	}
 
-	song := &Pattern{
+	pattern := &Pattern{
 		Tracks:       []Track{{Synth: synth, Rows: []Row{row}}},
 		NumRows:      1,
 		NumTracks:    1,
@@ -30,7 +30,7 @@ func (p *PreviewPlayer) Start(row Row, synth *audio.Synth, rowDuration time.Dura
 	}
 
 	collector := &bufferSink{}
-	engine := NewRenderEngine(song, RenderConfig{
+	engine := NewRenderEngine(pattern, RenderConfig{
 		SampleRate:   sampleRate,
 		GlobalVolume: globalVolume,
 		LoopCount:    1,

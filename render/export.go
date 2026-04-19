@@ -18,7 +18,7 @@ type WAVSink struct {
 	outputPath string
 }
 
-func ExportWAV(song *Pattern, wavPath string, opts WavExportOptions) error {
+func ExportWAV(pattern *Pattern, wavPath string, opts WavExportOptions) error {
 	if wavPath == "" {
 		return fmt.Errorf("render: output path is empty")
 	}
@@ -32,7 +32,7 @@ func ExportWAV(song *Pattern, wavPath string, opts WavExportOptions) error {
 		opts.LoopCount = 1
 	}
 
-	engine := NewRenderEngine(song, RenderConfig{
+	engine := NewRenderEngine(pattern, RenderConfig{
 		SampleRate:   opts.SampleRate,
 		GlobalVolume: opts.GlobalVolume,
 		LoopCount:    opts.LoopCount,

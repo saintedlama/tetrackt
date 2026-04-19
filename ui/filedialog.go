@@ -422,7 +422,7 @@ func (m *FileDialogModel) View() tea.View {
 			sb.WriteString(quickstartLabel)
 			sb.WriteString("\n")
 
-			demoLabel := "Demo Song"
+			demoLabel := "Demo Module"
 			if m.loadBuiltinFocus == 1 {
 				demoLabel = common.StyleSelected.Render(demoLabel)
 			}
@@ -468,7 +468,7 @@ func (m *FileDialogModel) View() tea.View {
 	case m.Mode == ModeSave:
 		help = "Tab: edit fields  ↑↓: navigate  Enter: open/select  Esc: cancel"
 	case m.Mode == ModeLoad && m.loadPane == loadPaneBuiltIn:
-		help = "Tab: files  ↑↓: choose song  Enter: load song  Esc: cancel"
+		help = "Tab: files  ↑↓: choose module  Enter: load module  Esc: cancel"
 	default:
 		help = "Tab: built-in  ↑↓: navigate files  Enter: load file  Esc: cancel"
 	}

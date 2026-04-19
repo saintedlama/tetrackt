@@ -111,7 +111,7 @@ Saves as JSON. You can also export directly to `.wav` from the save dialog — s
 Tetrackt ships with a couple of modules to poke around in.
 
 - `Ctrl+l` → load `Quickstart` for a quick orientation
-- `Ctrl+l` → load `Demo Song` to hear what it can do
+- `Ctrl+l` → load `Demo Module` to hear what it can do
 - Or load `modules/quickstart.json` / `modules/chiptune-demo.json` directly
 
 ## Install
