@@ -259,8 +259,8 @@ func (m *TrackerModel) View() string {
 	// Separator
 	tracks.WriteString("    ")
 	for i := 0; i < m.NumTracks; i++ {
-		tracks.WriteString(strings.Repeat("─", 14))
-		tracks.WriteString("   ")
+		tracks.WriteString(strings.Repeat("─", 15))
+		tracks.WriteString("  ")
 	}
 	tracks.WriteString("\n")
 
