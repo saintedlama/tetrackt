@@ -107,7 +107,7 @@ func (e *RenderEngine) renderRow(rowIdx int, sink RenderSink) error {
 	e.startRow(rowIdx)
 	ticks := e.song.RowTicks(rowIdx)
 
-	for subTick := 0; subTick < ticks; subTick++ {
+	for subTick := range ticks {
 		tickSamples := e.tickSampleCount(rowIdx, subTick)
 		e.applyTick(rowIdx, subTick)
 		if err := e.mixActiveVoices(tickSamples, sink); err != nil {

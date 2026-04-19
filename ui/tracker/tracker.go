@@ -50,7 +50,7 @@ type Viewport struct {
 const DefaultBPM = 160
 const minBPM = 40
 const maxBPM = 300
-const DefaultTicks = 6 // sub-ticks per row (default when row ticks is 0)
+const DefaultTicks = 1 // sub-ticks per row (default when row ticks is 0)
 const defaultEditStep = 1
 
 // BPM represents beats per minute with validation and duration calculation.

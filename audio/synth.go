@@ -141,8 +141,7 @@ func (s *Synth) NewPatch(sampleRate beep.SampleRate, frequency float64, noteSamp
 	var filterEnvGen *filterEnvelopeGenerator
 	var pipeline beep.Streamer
 	if s.FilterEnvelope.Depth > 0 && s.Filter.Type != FilterOff {
-		filterEnvGen = newFilterEnvelopeGenerator(mixed, sampleRate, noteSamples, s.Filter, s.FilterEnvelope, makeLFO(ModCutoff))
-		pipeline = filterEnvGen
+		pipeline = newFilterEnvelopeGenerator(mixed, sampleRate, noteSamples, s.Filter, s.FilterEnvelope, makeLFO(ModCutoff))
 	} else {
 		pipeline = NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
 	}
@@ -364,7 +363,7 @@ func (p *Patch) Stream(samples [][2]float64) (int, bool) {
 	}
 	n, ok := p.pipeline.Stream(samples)
 	if p.volume != 1.0 {
-		for i := 0; i < n; i++ {
+		for i := range n {
 			samples[i][0] *= p.volume
 			samples[i][1] *= p.volume
 		}
