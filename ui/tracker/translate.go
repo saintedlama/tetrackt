@@ -21,11 +21,10 @@ func (m *TrackerModel) ToRenderPattern() *render.Pattern {
 		}
 	}
 	return &render.Pattern{
-		Tracks:       tracks,
-		NumRows:      m.NumRows,
-		NumTracks:    m.NumTracks,
-		RowDuration:  m.BPM.Duration(),
-		DefaultTicks: DefaultTicks,
+		Tracks:      tracks,
+		NumRows:     m.NumRows,
+		NumTracks:   m.NumTracks,
+		RowDuration: m.BPM.Duration(),
 	}
 }
 

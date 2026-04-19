@@ -58,7 +58,7 @@ type Viewport struct {
 const DefaultBPM = 160
 const minBPM = 40
 const maxBPM = 300
-const DefaultTicks = 1 // sub-ticks per row (default when row ticks is 0)
+const DefaultTicks = 0 // sub-ticks per row default (0 = no subdivision)
 const defaultEditStep = 1
 
 // BPM represents beats per minute with validation and duration calculation.
@@ -156,7 +156,7 @@ type TrackerModel struct {
 
 // RowTicks returns the number of sub-ticks for the given row.
 // It returns the first non-zero Ticks value across all tracks at that row,
-// falling back to DefaultTicks when none is set.
+// or 0 when none is set.
 func (m *TrackerModel) RowTicks(rowIdx int) int {
 	if rowIdx >= 0 && rowIdx < m.NumRows {
 		for _, track := range m.Tracks {
@@ -179,7 +179,7 @@ type Track struct {
 type TrackRow struct {
 	Note       audio.Note
 	Volume     int  // 0-64
-	Ticks      int  // sub-ticks to play for this row; 0 = use DefaultTicks
+	Ticks      int  // sub-ticks to play for this row; 0 = no subdivision
 	Continuous bool // synthesise this row as a continuous stream across ticks
 	Arpeggio   audio.ArpeggioEffect
 	Effect     TrackerEffect
@@ -831,7 +831,7 @@ func formatParamPending(hi int) string {
 }
 
 func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {
-	result, ok := effects.Apply(effects.Type(effectType), param, row.Ticks, DefaultTicks)
+	result, ok := effects.Apply(effects.Type(effectType), param, row.Ticks)
 	if !ok {
 		return false
 	}

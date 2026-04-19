@@ -26,10 +26,6 @@ func (p *PreviewPlayer) Start(row Row, synth *audio.Synth, rowDuration time.Dura
 	}
 
 	subticks := row.Ticks
-	if subticks <= 0 {
-		subticks = 6
-	}
-
 	durationMs := float64(rowDuration) / float64(time.Millisecond)
 	fx := rowToEffectDefs(row, subticks, synth.Portamento > 0)
 	ep := effects.NewEffectsPatch(synth, fx, durationMs, subticks)

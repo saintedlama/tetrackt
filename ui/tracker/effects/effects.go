@@ -153,8 +153,7 @@ type ApplyResult struct {
 }
 
 // Apply applies an effect with the given parameter, returning the changes to make.
-// The defaultTicks is used for arpeggio preset calculation when the row ticks is 0.
-func Apply(effectType Type, param int, currentTicks int, defaultTicks int) (ApplyResult, bool) {
+func Apply(effectType Type, param int, currentTicks int) (ApplyResult, bool) {
 	decoded, ok := effectType.DecodeParam(param)
 	if !ok {
 		return ApplyResult{}, false
@@ -204,9 +203,6 @@ func Apply(effectType Type, param int, currentTicks int, defaultTicks int) (Appl
 		}
 
 		ticks := currentTicks
-		if ticks <= 0 {
-			ticks = defaultTicks
-		}
 		result.Arpeggio = audio.ArpeggioEffect{Offsets: generateArpOffsets(preset, ticks, step)}
 		result.Continuous = true
 		return result, true

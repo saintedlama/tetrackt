@@ -99,34 +99,34 @@ func TestType_DecodeParam(t *testing.T) {
 }
 
 func TestApply_RowTicks(t *testing.T) {
-	result, ok := Apply(RowTicks, 0x0C, 0, 6)
+	result, ok := Apply(RowTicks, 0x0C, 0)
 	require.True(t, ok, "expected apply to succeed")
 	assert.Equal(t, 12, result.Ticks, "expected ticks=12")
 	assert.Equal(t, RowTicks, result.Effect.Type, "expected effect type RowTicks")
 }
 
 func TestApply_Continuous(t *testing.T) {
-	result, ok := Apply(Continuous, 1, 0, 6)
+	result, ok := Apply(Continuous, 1, 0)
 	require.True(t, ok, "expected apply to succeed")
 	assert.True(t, result.Continuous, "expected continuous to be enabled")
 
-	result, ok = Apply(Continuous, 0, 0, 6)
+	result, ok = Apply(Continuous, 0, 0)
 	require.True(t, ok, "expected apply to succeed")
 	assert.False(t, result.Continuous, "expected continuous to be disabled")
 }
 
 func TestApply_ArpPreset(t *testing.T) {
-	// Preset 1, step 4 (default)
-	result, ok := Apply(ArpPreset, 0x14, 0, 6)
+	// Preset 1, step 4 (default), with 6 explicit ticks on the row
+	result, ok := Apply(ArpPreset, 0x14, 6)
 	require.True(t, ok, "expected apply to succeed")
 	assert.True(t, result.Arpeggio.IsActive(), "expected arp offsets to be generated")
 	assert.True(t, result.Continuous, "expected arp preset command to force continuous")
-	// Should generate 6 offsets (defaultSpeed)
+	// Should generate 6 offsets matching the row's tick count
 	assert.Len(t, result.Arpeggio.Offsets, 6, "expected 6 offsets")
 }
 
 func TestApply_ArpPreset_ZeroClearsArp(t *testing.T) {
-	result, ok := Apply(ArpPreset, 0x00, 12, 6)
+	result, ok := Apply(ArpPreset, 0x00, 12)
 	require.True(t, ok, "expected apply to succeed")
 	assert.False(t, result.Arpeggio.IsActive(), "expected arpeggio to be cleared")
 }

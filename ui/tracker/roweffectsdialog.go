@@ -151,10 +151,7 @@ type RowEffectsDialog struct {
 func NewRowEffectsDialog(row TrackRow, trackIdx, rowIdx int) *RowEffectsDialog {
 	ticks := row.Ticks
 	if ticks <= 0 {
-		ticks = DefaultTicks / 2
-		if ticks < 1 {
-			ticks = 1
-		}
+		ticks = 1
 	}
 	offsets := make([]int, ticks)
 	if row.Arpeggio.IsActive() {

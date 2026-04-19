@@ -159,8 +159,12 @@ func TestInlineContinuousCommandToggle(t *testing.T) {
 
 func TestInlineArpPresetCommand(t *testing.T) {
 	m := NewTracker(1, 8, 80, 24)
+
+	// Arp offsets are sized by the row's tick count — set it explicitly.
+	m.Tracks[0].Rows[0].Ticks = 4
+
 	m.CursorCol = columnEffect
-	_, _ = m.Update(tea.KeyPressMsg{Text: "7"})
+	_, _ = m.Update(tea.KeyPressMsg{Text: "7"}) // EffectArpPreset
 
 	m.CursorCol = columnParam
 	_, _ = m.Update(tea.KeyPressMsg{Text: "1"})
@@ -170,6 +174,7 @@ func TestInlineArpPresetCommand(t *testing.T) {
 	assert.Equal(t, EffectArpPreset, row.Effect.Type, "expected EffectArpPreset")
 	assert.True(t, row.Arpeggio.IsActive(), "expected arp offsets to be generated")
 	assert.True(t, row.Continuous, "expected arp preset command to force continuous")
+	assert.Len(t, row.Arpeggio.Offsets, 4, "expected 4 offsets matching row tick count")
 }
 
 func TestTransposeAltShiftOrderVariants(t *testing.T) {
