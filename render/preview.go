@@ -44,32 +44,3 @@ func (p *PreviewPlayer) Start(row Row, synth *audio.Synth, rowDuration time.Dura
 func (p *PreviewPlayer) Tick() bool {
 	return false
 }
-
-func rowToEffectDefs(row Row, subticks int, portamento bool) effects.EffectDefs {
-	fx := effects.EffectDefs{
-		Arpeggio:   row.Arpeggio,
-		Portamento: effects.PortamentoEffect{Active: portamento},
-	}
-
-	switch row.Effect.Type {
-	case EffectVibrato:
-		speed := (row.Effect.Param >> 4) & 0xF
-		depth := row.Effect.Param & 0xF
-		if speed > 0 {
-			fx.Vibrato = effects.VibratoEffect{
-				Depth: float64(depth) / 4.0,
-				Rate:  float64(subticks) / float64(speed),
-			}
-		}
-	case EffectVolumeSlide:
-		fx.VolumeSlide = effects.VolumeSlideEffect{
-			Delta: float64(int8(uint8(row.Effect.Param))) / 64.0,
-		}
-	case EffectNoteCut:
-		fx.NoteCut = effects.NoteCutEffect{Tick: row.Effect.Param}
-	case EffectNoteDelay:
-		fx.NoteDelay = effects.NoteDelayEffect{Tick: row.Effect.Param}
-	}
-
-	return fx
-}

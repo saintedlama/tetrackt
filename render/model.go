@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/audio/effects"
 )
 
 // EffectType identifies per-row playback effects evaluated each sub-tick.
@@ -59,4 +60,36 @@ func (s *Pattern) RowTicks(rowIdx int) int {
 		}
 	}
 	return 0
+}
+
+// rowToEffectDefs converts a Row's effect into the effects.EffectDefs used by
+// EffectsPatch. subticks is the number of sub-ticks in the row; portamento
+// indicates whether the synth has portamento enabled.
+func rowToEffectDefs(row Row, subticks int, portamento bool) effects.EffectDefs {
+	fx := effects.EffectDefs{
+		Arpeggio:   row.Arpeggio,
+		Portamento: effects.PortamentoEffect{Active: portamento},
+	}
+
+	switch row.Effect.Type {
+	case EffectVibrato:
+		speed := (row.Effect.Param >> 4) & 0xF
+		depth := row.Effect.Param & 0xF
+		if speed > 0 {
+			fx.Vibrato = effects.VibratoEffect{
+				Depth: float64(depth) / 4.0,
+				Rate:  float64(subticks) / float64(speed),
+			}
+		}
+	case EffectVolumeSlide:
+		fx.VolumeSlide = effects.VolumeSlideEffect{
+			Delta: float64(int8(uint8(row.Effect.Param))) / 64.0,
+		}
+	case EffectNoteCut:
+		fx.NoteCut = effects.NoteCutEffect{Tick: row.Effect.Param}
+	case EffectNoteDelay:
+		fx.NoteDelay = effects.NoteDelayEffect{Tick: row.Effect.Param}
+	}
+
+	return fx
 }
