@@ -4,44 +4,44 @@ import (
 	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/audio/effects"
 )
 
 type PreviewPlayer struct {
-	sink *SpeakerSink
+	sink          *SpeakerSink
+	prevFrequency float64
 }
 
 func NewPreviewPlayer(sink *SpeakerSink) PreviewPlayer {
 	return PreviewPlayer{sink: sink}
 }
 
-func (p *PreviewPlayer) Reset() {}
+func (p *PreviewPlayer) Reset() {
+	p.prevFrequency = 0
+}
 
 func (p *PreviewPlayer) Start(row Row, synth *audio.Synth, rowDuration time.Duration, sampleRate audio.SampleRate, globalVolume float64) bool {
 	if row.Frequency == 0 || synth == nil {
 		return false
 	}
 
-	pattern := &Pattern{
-		Tracks:       []Track{{Synth: synth, Rows: []Row{row}}},
-		NumRows:      1,
-		NumTracks:    1,
-		RowDuration:  rowDuration,
-		DefaultTicks: 6,
+	subticks := row.Ticks
+	if subticks <= 0 {
+		subticks = 6
 	}
 
-	collector := &bufferSink{}
-	engine := NewRenderEngine(pattern, RenderConfig{
-		SampleRate:   sampleRate,
-		GlobalVolume: globalVolume,
-		LoopCount:    1,
-	})
-	if err := engine.Run(collector); err != nil {
-		return false
+	durationMs := float64(rowDuration) / float64(time.Millisecond)
+	fx := rowToEffectDefs(row, subticks, synth.Portamento > 0)
+	ep := effects.NewEffectsPatch(synth, fx, durationMs, subticks)
+	streamer := ep.Streamer(sampleRate, row.Frequency, p.prevFrequency)
+	p.prevFrequency = row.Frequency
+
+	vol := globalVolume
+	if row.Volume > 0 {
+		vol *= row.Volume
 	}
-	if len(collector.frames) == 0 {
-		return false
-	}
-	p.sink.Play(&sampleStreamer{samples: collector.frames}, 1.0)
+
+	p.sink.Play(streamer, vol)
 	return false
 }
 
@@ -49,20 +49,31 @@ func (p *PreviewPlayer) Tick() bool {
 	return false
 }
 
-type bufferSink struct {
-	frames [][2]float64
-}
+func rowToEffectDefs(row Row, subticks int, portamento bool) effects.EffectDefs {
+	fx := effects.EffectDefs{
+		Arpeggio:   row.Arpeggio,
+		Portamento: effects.PortamentoEffect{Active: portamento},
+	}
 
-func (s *bufferSink) Begin(sampleRate audio.SampleRate) error {
-	s.frames = nil
-	return nil
-}
+	switch row.Effect.Type {
+	case EffectVibrato:
+		speed := (row.Effect.Param >> 4) & 0xF
+		depth := row.Effect.Param & 0xF
+		if speed > 0 {
+			fx.Vibrato = effects.VibratoEffect{
+				Depth: float64(depth) / 4.0,
+				Rate:  float64(subticks) / float64(speed),
+			}
+		}
+	case EffectVolumeSlide:
+		fx.VolumeSlide = effects.VolumeSlideEffect{
+			Delta: float64(int8(uint8(row.Effect.Param))) / 64.0,
+		}
+	case EffectNoteCut:
+		fx.NoteCut = effects.NoteCutEffect{Tick: row.Effect.Param}
+	case EffectNoteDelay:
+		fx.NoteDelay = effects.NoteDelayEffect{Tick: row.Effect.Param}
+	}
 
-func (s *bufferSink) Write(samples [][2]float64) error {
-	s.frames = append(s.frames, samples...)
-	return nil
-}
-
-func (s *bufferSink) End() error {
-	return nil
+	return fx
 }

@@ -183,30 +183,30 @@ type effectsStreamer struct {
 // tickSize returns the number of samples in the current subtick.
 // The last subtick absorbs any rounding remainder so the total sample count
 // exactly matches the originally requested duration.
-func (s *effectsStreamer) tickSize() int {
-	if s.currentSubtick == s.totalSubticks-1 {
-		return s.subtickSamples + s.remainder
+func (e *effectsStreamer) tickSize() int {
+	if e.currentSubtick == e.totalSubticks-1 {
+		return e.subtickSamples + e.remainder
 	}
-	return s.subtickSamples
+	return e.subtickSamples
 }
 
 // Stream implements audio.Streamer.
 // Effects are applied at the start of each subtick before pulling samples
 // from the underlying Patch.
-func (s *effectsStreamer) Stream(samples [][2]float64) (int, bool) {
+func (e *effectsStreamer) Stream(samples [][2]float64) (int, bool) {
 	total := 0
 	for len(samples) > 0 {
-		if s.currentSubtick >= s.totalSubticks {
+		if e.currentSubtick >= e.totalSubticks {
 			return total, false
 		}
 
-		if s.pendingSubtick {
-			s.applySubtickEffects()
-			s.pendingSubtick = false
+		if e.pendingSubtick {
+			e.applySubtickEffects()
+			e.pendingSubtick = false
 		}
 
-		tickSize := s.tickSize()
-		available := tickSize - s.samplesInTick
+		tickSize := e.tickSize()
+		available := tickSize - e.samplesInTick
 		chunk := samples
 		if len(chunk) > available {
 			chunk = samples[:available]
@@ -214,8 +214,8 @@ func (s *effectsStreamer) Stream(samples [][2]float64) (int, bool) {
 
 		var n int
 		var ok bool
-		if s.patch != nil {
-			n, ok = s.patch.Stream(chunk)
+		if e.patch != nil {
+			n, ok = e.patch.Stream(chunk)
 		} else {
 			// NoteDelay: output silence until the patch is created.
 			for i := range chunk {
@@ -225,17 +225,17 @@ func (s *effectsStreamer) Stream(samples [][2]float64) (int, bool) {
 		}
 
 		total += n
-		s.samplesInTick += n
+		e.samplesInTick += n
 		samples = samples[n:]
 
-		if s.samplesInTick >= tickSize {
-			s.currentSubtick++
-			s.samplesInTick = 0
-			if s.currentSubtick < s.totalSubticks {
-				if s.retrigger && s.patch != nil {
-					s.patch.Reset()
+		if e.samplesInTick >= tickSize {
+			e.currentSubtick++
+			e.samplesInTick = 0
+			if e.currentSubtick < e.totalSubticks {
+				if e.retrigger && e.patch != nil {
+					e.patch.Reset()
 				}
-				s.pendingSubtick = true
+				e.pendingSubtick = true
 			}
 		}
 
@@ -243,7 +243,7 @@ func (s *effectsStreamer) Stream(samples [][2]float64) (int, bool) {
 			return total, false
 		}
 	}
-	return total, s.currentSubtick < s.totalSubticks
+	return total, e.currentSubtick < e.totalSubticks
 }
 
 // applySubtickEffects fires all time-based effects for the current subtick.
@@ -251,74 +251,74 @@ func (s *effectsStreamer) Stream(samples [][2]float64) (int, bool) {
 // Pitch priority (highest wins): Arpeggio → Vibrato → Portamento.
 // Volume priority: NoteCut silences permanently; VolumeSlide is suppressed
 // after a cut. Both are independent of the pitch effects.
-func (s *effectsStreamer) applySubtickEffects() {
-	tick := s.currentSubtick
+func (e *effectsStreamer) applySubtickEffects() {
+	tick := e.currentSubtick
 
 	// NoteDelay: create the patch when the delay tick arrives; return early
 	// for all preceding ticks so no effects fire during the silence period.
-	if s.noteDelay.IsActive() {
-		if s.patch == nil {
-			if tick < s.noteDelay.Tick {
+	if e.noteDelay.IsActive() {
+		if e.patch == nil {
+			if tick < e.noteDelay.Tick {
 				return
 			}
 			// Delay fires: create a patch sized for the remaining duration so
 			// the full ADSR envelope applies to exactly the ticks that will play.
-			ticksLeft := s.totalSubticks - tick
-			remainingSamples := ticksLeft*s.subtickSamples + s.remainder
-			s.patch = s.synth.NewPatch(s.sr, s.startFreq, remainingSamples)
-			if s.gliding {
-				s.patch.StartPortamento(s.prevFreq, s.noteFreq, ticksLeft)
+			ticksLeft := e.totalSubticks - tick
+			remainingSamples := ticksLeft*e.subtickSamples + e.remainder
+			e.patch = e.synth.NewPatch(e.sr, e.startFreq, remainingSamples)
+			if e.gliding {
+				e.patch.StartPortamento(e.prevFreq, e.noteFreq, ticksLeft)
 			}
 		}
 	}
 
-	if s.patch == nil {
+	if e.patch == nil {
 		return
 	}
 
 	// Effective tick index relative to when the patch started playing
 	// (always 0 on the first active subtick, regardless of NoteDelay).
 	effectiveTick := tick
-	effectiveTotal := s.totalSubticks
-	if s.noteDelay.IsActive() {
-		effectiveTick = tick - s.noteDelay.Tick
-		effectiveTotal = s.totalSubticks - s.noteDelay.Tick
+	effectiveTotal := e.totalSubticks
+	if e.noteDelay.IsActive() {
+		effectiveTick = tick - e.noteDelay.Tick
+		effectiveTotal = e.totalSubticks - e.noteDelay.Tick
 	}
 
 	// Pitch effects.
-	if s.arp.IsActive() {
-		offset := s.arp.Offsets[effectiveTick%len(s.arp.Offsets)]
-		arpFreq := s.noteFreq * math.Pow(2, float64(offset)/12.0)
-		s.patch.SetFrequency(arpFreq)
-	} else if s.vibrato.IsActive() {
-		phase := 2 * math.Pi * s.vibrato.Rate * float64(effectiveTick) / float64(effectiveTotal)
-		semitoneShift := s.vibrato.Depth * math.Sin(phase)
-		s.patch.SetFrequency(s.noteFreq * math.Pow(2, semitoneShift/12.0))
-	} else if s.portamento.Active && s.gliding {
+	if e.arp.IsActive() {
+		offset := e.arp.Offsets[effectiveTick%len(e.arp.Offsets)]
+		arpFreq := e.noteFreq * math.Pow(2, float64(offset)/12.0)
+		e.patch.SetFrequency(arpFreq)
+	} else if e.vibrato.IsActive() {
+		phase := 2 * math.Pi * e.vibrato.Rate * float64(effectiveTick) / float64(effectiveTotal)
+		semitoneShift := e.vibrato.Depth * math.Sin(phase)
+		e.patch.SetFrequency(e.noteFreq * math.Pow(2, semitoneShift/12.0))
+	} else if e.portamento.Active && e.gliding {
 		// Exponential glide: same formula as Patch.TickPortamento.
 		// effectiveTick goes 0..N-1; step 0 advances to t=1/N so the glide
 		// reaches the target frequency exactly on the last subtick.
 		t := float64(effectiveTick+1) / float64(effectiveTotal)
-		glideFreq := s.prevFreq * math.Pow(s.noteFreq/s.prevFreq, t)
-		s.patch.SetFrequency(glideFreq)
+		glideFreq := e.prevFreq * math.Pow(e.noteFreq/e.prevFreq, t)
+		e.patch.SetFrequency(glideFreq)
 	}
 
 	// Volume effects. NoteCut fires once and suppresses all subsequent
 	// VolumeSlide steps so the silence cannot be un-done by a slide.
-	if s.noteCut.IsActive() && tick == s.noteCut.Tick {
-		s.cut = true
-		s.patch.SetVolume(0)
+	if e.noteCut.IsActive() && tick == e.noteCut.Tick {
+		e.cut = true
+		e.patch.SetVolume(0)
 	}
-	if !s.cut && s.volumeSlide.IsActive() {
-		s.currentVolume = math.Max(0, math.Min(1, s.currentVolume+s.volumeSlide.Delta))
-		s.patch.SetVolume(s.currentVolume)
+	if !e.cut && e.volumeSlide.IsActive() {
+		e.currentVolume = math.Max(0, math.Min(1, e.currentVolume+e.volumeSlide.Delta))
+		e.patch.SetVolume(e.currentVolume)
 	}
 }
 
 // Err implements audio.Streamer.
-func (s *effectsStreamer) Err() error {
-	if s.patch != nil {
-		return s.patch.Err()
+func (e *effectsStreamer) Err() error {
+	if e.patch != nil {
+		return e.patch.Err()
 	}
 	return nil
 }
