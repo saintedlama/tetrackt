@@ -309,28 +309,6 @@ func (d *RowEffectsDialog) adjustFocused(delta int) {
 		if !d.arpEnabled && d.focusField >= d.numFields() {
 			d.focusField = 2
 		}
-	case d.focusField == 3: // Preset (ARP on only)
-		if d.arpEnabled {
-			n := max(0, min(len(arpPresetNames)-1, int(d.preset)+delta))
-			d.preset = ArpPreset(n)
-			if d.focusField >= d.numFields() {
-				d.focusField = d.numFields() - 1
-			}
-		}
-	case d.focusField >= 4 && d.focusField < arpBase: // arp step or manual offsets
-		if !d.arpEnabled {
-			break // no fields beyond continuous when ARP is off
-		}
-		if d.preset != ArpPresetNone {
-			// field 4 = Step
-			d.step = max(minStep, min(maxStep, d.step+delta))
-		} else {
-			// field 4…N = manual offset[i]
-			i := d.focusField - 4
-			if i < len(d.offsets) {
-				d.offsets[i] = max(minSemitone, min(maxSemitone, d.offsets[i]+delta))
-			}
-		}
 	case d.focusField == arpBase: // Effect type
 		n := int(d.effectType) + delta
 		if n < 0 {
@@ -369,6 +347,23 @@ func (d *RowEffectsDialog) adjustFocused(delta int) {
 			lo := d.effectParam & 0xF
 			lo = max(0, min(15, lo+delta))
 			d.effectParam = (hi << 4) | lo
+		}
+	case d.focusField == 3 && d.arpEnabled: // Preset (ARP on only)
+		n := max(0, min(len(arpPresetNames)-1, int(d.preset)+delta))
+		d.preset = ArpPreset(n)
+		if d.focusField >= d.numFields() {
+			d.focusField = d.numFields() - 1
+		}
+	case d.focusField >= 4 && d.focusField < arpBase: // arp step or manual offsets
+		if d.preset != ArpPresetNone {
+			// field 4 = Step
+			d.step = max(minStep, min(maxStep, d.step+delta))
+		} else {
+			// field 4…N = manual offset[i]
+			i := d.focusField - 4
+			if i < len(d.offsets) {
+				d.offsets[i] = max(minSemitone, min(maxSemitone, d.offsets[i]+delta))
+			}
 		}
 	}
 }
