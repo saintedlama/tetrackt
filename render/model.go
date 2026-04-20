@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
-	"github.com/tetrackt/tetrackt/audio/effects"
 )
 
 // EffectType identifies per-row playback effects evaluated each sub-tick.
@@ -63,12 +62,12 @@ func (s *Pattern) RowTicks(rowIdx int) int {
 	return 0
 }
 
-// rowToEffectDefs converts a Row's effect into the effects.EffectDefs used by
+// rowToEffectDefs converts a Row's effect into the audio.EffectDefs used by
 // EffectsPatch. subticks is the number of sub-ticks in the row.
-func rowToEffectDefs(row Row, subticks int) effects.EffectDefs {
-	fx := effects.EffectDefs{
+func rowToEffectDefs(row Row, subticks int) audio.EffectDefs {
+	fx := audio.EffectDefs{
 		Arpeggio:   row.Arpeggio,
-		Portamento: effects.PortamentoEffect{Ticks: row.Portamento},
+		Portamento: audio.PortamentoEffect{Ticks: row.Portamento},
 	}
 
 	switch row.Effect.Type {
@@ -76,19 +75,19 @@ func rowToEffectDefs(row Row, subticks int) effects.EffectDefs {
 		speed := (row.Effect.Param >> 4) & 0xF
 		depth := row.Effect.Param & 0xF
 		if speed > 0 {
-			fx.Vibrato = effects.VibratoEffect{
+			fx.Vibrato = audio.VibratoEffect{
 				Depth: float64(depth) / 4.0,
 				Rate:  float64(subticks) / float64(speed),
 			}
 		}
 	case EffectVolumeSlide:
-		fx.VolumeSlide = effects.VolumeSlideEffect{
+		fx.VolumeSlide = audio.VolumeSlideEffect{
 			Delta: float64(int8(uint8(row.Effect.Param))) / 64.0,
 		}
 	case EffectNoteCut:
-		fx.NoteCut = effects.NoteCutEffect{Tick: row.Effect.Param}
+		fx.NoteCut = audio.NoteCutEffect{Tick: row.Effect.Param}
 	case EffectNoteDelay:
-		fx.NoteDelay = effects.NoteDelayEffect{Tick: row.Effect.Param}
+		fx.NoteDelay = audio.NoteDelayEffect{Tick: row.Effect.Param}
 	}
 
 	return fx

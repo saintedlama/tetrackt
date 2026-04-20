@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/tetrackt/tetrackt/audio"
-	"github.com/tetrackt/tetrackt/audio/effects"
 )
 
 type RenderConfig struct {
@@ -112,7 +111,7 @@ func (e *RenderEngine) startRow(rowIdx int) {
 			subticks = 1
 		}
 		fx := rowToEffectDefs(row, subticks)
-		ep := effects.NewEffectsPatch(track.Synth, fx, durationMs, subticks)
+		ep := audio.NewEffectsPatch(track.Synth, fx, durationMs, subticks)
 		streamer := ep.Streamer(e.cfg.SampleRate, row.Frequency, e.prevFrequencies[trackIdx])
 		e.prevFrequencies[trackIdx] = row.Frequency
 
@@ -143,7 +142,7 @@ func (e *RenderEngine) mixActiveVoices(samplesPerTick int, sink RenderSink) erro
 	for _, voice := range e.activeVoices {
 		voiceBuf := make([][2]float64, samplesPerTick)
 		n, ok := voice.Stream(voiceBuf)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			mixBuf[i][0] += voiceBuf[i][0]
 			mixBuf[i][1] += voiceBuf[i][1]
 		}

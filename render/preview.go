@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
-	"github.com/tetrackt/tetrackt/audio/effects"
 )
 
 type PreviewPlayer struct {
@@ -28,7 +27,7 @@ func (p *PreviewPlayer) Start(row Row, synth *audio.Synth, rowDuration time.Dura
 	subticks := row.Ticks
 	durationMs := float64(rowDuration) / float64(time.Millisecond)
 	fx := rowToEffectDefs(row, subticks)
-	ep := effects.NewEffectsPatch(synth, fx, durationMs, subticks)
+	ep := audio.NewEffectsPatch(synth, fx, durationMs, subticks)
 	streamer := ep.Streamer(sampleRate, row.Frequency, p.prevFrequency)
 	p.prevFrequency = row.Frequency
 
