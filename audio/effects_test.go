@@ -224,6 +224,118 @@ func TestEffectsPatchPortamentoNoPrevFreq(t *testing.T) {
 	assert.Equal(t, totalSamples, len(samples))
 }
 
+func TestEffectsPatchPortamentoDelayedGlide(t *testing.T) {
+	// StartTick=2, Ticks=2 in a 4-subtick note:
+	// subticks 0-1 hold prevFreq (220 Hz), subticks 2-3 glide to noteFreq (440 Hz).
+	// Subtick 0 should have fewer zero crossings than subtick 3 (higher freq after glide).
+	const sr = SampleRate(44100)
+	const durationMs = 100.0
+	const subticks = 4
+	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+
+	ep := NewEffectsPatch(sineSynth(),
+		EffectDefs{Portamento: PortamentoEffect{StartTick: 2, Ticks: 2}},
+		durationMs, subticks)
+	streamer := ep.Streamer(sr, 440.0, 220.0)
+
+	buf := make([][2]float64, subtickSamples)
+
+	streamer.Stream(buf)
+	c0 := countZeroCrossings(buf)
+
+	streamer.Stream(buf) // subtick 1: still at prevFreq
+	c1 := countZeroCrossings(buf)
+
+	streamer.Stream(buf) // subtick 2: glide starts
+	streamer.Stream(buf) // subtick 3: glide ends at noteFreq
+	c3 := countZeroCrossings(buf)
+
+	// subticks 0 and 1 both hold prevFreq (220 Hz) → similar crossing counts
+	assert.InDelta(t, float64(c0), float64(c1), float64(c0)*0.2,
+		"subtick 0 and 1 should hold prevFreq: c0=%d c1=%d", c0, c1)
+
+	// subtick 3 should be near noteFreq (440 Hz) → ~2x crossings
+	ratio := float64(c3) / float64(c0)
+	assert.InDelta(t, 2.0, ratio, 0.3,
+		"expected ~2x crossings after glide to 440 Hz: c0=%d c3=%d", c0, c3)
+}
+
+func TestEffectsPatchPortamentoDelayedSnap(t *testing.T) {
+	// StartTick=2, Ticks=0: hold prevFreq (220 Hz) for subticks 0-1, snap to noteFreq at tick 2.
+	const sr = SampleRate(44100)
+	const durationMs = 100.0
+	const subticks = 4
+	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+
+	ep := NewEffectsPatch(sineSynth(),
+		EffectDefs{Portamento: PortamentoEffect{StartTick: 2, Ticks: 0}},
+		durationMs, subticks)
+	streamer := ep.Streamer(sr, 440.0, 220.0)
+
+	buf := make([][2]float64, subtickSamples)
+
+	streamer.Stream(buf)
+	c0 := countZeroCrossings(buf) // prevFreq 220 Hz
+
+	streamer.Stream(buf)
+	c1 := countZeroCrossings(buf) // still prevFreq
+
+	streamer.Stream(buf)
+	c2 := countZeroCrossings(buf) // snapped to noteFreq 440 Hz
+
+	streamer.Stream(buf)
+	c3 := countZeroCrossings(buf) // still noteFreq
+
+	// subticks 0 and 1 at prevFreq → similar
+	assert.InDelta(t, float64(c0), float64(c1), float64(c0)*0.2,
+		"subtick 0 and 1 should hold prevFreq: c0=%d c1=%d", c0, c1)
+
+	// subticks 2 and 3 at noteFreq → ~2x crossings vs prevFreq
+	ratio2 := float64(c2) / float64(c0)
+	assert.InDelta(t, 2.0, ratio2, 0.3,
+		"expected ~2x crossings after snap: c0=%d c2=%d", c0, c2)
+	assert.InDelta(t, float64(c2), float64(c3), float64(c2)*0.2,
+		"subtick 2 and 3 should both be at noteFreq: c2=%d c3=%d", c2, c3)
+}
+
+func TestEffectsPatchPortamentoFastGlideThenHold(t *testing.T) {
+	// StartTick=0, Ticks=2 in a 4-subtick note: glide over first 2 ticks, hold at noteFreq.
+	// Subtick 3 should be at noteFreq (440 Hz), ~2x crossings of prevFreq (220 Hz).
+	const sr = SampleRate(44100)
+	const durationMs = 100.0
+	const subticks = 4
+	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+
+	ep := NewEffectsPatch(sineSynth(),
+		EffectDefs{Portamento: PortamentoEffect{StartTick: 0, Ticks: 2}},
+		durationMs, subticks)
+	streamer := ep.Streamer(sr, 440.0, 220.0)
+
+	buf := make([][2]float64, subtickSamples)
+
+	streamer.Stream(buf)
+	c0 := countZeroCrossings(buf) // mid-glide
+
+	streamer.Stream(buf) // glide ends here
+	streamer.Stream(buf) // subtick 2: hold at noteFreq
+	streamer.Stream(buf) // subtick 3: hold at noteFreq
+	c3 := countZeroCrossings(buf)
+
+	// Reference: direct patch at 220 Hz to get baseline crossing count
+	refLow := sineSynth().NewPatch(sr, 220.0, subtickSamples)
+	bufRef := make([][2]float64, subtickSamples)
+	refLow.Stream(bufRef)
+	cRef := countZeroCrossings(bufRef)
+
+	// Subtick 0 is mid-glide so higher than prevFreq
+	assert.Greater(t, c0, cRef, "mid-glide subtick should be above prevFreq crossing rate")
+
+	// Subtick 3 should be at noteFreq (~2x prevFreq)
+	ratio := float64(c3) / float64(cRef)
+	assert.InDelta(t, 2.0, ratio, 0.3,
+		"subtick 3 should be at noteFreq after fast glide: c3=%d cRef=%d", c3, cRef)
+}
+
 func TestEffectsPatchVolumeSlideDecreases(t *testing.T) {
 	// A negative delta should fade the note out over subticks.
 	// RMS of the second half of the note must be lower than the first.

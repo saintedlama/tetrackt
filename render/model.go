@@ -66,8 +66,11 @@ func (s *Pattern) RowTicks(rowIdx int) int {
 // EffectsPatch. subticks is the number of sub-ticks in the row.
 func rowToEffectDefs(row Row, subticks int) audio.EffectDefs {
 	fx := audio.EffectDefs{
-		Arpeggio:   row.Arpeggio,
-		Portamento: audio.PortamentoEffect{Ticks: row.Portamento},
+		Arpeggio: row.Arpeggio,
+		Portamento: audio.PortamentoEffect{
+			StartTick: (row.Portamento >> 4) & 0xF,
+			Ticks:     row.Portamento & 0xF,
+		},
 	}
 
 	switch row.Effect.Type {
