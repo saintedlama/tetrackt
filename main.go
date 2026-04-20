@@ -500,6 +500,10 @@ func (m *model) loadEmbeddedDemo() error {
 
 // View renders the UI
 func (m model) View() tea.View {
+	if m.width > 0 && m.width < minWidth {
+		return m.renderScreenTooSmall()
+	}
+
 	// Tab bar
 	tabs := make([]string, len(m.screens))
 	for i, s := range m.screens {
@@ -600,4 +604,29 @@ func newModel(sampleRate audio.SampleRate, trackerModel *tracker.TrackerModel, t
 		globalVolume: 1.0,
 		mcpActive:    mcpActive,
 	}
+}
+
+const minWidth = 184
+
+func (m model) renderScreenTooSmall() tea.View {
+	logo := ui.Logo()
+	hint := lipgloss.NewStyle().
+		Foreground(common.ColorTextMuted).
+		Render("TeTrackT wants more space")
+	content := lipgloss.JoinVertical(lipgloss.Center, logo, hint)
+	x := (m.width - lipgloss.Width(content)) / 2
+	y := (m.height - lipgloss.Height(content)) / 2
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+	padded := lipgloss.NewStyle().
+		MarginLeft(x).
+		MarginTop(y).
+		Render(content)
+	v := tea.NewView(padded)
+	v.AltScreen = true
+	return v
 }
