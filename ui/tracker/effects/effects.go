@@ -18,7 +18,6 @@ const (
 	NoteCut          // Param: sub-tick at which to silence the note
 	NoteDelay        // Param: sub-tick at which to trigger NoteOn
 	RowTicks         // Param: 00 clears row tick override; 01..20 sets per-row sub-ticks
-	Continuous       // Param: 00 = off, 01 = on
 	ArpPreset        // Param: high nibble preset, low nibble step bucket
 )
 
@@ -41,8 +40,6 @@ func (t Type) Format() string {
 		return "D"
 	case RowTicks:
 		return "T"
-	case Continuous:
-		return "O"
 	case ArpPreset:
 		return "A"
 	default:
@@ -81,7 +78,7 @@ func FormatArpeggio(arp audio.ArpeggioEffect) string {
 }
 
 // ParseKey parses a single key press into an effect type.
-// Supports both letter aliases (v, s, c, d, t, o, a) and hex nibbles (0-7).
+// Supports both letter aliases (v, s, c, d, t, a) and hex nibbles (0-7).
 func ParseKey(key string) (Type, bool) {
 	switch strings.ToLower(key) {
 	case "v":
@@ -94,8 +91,6 @@ func ParseKey(key string) (Type, bool) {
 		return NoteDelay, true
 	case "t":
 		return RowTicks, true
-	case "o":
-		return Continuous, true
 	case "a":
 		return ArpPreset, true
 	}
@@ -134,11 +129,6 @@ func (t Type) DecodeParam(param int) (int, bool) {
 			return param, true
 		}
 		return 0, false
-	case Continuous:
-		if param == 0 || param == 1 {
-			return param, true
-		}
-		return 0, false
 	default:
 		return 0, false
 	}
@@ -146,15 +136,13 @@ func (t Type) DecodeParam(param int) (int, bool) {
 
 // ApplyResult describes what an effect application changed.
 type ApplyResult struct {
-	Effect     Effect
-	Ticks      int  // Row ticks override (0 = no override)
-	Continuous bool // Whether the note should continue
-	Arpeggio   audio.ArpeggioEffect
+	Effect   Effect
+	Ticks    int // Row ticks override (0 = no override)
+	Arpeggio audio.ArpeggioEffect
 }
 
 // Apply applies an effect with the given parameter, returning the changes to make.
-// The defaultTicks is used for arpeggio preset calculation when the row ticks is 0.
-func Apply(effectType Type, param int, currentTicks int, defaultTicks int) (ApplyResult, bool) {
+func Apply(effectType Type, param int, currentTicks int) (ApplyResult, bool) {
 	decoded, ok := effectType.DecodeParam(param)
 	if !ok {
 		return ApplyResult{}, false
@@ -185,10 +173,6 @@ func Apply(effectType Type, param int, currentTicks int, defaultTicks int) (Appl
 		}
 		return result, true
 
-	case Continuous:
-		result.Continuous = decoded == 1
-		return result, true
-
 	case ArpPreset:
 		preset := (param >> 4) & 0xF
 		step := param & 0xF
@@ -204,11 +188,7 @@ func Apply(effectType Type, param int, currentTicks int, defaultTicks int) (Appl
 		}
 
 		ticks := currentTicks
-		if ticks <= 0 {
-			ticks = defaultTicks
-		}
 		result.Arpeggio = audio.ArpeggioEffect{Offsets: generateArpOffsets(preset, ticks, step)}
-		result.Continuous = true
 		return result, true
 
 	default:

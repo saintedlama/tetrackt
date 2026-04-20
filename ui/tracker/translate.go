@@ -1,7 +1,7 @@
 package tracker
 
 import (
-	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 	"github.com/tetrackt/tetrackt/render"
 )
 
@@ -21,11 +21,10 @@ func (m *TrackerModel) ToRenderPattern() *render.Pattern {
 		}
 	}
 	return &render.Pattern{
-		Tracks:       tracks,
-		NumRows:      m.NumRows,
-		NumTracks:    m.NumTracks,
-		RowDuration:  m.BPM.Duration(),
-		DefaultTicks: DefaultTicks,
+		Tracks:      tracks,
+		NumRows:     m.NumRows,
+		NumTracks:   m.NumTracks,
+		RowDuration: m.BPM.Duration(),
 	}
 }
 
@@ -36,14 +35,15 @@ func ToRenderRow(row TrackRow) render.Row {
 
 func toRenderRow(row TrackRow) render.Row {
 	rr := render.Row{
-		Arpeggio: row.Arpeggio,
+		Arpeggio:   row.Arpeggio,
+		Portamento: row.Portamento,
 		Effect: render.RowEffect{
 			Type:  render.EffectType(row.Effect.Type),
 			Param: row.Effect.Param,
 		},
 		Ticks: row.Ticks,
 	}
-	if !audio.IsOff(row.Note) {
+	if !notes.IsOff(row.Note) {
 		rr.Frequency = row.Note.Frequency()
 		rr.Volume = float64(row.Volume) / 64.0
 	}

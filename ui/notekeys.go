@@ -3,7 +3,7 @@ package ui
 import (
 	"strings"
 
-	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 )
 
 type InputProfile string
@@ -19,7 +19,7 @@ var currentInputProfile = InputProfileQWERTY
 // Shared between tracker/synth/patch-bank note preview paths.
 var NoteKeys = noteKeysForProfile(currentInputProfile)
 
-func noteKeysForProfile(profile InputProfile) map[string]audio.Base {
+func noteKeysForProfile(profile InputProfile) map[string]notes.Base {
 	naturalLower := "zxcvbnm"
 	naturalUpper := "qwertyu"
 	if profile == InputProfileQWERTZ {
@@ -27,7 +27,7 @@ func noteKeysForProfile(profile InputProfile) map[string]audio.Base {
 		naturalUpper = "qwertzu"
 	}
 
-	m := map[string]audio.Base{
+	m := map[string]notes.Base{
 		"s": "C#",
 		"d": "D#",
 		"g": "F#",

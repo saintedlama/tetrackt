@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
 	"github.com/tetrackt/tetrackt/ui/tracker/effects"
@@ -58,7 +59,7 @@ type Viewport struct {
 const DefaultBPM = 160
 const minBPM = 40
 const maxBPM = 300
-const DefaultTicks = 1 // sub-ticks per row (default when row ticks is 0)
+const DefaultTicks = 0 // sub-ticks per row default (0 = no subdivision)
 const defaultEditStep = 1
 
 // BPM represents beats per minute with validation and duration calculation.
@@ -103,6 +104,7 @@ const (
 	columnNote trackerColumn = iota
 	columnVolume
 	columnArpeggio
+	columnPortamento
 	columnEffect
 	columnParam
 	trackerColumnCount
@@ -113,7 +115,7 @@ type TrackerEdited struct{}
 
 // TrackerNoteEntered is emitted when a note is entered in the tracker grid.
 type TrackerNoteEntered struct {
-	Note  audio.Note
+	Note  notes.Note
 	Row   TrackRow
 	Synth *audio.Synth
 }
@@ -156,7 +158,7 @@ type TrackerModel struct {
 
 // RowTicks returns the number of sub-ticks for the given row.
 // It returns the first non-zero Ticks value across all tracks at that row,
-// falling back to DefaultTicks when none is set.
+// or 0 when none is set.
 func (m *TrackerModel) RowTicks(rowIdx int) int {
 	if rowIdx >= 0 && rowIdx < m.NumRows {
 		for _, track := range m.Tracks {
@@ -177,11 +179,11 @@ type Track struct {
 
 // TrackRow represents a single row in a track
 type TrackRow struct {
-	Note       audio.Note
-	Volume     int  // 0-64
-	Ticks      int  // sub-ticks to play for this row; 0 = use DefaultTicks
-	Continuous bool // synthesise this row as a continuous stream across ticks
+	Note       notes.Note
+	Volume     int // 0-64
+	Ticks      int // sub-ticks to play for this row; 0 = no subdivision
 	Arpeggio   audio.ArpeggioEffect
+	Portamento int // sub-tick glide count; 0 = snap
 	Effect     TrackerEffect
 }
 
@@ -209,7 +211,7 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 		// Initialize all rows with empty data
 		for j := range numRows {
 			tracks[i].Rows[j] = TrackRow{
-				Note:   audio.Off(),
+				Note:   notes.Off(),
 				Volume: 0,
 			}
 		}
@@ -252,15 +254,15 @@ func (m *TrackerModel) View() string {
 			trackHeader = headerStyle.Foreground(common.ColorGray).Render(trackHeader)
 		}
 		tracks.WriteString(trackHeader)
-		tracks.WriteString("        ")
+		tracks.WriteString("            ")
 	}
 	tracks.WriteString("\n")
 
 	// Separator
 	tracks.WriteString("    ")
 	for i := 0; i < m.NumTracks; i++ {
-		tracks.WriteString(strings.Repeat("─", 15))
-		tracks.WriteString("  ")
+		tracks.WriteString(strings.Repeat("─", 18))
+		tracks.WriteString("   ")
 	}
 	tracks.WriteString("\n")
 
@@ -292,6 +294,7 @@ func (m *TrackerModel) View() string {
 				fmt.Sprintf("%-3s", formatNote(trackRow.Note)),
 				formatVolume(trackRow.Volume),
 				effects.FormatArpeggio(trackRow.Arpeggio),
+				formatPortamento(trackRow.Portamento),
 				effects.Type(trackRow.Effect.Type).Format(),
 				effects.Type(trackRow.Effect.Type).FormatParam(trackRow.Effect.Param),
 			}
@@ -301,7 +304,7 @@ func (m *TrackerModel) View() string {
 			for colIdx, part := range parts {
 				col := trackerColumn(colIdx)
 				isNibblePending := isCursorCell && m.nibbleHi != nil &&
-					(col == columnVolume || col == columnArpeggio || col == columnParam)
+					(col == columnVolume || col == columnArpeggio || col == columnPortamento || col == columnParam)
 
 				if isNibblePending && col == m.CursorCol {
 					switch col {
@@ -309,6 +312,8 @@ func (m *TrackerModel) View() string {
 						part = formatVolumePending(*m.nibbleHi)
 					case columnArpeggio:
 						part = formatArpPending(*m.nibbleHi)
+					case columnPortamento:
+						part = formatPortamentoPending(*m.nibbleHi)
 					case columnParam:
 						part = formatParamPending(*m.nibbleHi)
 					}
@@ -553,7 +558,7 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 	switch m.CursorCol {
 	case columnNote:
 		if base, ok := ui.NoteKeys[key]; ok {
-			note := audio.Note{Base: base, Octave: audio.Octave(m.Octave)}
+			note := notes.Note{Base: base, Octave: notes.Octave(m.Octave)}
 			row.Note = note
 			entered := &TrackerNoteEntered{Note: note, Row: *row, Synth: m.Tracks[cursorTrack].Synth}
 			m.advanceByEditStep()
@@ -576,7 +581,15 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 				o1 := (*val >> 4) & 0xF
 				o2 := *val & 0xF
 				row.Arpeggio = audio.ArpeggioEffect{Offsets: []int{0, o1, o2}}
-				row.Continuous = true
+				m.advanceByEditStep()
+				return nil, true
+			}
+		}
+	case columnPortamento:
+		if v, ok := parseHexNibble(key); ok {
+			val := m.pushNibble(v)
+			if val != nil {
+				row.Portamento = *val
 				m.advanceByEditStep()
 				return nil, true
 			}
@@ -613,21 +626,19 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 	switch m.CursorCol {
 	case columnNote:
-		row.Note = audio.Off()
+		row.Note = notes.Off()
 	case columnVolume:
 		row.Volume = 0
 	case columnArpeggio:
 		row.Arpeggio = audio.ArpeggioEffect{}
-		row.Continuous = false
+	case columnPortamento:
+		row.Portamento = 0
 	case columnEffect:
 		switch row.Effect.Type {
 		case EffectRowTicks:
 			row.Ticks = 0
-		case EffectContinuous:
-			row.Continuous = false
 		case EffectArpPreset:
 			row.Arpeggio = audio.ArpeggioEffect{}
-			row.Continuous = false
 		}
 		row.Effect.Type = EffectNone
 		row.Effect.Param = 0
@@ -684,7 +695,7 @@ func (m *TrackerModel) copySelectionToClipboard() {
 
 func (m *TrackerModel) clearSelectedCells() {
 	for _, c := range m.nav.SelectedCells() {
-		m.Tracks[c.Track].Rows[c.Row] = TrackRow{Note: audio.Off()}
+		m.Tracks[c.Track].Rows[c.Row] = TrackRow{Note: notes.Off()}
 	}
 }
 
@@ -729,8 +740,8 @@ func (m *TrackerModel) pasteClipboardEffectsOnly() bool {
 			src := m.clipboard.Cells[r][t]
 			dst := &m.Tracks[dstTrack].Rows[dstRow]
 			dst.Volume = src.Volume
-			dst.Continuous = src.Continuous
 			dst.Arpeggio = src.Arpeggio
+			dst.Portamento = src.Portamento
 			dst.Ticks = src.Ticks
 			dst.Effect = src.Effect
 		}
@@ -742,7 +753,7 @@ func (m *TrackerModel) transposeSelection(semitones int) bool {
 	edited := false
 	for _, c := range m.nav.SelectedCells() {
 		r := &m.Tracks[c.Track].Rows[c.Row]
-		if r.Note.Base == audio.BaseOff {
+		if r.Note.Base == notes.BaseOff {
 			continue
 		}
 		if n, ok := r.Note.Transpose(semitones); ok {
@@ -759,7 +770,7 @@ func (m *TrackerModel) insertTrackSpace() {
 	for row := m.NumRows - 1; row > cursorRow; row-- {
 		m.Tracks[t].Rows[row] = m.Tracks[t].Rows[row-1]
 	}
-	m.Tracks[t].Rows[cursorRow] = TrackRow{Note: audio.Off()}
+	m.Tracks[t].Rows[cursorRow] = TrackRow{Note: notes.Off()}
 }
 
 func (m *TrackerModel) insertGlobalRowSpace() {
@@ -768,7 +779,7 @@ func (m *TrackerModel) insertGlobalRowSpace() {
 		for row := m.NumRows - 1; row > cursorRow; row-- {
 			m.Tracks[t].Rows[row] = m.Tracks[t].Rows[row-1]
 		}
-		m.Tracks[t].Rows[cursorRow] = TrackRow{Note: audio.Off()}
+		m.Tracks[t].Rows[cursorRow] = TrackRow{Note: notes.Off()}
 	}
 }
 
@@ -792,8 +803,8 @@ func (m *TrackerModel) visibleRows() int {
 	return m.Viewport.Height - chromeRows
 }
 
-func formatNote(note audio.Note) string {
-	if note.Base == audio.BaseOff {
+func formatNote(note notes.Note) string {
+	if note.Base == notes.BaseOff {
 		return "---"
 	}
 
@@ -830,8 +841,23 @@ func formatParamPending(hi int) string {
 	return fmt.Sprintf("%X.", hi)
 }
 
+// formatPortamento formats the portamento glide count for display.
+// Returns "---" for 0, or "G" followed by two hex digits for non-zero.
+func formatPortamento(p int) string {
+	if p == 0 {
+		return "---"
+	}
+	return fmt.Sprintf("G%02X", p)
+}
+
+// formatPortamentoPending renders the first nibble of a portamento entry in progress.
+// e.g. hi=3 -> "G3."
+func formatPortamentoPending(hi int) string {
+	return fmt.Sprintf("G%X.", hi)
+}
+
 func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {
-	result, ok := effects.Apply(effects.Type(effectType), param, row.Ticks, DefaultTicks)
+	result, ok := effects.Apply(effects.Type(effectType), param, row.Ticks)
 	if !ok {
 		return false
 	}
@@ -839,9 +865,6 @@ func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {
 	row.Effect = result.Effect
 	if result.Ticks > 0 || effectType == EffectRowTicks {
 		row.Ticks = result.Ticks
-	}
-	if result.Continuous || effectType == EffectContinuous {
-		row.Continuous = result.Continuous
 	}
 	if result.Arpeggio.IsActive() || effectType == EffectArpPreset {
 		row.Arpeggio = result.Arpeggio

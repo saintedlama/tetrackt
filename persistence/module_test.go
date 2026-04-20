@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 	"github.com/tetrackt/tetrackt/ui/tracker"
 )
 
@@ -99,12 +100,12 @@ func TestModuleToTracksPadsToEightWithDefaults(t *testing.T) {
 	require.NotNil(t, m.Tracks[2].Synth, "expected padded track synth to be default-initialized")
 	require.Equal(t, 64, len(m.Tracks[2].Rows), "expected padded track rows to be 64")
 
-	assert.Equal(t, audio.Off(), m.Tracks[2].Rows[0].Note,
+	assert.Equal(t, notes.Off(), m.Tracks[2].Rows[0].Note,
 		"expected padded row to be empty note")
 	assert.Equal(t, 0, m.Tracks[2].Rows[0].Volume,
 		"expected padded row to have zero volume")
 
-	assert.Equal(t, audio.Off(), m.Tracks[0].Rows[63].Note,
+	assert.Equal(t, notes.Off(), m.Tracks[0].Rows[63].Note,
 		"expected padded tail row to be empty note")
 	assert.Equal(t, 0, m.Tracks[0].Rows[63].Volume,
 		"expected padded tail row to have zero volume")
@@ -134,11 +135,11 @@ func TestSaveAndLoad(t *testing.T) {
 		Release: 300 * time.Millisecond,
 	}
 	trackerModel.Tracks[0].Rows[0] = tracker.TrackRow{
-		Note:   audio.NewNote("C", 4),
+		Note:   notes.NewNote("C", 4),
 		Volume: 64,
 	}
 	trackerModel.Tracks[0].Rows[1] = tracker.TrackRow{
-		Note:   audio.NewNote("E", 4),
+		Note:   notes.NewNote("E", 4),
 		Volume: 80,
 	}
 
@@ -168,9 +169,9 @@ func TestSaveAndLoad(t *testing.T) {
 	assert.Equal(t, audio.Mixer{Volume1: 0.75, Volume2: 0.5}, newTracker.Tracks[0].Synth.Mixer, "expected Mixer={0.75, 0.5}")
 
 	// Verify row data
-	assert.Equal(t, audio.NewNote("C", 4), newTracker.Tracks[0].Rows[0].Note, "expected Note=C-4")
+	assert.Equal(t, notes.NewNote("C", 4), newTracker.Tracks[0].Rows[0].Note, "expected Note=C-4")
 	assert.Equal(t, 64, newTracker.Tracks[0].Rows[0].Volume, "expected Volume=64")
-	assert.Equal(t, audio.NewNote("E", 4), newTracker.Tracks[0].Rows[1].Note, "expected Note=E-4")
+	assert.Equal(t, notes.NewNote("E", 4), newTracker.Tracks[0].Rows[1].Note, "expected Note=E-4")
 	assert.Equal(t, 80, newTracker.Tracks[0].Rows[1].Volume, "expected Volume=80")
 
 	// Verify envelope data

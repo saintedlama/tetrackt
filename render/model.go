@@ -26,11 +26,12 @@ type RowEffect struct {
 // Row is the frequency-domain representation of a single pattern cell.
 // It contains no display strings — all note data has been converted to Hz.
 type Row struct {
-	Frequency float64 // Hz; 0 = rest (no note)
-	Volume    float64 // 0 = use synth default; range 0..1
-	Arpeggio  audio.ArpeggioEffect
-	Effect    RowEffect
-	Ticks     int // sub-ticks override; 0 = use Pattern.DefaultTicks
+	Frequency  float64 // Hz; 0 = rest (no note)
+	Volume     float64 // 0 = use synth default; range 0..1
+	Arpeggio   audio.ArpeggioEffect
+	Portamento int // sub-tick count for the glide; 0 = snap
+	Effect     RowEffect
+	Ticks      int // sub-ticks per row; 0 = no subdivision
 }
 
 // Track is one channel of a Pattern.
@@ -42,14 +43,14 @@ type Track struct {
 // Pattern is the complete frequency-domain render model.
 // It is produced by the tracker UI and consumed by the RenderEngine.
 type Pattern struct {
-	Tracks       []Track
-	NumRows      int
-	NumTracks    int
-	RowDuration  time.Duration // duration of one row (derived from BPM)
-	DefaultTicks int           // default sub-ticks per row when Row.Ticks == 0
+	Tracks      []Track
+	NumRows     int
+	NumTracks   int
+	RowDuration time.Duration // duration of one row (derived from BPM)
 }
 
 // RowTicks returns the effective sub-tick count for the given row.
+// Returns 0 when no track at that row has a non-zero tick count set.
 func (s *Pattern) RowTicks(rowIdx int) int {
 	if rowIdx >= 0 && rowIdx < s.NumRows {
 		for _, track := range s.Tracks {
@@ -58,8 +59,39 @@ func (s *Pattern) RowTicks(rowIdx int) int {
 			}
 		}
 	}
-	if s.DefaultTicks > 0 {
-		return s.DefaultTicks
+	return 0
+}
+
+// rowToEffectDefs converts a Row's effect into the audio.EffectDefs used by
+// EffectsPatch. subticks is the number of sub-ticks in the row.
+func rowToEffectDefs(row Row, subticks int) audio.EffectDefs {
+	fx := audio.EffectDefs{
+		Arpeggio: row.Arpeggio,
+		Portamento: audio.PortamentoEffect{
+			StartTick: (row.Portamento >> 4) & 0xF,
+			Ticks:     row.Portamento & 0xF,
+		},
 	}
-	return 6
+
+	switch row.Effect.Type {
+	case EffectVibrato:
+		speed := (row.Effect.Param >> 4) & 0xF
+		depth := row.Effect.Param & 0xF
+		if speed > 0 {
+			fx.Vibrato = audio.VibratoEffect{
+				Depth: float64(depth) / 4.0,
+				Rate:  float64(subticks) / float64(speed),
+			}
+		}
+	case EffectVolumeSlide:
+		fx.VolumeSlide = audio.VolumeSlideEffect{
+			Delta: float64(int8(uint8(row.Effect.Param))) / 64.0,
+		}
+	case EffectNoteCut:
+		fx.NoteCut = audio.NoteCutEffect{Tick: row.Effect.Param}
+	case EffectNoteDelay:
+		fx.NoteDelay = audio.NoteDelayEffect{Tick: row.Effect.Param}
+	}
+
+	return fx
 }

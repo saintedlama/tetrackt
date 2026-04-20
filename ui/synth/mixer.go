@@ -13,41 +13,37 @@ import (
 )
 
 type Mixer struct {
-	Mixer         audio.Mixer
-	Portamento    float64
-	volBar1       common.Bar
-	panBar1       common.Bar
-	volBar2       common.Bar
-	panBar2       common.Bar
-	volBar3       common.Bar
-	panBar3       common.Bar
-	masterBar     common.Bar
-	portamentoBar common.Bar
-	selected      int // 0=vol1, 1=pan1, 2=vol2, 3=pan2, 4=vol3, 5=pan3, 6=master, 7=mode, 8=portamento
+	Mixer     audio.Mixer
+	volBar1   common.Bar
+	panBar1   common.Bar
+	volBar2   common.Bar
+	panBar2   common.Bar
+	volBar3   common.Bar
+	panBar3   common.Bar
+	masterBar common.Bar
+	selected  int // 0=vol1, 1=pan1, 2=vol2, 3=pan2, 4=vol3, 5=pan3, 6=master, 7=mode
 }
 
-const mixerNumRows = 9
+const mixerNumRows = 8
 
 type MixerUpdated struct {
 	Mixer audio.Mixer
 }
 
-func NewMixer(mixer audio.Mixer, portamento float64) *Mixer {
+func NewMixer(mixer audio.Mixer) *Mixer {
 	mv := mixer.MasterVolume
 	if mv == 0 {
 		mv = 1.0
 	}
 	return &Mixer{
-		Mixer:         mixer,
-		Portamento:    portamento,
-		volBar1:       common.NewBar(0, 1, mixer.Volume1, 10),
-		panBar1:       common.NewBar(-1, 1, mixer.Pan1, 10),
-		volBar2:       common.NewBar(0, 1, mixer.Volume2, 10),
-		panBar2:       common.NewBar(-1, 1, mixer.Pan2, 10),
-		volBar3:       common.NewBar(0, 1, mixer.Volume3, 10),
-		panBar3:       common.NewBar(-1, 1, mixer.Pan3, 10),
-		masterBar:     common.NewBar(0, 1, mv, 10),
-		portamentoBar: common.NewBar(0, 2, portamento, 10),
+		Mixer:     mixer,
+		volBar1:   common.NewBar(0, 1, mixer.Volume1, 10),
+		panBar1:   common.NewBar(-1, 1, mixer.Pan1, 10),
+		volBar2:   common.NewBar(0, 1, mixer.Volume2, 10),
+		panBar2:   common.NewBar(-1, 1, mixer.Pan2, 10),
+		volBar3:   common.NewBar(0, 1, mixer.Volume3, 10),
+		panBar3:   common.NewBar(-1, 1, mixer.Pan3, 10),
+		masterBar: common.NewBar(0, 1, mv, 10),
 	}
 }
 
@@ -66,12 +62,6 @@ func (m *Mixer) SetMixer(mixer audio.Mixer) {
 	}
 	m.masterBar.Value = mv
 	m.Mixer.MasterVolume = mv
-}
-
-// SetPortamento updates the portamento value and syncs the bar.
-func (m *Mixer) SetPortamento(portamento float64) {
-	m.Portamento = portamento
-	m.portamentoBar.Value = portamento
 }
 
 func (m *Mixer) Init() tea.Cmd {
@@ -155,13 +145,6 @@ func (m *Mixer) View() string {
 		lbl("Mode", m.selected == 7),
 		m.Mixer.Mode.String(),
 	))
-	sb.WriteString("\n")
-	// Glide / portamento (no trailing newline)
-	sb.WriteString(fmt.Sprintf("%s %s %4.2fs",
-		lbl("Glide", m.selected == 8),
-		m.portamentoBar.View(),
-		m.Portamento,
-	))
 	return sb.String()
 }
 
@@ -221,7 +204,6 @@ func (m *Mixer) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 		m.Mixer.MasterVolume = mv
 	}
 	m.masterBar.Value = mv
-	m.portamentoBar.Value = m.Portamento
 
 	return m, func() tea.Msg {
 		return MixerUpdated{Mixer: m.Mixer}
@@ -246,8 +228,6 @@ func (m *Mixer) adjustSelected(delta float64) {
 		m.Mixer.MasterVolume = clampVolume(math.Round((m.Mixer.MasterVolume+delta)*100) / 100)
 	case 7:
 		// Mode is cycled via left/right in Update, not here
-	case 8:
-		m.Portamento = clampPortamento(math.Round((m.Portamento+delta)*100) / 100)
 	}
 }
 
@@ -257,16 +237,6 @@ func clampPan(v float64) float64 {
 	}
 	if v > 1 {
 		return 1
-	}
-	return v
-}
-
-func clampPortamento(v float64) float64 {
-	if v < 0 {
-		return 0
-	}
-	if v > 2 {
-		return 2
 	}
 	return v
 }

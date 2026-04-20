@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 	"github.com/tetrackt/tetrackt/ui/tracker/effects"
 )
 
@@ -21,9 +22,9 @@ func TestNoteEntryInEditModeEmitsPreviewMessage(t *testing.T) {
 	msg := cmd()
 	noteMsg, ok := msg.(TrackerNoteEntered)
 	require.True(t, ok, "expected TrackerNoteEntered, got %T", msg)
-	assert.Equal(t, audio.Base("C"), noteMsg.Note.Base, "unexpected note base")
-	assert.Equal(t, audio.Octave(4), noteMsg.Note.Octave, "unexpected note octave")
-	assert.Equal(t, audio.Base("C"), m.Tracks[0].Rows[0].Note.Base, "expected C note in current cell")
+	assert.Equal(t, notes.Base("C"), noteMsg.Note.Base, "unexpected note base")
+	assert.Equal(t, notes.Octave(4), noteMsg.Note.Octave, "unexpected note octave")
+	assert.Equal(t, notes.Base("C"), m.Tracks[0].Rows[0].Note.Base, "expected C note in current cell")
 }
 
 func TestEditStepAdvancesCursor(t *testing.T) {
@@ -47,33 +48,33 @@ func TestTabMovesToNextSubcolumn(t *testing.T) {
 func TestInsertTrackSpaceShiftsRowsDown(t *testing.T) {
 	m := NewTracker(1, 4, 80, 24)
 	m.nav.SetCursorPosition(0, 1)
-	m.Tracks[0].Rows[1].Note = audio.Note{Base: audio.Base("C"), Octave: 4}
-	m.Tracks[0].Rows[2].Note = audio.Note{Base: audio.Base("D"), Octave: 4}
+	m.Tracks[0].Rows[1].Note = notes.Note{Base: notes.BaseC, Octave: 4}
+	m.Tracks[0].Rows[2].Note = notes.Note{Base: notes.Base("D"), Octave: 4}
 
 	edited := m.handleGlobalEditingKey("insert")
 	require.True(t, edited, "expected insert to be treated as edit")
 
-	assert.Equal(t, audio.BaseOff, m.Tracks[0].Rows[1].Note.Base, "expected inserted empty row at cursor")
-	assert.Equal(t, audio.Base("C"), m.Tracks[0].Rows[2].Note.Base, "expected previous row shifted down to row 2")
+	assert.Equal(t, notes.BaseOff, m.Tracks[0].Rows[1].Note.Base, "expected inserted empty row at cursor")
+	assert.Equal(t, notes.Base("C"), m.Tracks[0].Rows[2].Note.Base, "expected previous row shifted down to row 2")
 }
 
 func TestTransposeCurrentStoredNoteSemitone(t *testing.T) {
 	m := NewTracker(1, 4, 80, 24)
 	m.nav.SetCursorPosition(0, 0)
-	m.Tracks[0].Rows[0].Note = audio.Note{Base: audio.BaseC, Octave: 4}
+	m.Tracks[0].Rows[0].Note = notes.Note{Base: notes.BaseC, Octave: 4}
 
 	edited := m.handleGlobalEditingKey("alt+up")
 	require.True(t, edited, "expected transpose to edit current note")
 
 	got := m.Tracks[0].Rows[0].Note
-	assert.Equal(t, audio.BaseCs, got.Base, "expected C# after transpose")
-	assert.Equal(t, audio.Octave(4), got.Octave, "expected octave 4 after transpose")
+	assert.Equal(t, notes.BaseCs, got.Base, "expected C# after transpose")
+	assert.Equal(t, notes.Octave(4), got.Octave, "expected octave 4 after transpose")
 }
 
 func TestTransposeSelectedNotesOctave(t *testing.T) {
 	m := NewTracker(2, 4, 80, 24)
-	m.Tracks[0].Rows[0].Note = audio.Note{Base: audio.BaseC, Octave: 4}
-	m.Tracks[1].Rows[1].Note = audio.Note{Base: audio.BaseE, Octave: 4}
+	m.Tracks[0].Rows[0].Note = notes.Note{Base: notes.BaseC, Octave: 4}
+	m.Tracks[1].Rows[1].Note = notes.Note{Base: notes.BaseE, Octave: 4}
 
 	// Use navigation grid to set up selection
 	m.nav.SetCursorPosition(0, 0)
@@ -83,12 +84,12 @@ func TestTransposeSelectedNotesOctave(t *testing.T) {
 	require.True(t, edited, "expected transpose to edit selected notes")
 
 	n0 := m.Tracks[0].Rows[0].Note
-	assert.Equal(t, audio.BaseC, n0.Base, "expected C")
-	assert.Equal(t, audio.Octave(5), n0.Octave, "expected C5")
+	assert.Equal(t, notes.BaseC, n0.Base, "expected C")
+	assert.Equal(t, notes.Octave(5), n0.Octave, "expected C5")
 
 	n1 := m.Tracks[1].Rows[1].Note
-	assert.Equal(t, audio.BaseE, n1.Base, "expected E")
-	assert.Equal(t, audio.Octave(5), n1.Octave, "expected E5")
+	assert.Equal(t, notes.BaseE, n1.Base, "expected E")
+	assert.Equal(t, notes.Octave(5), n1.Octave, "expected E5")
 }
 
 func TestParseEffectCommandNibbleSupportsInlineExtensions(t *testing.T) {
@@ -109,7 +110,6 @@ func TestParseEffectCommandKeyAliases(t *testing.T) {
 		"c": EffectNoteCut,
 		"d": EffectNoteDelay,
 		"t": EffectRowTicks,
-		"o": EffectContinuous,
 		"a": EffectArpPreset,
 	}
 
@@ -136,31 +136,14 @@ func TestInlineRowTicksCommand(t *testing.T) {
 	assert.Equal(t, 0x0C, row.Effect.Param, "expected effect param 0x0C")
 }
 
-func TestInlineContinuousCommandToggle(t *testing.T) {
-	m := NewTracker(1, 8, 80, 24)
-	m.CursorCol = columnEffect
-
-	_, _ = m.Update(tea.KeyPressMsg{Text: "6"})
-	m.CursorCol = columnParam
-	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
-	_, _ = m.Update(tea.KeyPressMsg{Text: "1"})
-
-	assert.True(t, m.Tracks[0].Rows[0].Continuous, "expected continuous to be enabled")
-
-	m.nav.Move(0, 1)
-	m.CursorCol = columnEffect
-	_, _ = m.Update(tea.KeyPressMsg{Text: "6"})
-	m.CursorCol = columnParam
-	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
-	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
-
-	assert.False(t, m.Tracks[0].Rows[1].Continuous, "expected continuous to be disabled")
-}
-
 func TestInlineArpPresetCommand(t *testing.T) {
 	m := NewTracker(1, 8, 80, 24)
+
+	// Arp offsets are sized by the row's tick count — set it explicitly.
+	m.Tracks[0].Rows[0].Ticks = 4
+
 	m.CursorCol = columnEffect
-	_, _ = m.Update(tea.KeyPressMsg{Text: "7"})
+	_, _ = m.Update(tea.KeyPressMsg{Text: "6"}) // EffectArpPreset
 
 	m.CursorCol = columnParam
 	_, _ = m.Update(tea.KeyPressMsg{Text: "1"})
@@ -169,27 +152,27 @@ func TestInlineArpPresetCommand(t *testing.T) {
 	row := m.Tracks[0].Rows[0]
 	assert.Equal(t, EffectArpPreset, row.Effect.Type, "expected EffectArpPreset")
 	assert.True(t, row.Arpeggio.IsActive(), "expected arp offsets to be generated")
-	assert.True(t, row.Continuous, "expected arp preset command to force continuous")
+	assert.Len(t, row.Arpeggio.Offsets, 4, "expected 4 offsets matching row tick count")
 }
 
 func TestTransposeAltShiftOrderVariants(t *testing.T) {
 	m := NewTracker(1, 4, 80, 24)
 	m.nav.SetCursorPosition(0, 0)
-	m.Tracks[0].Rows[0].Note = audio.Note{Base: audio.BaseC, Octave: 4}
+	m.Tracks[0].Rows[0].Note = notes.Note{Base: notes.BaseC, Octave: 4}
 
 	edited := m.handleGlobalEditingKey("shift+alt+up")
 	require.True(t, edited, "expected shift+alt+up to transpose")
 
 	got := m.Tracks[0].Rows[0].Note
-	assert.Equal(t, audio.BaseC, got.Base, "expected C")
-	assert.Equal(t, audio.Octave(5), got.Octave, "expected octave 5 after shift+alt+up")
+	assert.Equal(t, notes.BaseC, got.Base, "expected C")
+	assert.Equal(t, notes.Octave(5), got.Octave, "expected octave 5 after shift+alt+up")
 
 	edited = m.handleGlobalEditingKey("shift+alt+down")
 	require.True(t, edited, "expected shift+alt+down to transpose")
 
 	got = m.Tracks[0].Rows[0].Note
-	assert.Equal(t, audio.BaseC, got.Base, "expected C")
-	assert.Equal(t, audio.Octave(4), got.Octave, "expected octave 4 after shift+alt+down")
+	assert.Equal(t, notes.BaseC, got.Base, "expected C")
+	assert.Equal(t, notes.Octave(4), got.Octave, "expected octave 4 after shift+alt+down")
 }
 
 func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
@@ -197,12 +180,11 @@ func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 
 	// Source cell contains note + effects payload.
 	m.Tracks[0].Rows[0] = TrackRow{
-		Note:       audio.Note{Base: audio.BaseE, Octave: 4},
-		Volume:     48,
-		Ticks:      12,
-		Continuous: true,
-		Arpeggio:   audio.ArpeggioEffect{Offsets: []int{0, 4, 7}},
-		Effect:     TrackerEffect{Type: EffectVibrato, Param: 0x24},
+		Note:     notes.Note{Base: notes.BaseE, Octave: 4},
+		Volume:   48,
+		Ticks:    12,
+		Arpeggio: audio.ArpeggioEffect{Offsets: []int{0, 4, 7}},
+		Effect:   TrackerEffect{Type: EffectVibrato, Param: 0x24},
 	}
 
 	// Copy source cell.
@@ -211,18 +193,17 @@ func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 	m.handleGlobalEditingKey("alt+c")
 
 	// Destination has a different note that should be preserved.
-	m.Tracks[1].Rows[1] = TrackRow{Note: audio.Note{Base: audio.BaseA, Octave: 5}}
+	m.Tracks[1].Rows[1] = TrackRow{Note: notes.Note{Base: notes.BaseA, Octave: 5}}
 	m.nav.SetCursorPosition(1, 1)
 
 	edited := m.handleGlobalEditingKey("alt+shift+v")
 	require.True(t, edited, "expected alt+shift+v to edit destination cell")
 
 	got := m.Tracks[1].Rows[1]
-	assert.Equal(t, audio.BaseA, got.Note.Base, "expected destination note base A to be preserved")
-	assert.Equal(t, audio.Octave(5), got.Note.Octave, "expected destination note octave 5 to be preserved")
+	assert.Equal(t, notes.BaseA, got.Note.Base, "expected destination note base A to be preserved")
+	assert.Equal(t, notes.Octave(5), got.Note.Octave, "expected destination note octave 5 to be preserved")
 	assert.Equal(t, 48, got.Volume, "expected volume copied")
 	assert.Equal(t, 12, got.Ticks, "expected ticks copied")
-	assert.True(t, got.Continuous, "expected continuous copied")
 	assert.True(t, got.Arpeggio.IsActive(), "expected arp copied")
 	assert.Equal(t, EffectVibrato, got.Effect.Type, "expected effect type copied")
 	assert.Equal(t, 0x24, got.Effect.Param, "expected effect param copied")

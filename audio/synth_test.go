@@ -7,6 +7,7 @@ import (
 	"github.com/gopxl/beep/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tetrackt/tetrackt/notes"
 )
 
 func TestSynthPatchLength(t *testing.T) {
@@ -17,7 +18,7 @@ func TestSynthPatchLength(t *testing.T) {
 	osc := Oscillator{Type: Silent}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc, env, osc, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, Mixer{Volume1: 1.0, Volume2: 1.0}, NewFilter(), LFO{}, LFO{}, LFO{})
-	patch := synth.NewPatch(sr, NewNote(BaseA, Octave4).Frequency(), n)
+	patch := synth.NewPatch(sr, notes.NewNote(notes.BaseA, notes.Octave4).Frequency(), n)
 
 	buf := make([][2]float64, 512)
 	total := 0
@@ -41,7 +42,7 @@ func TestSynthSilentOscillators(t *testing.T) {
 	osc := Oscillator{Type: Silent}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc, env, osc, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, Mixer{Volume1: 1.0, Volume2: 1.0}, NewFilter(), LFO{}, LFO{}, LFO{})
-	samples := StreamN(synth.NewPatch(sr, NewNote(BaseA, Octave4).Frequency(), n), n)
+	samples := StreamN(synth.NewPatch(sr, notes.NewNote(notes.BaseA, notes.Octave4).Frequency(), n), n)
 
 	for i, s := range samples {
 		assert.Equal(t, 0.0, s[0], "sample %d L", i)
@@ -57,7 +58,7 @@ func TestSynthMixerZeroVolume(t *testing.T) {
 	osc := Oscillator{Type: Square}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc, env, osc, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, Mixer{Volume1: 0, Volume2: 0}, NewFilter(), LFO{}, LFO{}, LFO{})
-	samples := StreamN(synth.NewPatch(sr, NewNote(BaseA, Octave4).Frequency(), n), n)
+	samples := StreamN(synth.NewPatch(sr, notes.NewNote(notes.BaseA, notes.Octave4).Frequency(), n), n)
 
 	for i, s := range samples {
 		assert.Equal(t, 0.0, s[0], "sample %d L: want silent", i)
@@ -74,7 +75,7 @@ func TestSynthMixerBalance(t *testing.T) {
 	osc2 := Oscillator{Type: Silent}
 	env := Envelope{Sustain: 1.0}
 	synth := NewSynth(osc1, env, osc2, env, Oscillator{Type: Silent}, Envelope{Sustain: 1.0}, Mixer{Volume1: 1.0, Volume2: 0}, NewFilter(), LFO{}, LFO{}, LFO{})
-	samples := StreamN(synth.NewPatch(sr, NewNote(BaseA, Octave4).Frequency(), n), n)
+	samples := StreamN(synth.NewPatch(sr, notes.NewNote(notes.BaseA, notes.Octave4).Frequency(), n), n)
 
 	hasNonZero := false
 	for _, s := range samples {
@@ -90,7 +91,7 @@ func TestSynthFilterOff(t *testing.T) {
 	sr := beep.SampleRate(44100)
 	dur := 50 * time.Millisecond
 	n := sr.N(dur)
-	freq := NewNote(BaseA, Octave4).Frequency()
+	freq := notes.NewNote(notes.BaseA, notes.Octave4).Frequency()
 
 	osc := Oscillator{Type: Square}
 	env := Envelope{Sustain: 1.0}

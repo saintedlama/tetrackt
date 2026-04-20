@@ -2,187 +2,8 @@ package audio
 
 import (
 	"math"
-	"sync"
 	"time"
-
-	"github.com/gopxl/beep/v2"
 )
-
-// minEnvelopeLevel is the floor for exponential envelope calculations.
-// math.Log(0) = -Inf, which corrupts the multiplier; using this small positive
-// value instead produces ~-80 dB, which is inaudible.
-const minEnvelopeLevel = 0.0001
-
-type gateState int
-
-const (
-	gateIdle gateState = iota
-	gateAttack
-	gateDecay
-	gateSustain
-	gateRelease
-	gateDone
-)
-
-type gatedEnvelopeGenerator struct {
-	Streamer beep.Streamer
-
-	attackSamples  int
-	decaySamples   int
-	releaseSamples int
-	sustainLevel   float64
-
-	mu           sync.Mutex
-	state        gateState
-	pos          int
-	currentLevel float64
-	multiplier   float64
-}
-
-func newGatedEnvelopeGenerator(streamer beep.Streamer, sampleRate beep.SampleRate, env Envelope) *gatedEnvelopeGenerator {
-	sr := float64(sampleRate)
-	return &gatedEnvelopeGenerator{
-		Streamer:       streamer,
-		attackSamples:  int(env.Attack.Seconds() * sr),
-		decaySamples:   int(env.Decay.Seconds() * sr),
-		releaseSamples: int(env.Release.Seconds() * sr),
-		sustainLevel:   math.Max(minEnvelopeLevel, env.Sustain),
-		state:          gateIdle,
-		currentLevel:   0,
-		multiplier:     1.0,
-	}
-}
-
-func (g *gatedEnvelopeGenerator) NoteOn() {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.pos = 0
-	if g.attackSamples > 0 {
-		g.state = gateAttack
-		g.currentLevel = minEnvelopeLevel
-		g.multiplier = calculateMultiplier(g.currentLevel, 1.0, g.attackSamples)
-	} else if g.decaySamples > 0 {
-		g.state = gateDecay
-		g.currentLevel = 1.0
-		g.multiplier = calculateMultiplier(1.0, g.sustainLevel, g.decaySamples)
-	} else {
-		g.state = gateSustain
-		g.currentLevel = g.sustainLevel
-		g.multiplier = 1.0
-	}
-}
-
-func (g *gatedEnvelopeGenerator) NoteOff() {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if g.state == gateIdle {
-		g.state = gateDone
-		return
-	}
-	if g.releaseSamples > 0 {
-		g.state = gateRelease
-		g.pos = 0
-		g.multiplier = calculateMultiplier(math.Max(g.currentLevel, minEnvelopeLevel), minEnvelopeLevel, g.releaseSamples)
-	} else {
-		g.state = gateDone
-		g.currentLevel = 0
-		g.multiplier = 1.0
-	}
-}
-
-func (g *gatedEnvelopeGenerator) Stream(samples [][2]float64) (int, bool) {
-	n, _ := g.Streamer.Stream(samples)
-
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	if g.state == gateIdle {
-		for i := range n {
-			samples[i][0] = 0
-			samples[i][1] = 0
-		}
-		return n, true
-	}
-	if g.state == gateDone {
-		return 0, false
-	}
-
-	for i := range n {
-		samples[i][0] *= g.currentLevel
-		samples[i][1] *= g.currentLevel
-		g.currentLevel *= g.multiplier
-		g.pos++
-
-		switch g.state {
-		case gateAttack:
-			if g.pos >= g.attackSamples {
-				g.pos = 0
-				g.currentLevel = 1.0
-				if g.decaySamples > 0 {
-					g.state = gateDecay
-					g.multiplier = calculateMultiplier(1.0, g.sustainLevel, g.decaySamples)
-				} else {
-					g.state = gateSustain
-					g.currentLevel = g.sustainLevel
-					g.multiplier = 1.0
-				}
-			}
-		case gateDecay:
-			if g.pos >= g.decaySamples {
-				g.state = gateSustain
-				g.pos = 0
-				g.currentLevel = g.sustainLevel
-				g.multiplier = 1.0
-			}
-		case gateRelease:
-			if g.pos >= g.releaseSamples {
-				g.state = gateDone
-				g.currentLevel = 0
-				g.multiplier = 1.0
-				return n, false
-			}
-		}
-	}
-
-	return n, true
-}
-
-func (g *gatedEnvelopeGenerator) Err() error {
-	return nil
-}
-
-type Stages int
-
-const (
-	StageOff Stages = iota
-	StageAttack
-	StageDecay
-	StageSustain
-	StageRelease
-)
-
-type envelopeGenerator struct {
-	samples  int // total number of samples for the envelope
-	idx      int // current sample index
-	Streamer beep.Streamer
-
-	currentStage      Stages
-	currentLevel      float64
-	currentMultiplier float64
-	sustain           float64
-
-	attackSamples  int
-	decaySamples   int
-	sustainSamples int
-	releaseSamples int
-}
-
-type Envelope struct {
-	Attack  time.Duration
-	Decay   time.Duration
-	Sustain float64
-	Release time.Duration
-}
 
 // ArpeggioEffect cycles through frequency offsets, one per tick.
 // Offsets are semitone values relative to the base frequency and are converted
@@ -197,94 +18,340 @@ func (a ArpeggioEffect) IsActive() bool {
 	return len(a.Offsets) > 0
 }
 
-// Creates a beep.Streamer that applies ADSR envelope to the provided streamer
-func NewEnvelope(streamer beep.Streamer, sampleRate beep.SampleRate, noteSamples int, envelope Envelope) beep.Streamer {
-	sr := float64(sampleRate)
-	attackSamples := int(envelope.Attack.Seconds() * sr)
-	decaySamples := int(envelope.Decay.Seconds() * sr)
-	releaseSamples := int(envelope.Release.Seconds() * sr)
-	sustainSamples := max(0, noteSamples-(attackSamples+decaySamples+releaseSamples))
+// VibratoEffect applies pitch modulation at subtick granularity.
+// Depth is the maximum pitch deviation in semitones; Rate counts how many full
+// sine oscillations occur over the total note length (e.g. 2 = two full waves).
+type VibratoEffect struct {
+	Depth float64 // semitones (>= 0); 0 = disabled
+	Rate  float64 // oscillations per note length (> 0 to be active)
+}
 
-	return &envelopeGenerator{
-		samples:  noteSamples,
-		idx:      -1,
-		Streamer: streamer,
+// IsActive reports whether vibrato will produce any pitch modulation.
+func (v VibratoEffect) IsActive() bool { return v.Depth > 0 && v.Rate > 0 }
 
-		currentStage:      StageOff,
-		currentLevel:      0, // start with minimum level greater than 0 for multiplicative increase
-		currentMultiplier: 1.0,
-		sustain:           math.Max(minEnvelopeLevel, envelope.Sustain),
-		attackSamples:     attackSamples,
-		decaySamples:      decaySamples,
-		sustainSamples:    sustainSamples,
-		releaseSamples:    releaseSamples,
+// PortamentoEffect controls pitch glide from a previous note.
+//
+// StartTick is the first sub-tick at which the glide begins. Before StartTick
+// the oscillator holds at prevFreq. Ticks is the number of sub-ticks over
+// which the pitch slides exponentially from prevFreq to the target frequency.
+// After the glide completes the pitch snaps to and holds at the target.
+//
+// Common patterns:
+//   - StartTick=0, Ticks=0  → snap immediately (no portamento)
+//   - StartTick=0, Ticks=N  → glide immediately over N sub-ticks
+//   - StartTick=S, Ticks=0  → hold prevFreq, snap to target at tick S
+//   - StartTick=S, Ticks=N  → hold prevFreq, glide over N ticks from tick S
+//
+// Glide duration is clamped to the available sub-ticks so the pitch always
+// arrives at the target by the last sub-tick.
+// Row smoothness is controlled by the row's sub-tick count: more sub-ticks
+// produce smoother glides.
+// Not designed to be combined with RetriggerEnvelope (Reset clears the glide).
+type PortamentoEffect struct {
+	StartTick int // sub-tick at which the glide begins; 0 = immediate
+	Ticks     int // number of sub-ticks for the glide; 0 = snap (no glide)
+}
+
+// VolumeSlideEffect adjusts the output volume by a fixed delta at every subtick.
+// Delta is the per-subtick change in [−1, 1]; positive increases volume,
+// negative decreases it. Volume is clamped to [0, 1] after each step.
+// A delta of 0 disables the effect.
+type VolumeSlideEffect struct {
+	Delta float64
+}
+
+// IsActive reports whether the slide will change volume.
+func (v VolumeSlideEffect) IsActive() bool { return v.Delta != 0 }
+
+// NoteCutEffect silences the note at a specific subtick by setting volume to
+// zero. Once triggered, the silence persists for the remainder of the note;
+// subsequent VolumeSlide steps are ignored after the cut.
+// Tick <= 0 disables the effect.
+type NoteCutEffect struct {
+	Tick int // 0-based subtick index at which to cut; <= 0 = inactive
+}
+
+// IsActive reports whether the cut will fire.
+func (n NoteCutEffect) IsActive() bool { return n.Tick > 0 }
+
+// NoteDelayEffect defers note playback to a specific subtick. Before Tick the
+// streamer outputs silence; from Tick onward the patch plays with its ADSR
+// envelope starting at that moment, so the full envelope applies only to the
+// remaining duration.
+// Tick <= 0 disables the effect (immediate playback).
+type NoteDelayEffect struct {
+	Tick int // 0-based subtick index at which playback begins; <= 0 = immediate
+}
+
+// IsActive reports whether playback will be deferred.
+func (n NoteDelayEffect) IsActive() bool { return n.Tick > 0 }
+
+// EffectDefs bundles all per-note effect definitions for an EffectsPatch.
+type EffectDefs struct {
+	Arpeggio          ArpeggioEffect
+	Portamento        PortamentoEffect
+	Vibrato           VibratoEffect
+	RetriggerEnvelope bool // restart ADSR at every subtick boundary (useful with Arpeggio)
+	VolumeSlide       VolumeSlideEffect
+	NoteCut           NoteCutEffect
+	NoteDelay         NoteDelayEffect
+}
+
+// EffectsPatch couples a Synth with time-aware effect definitions.
+// It knows the note duration in milliseconds and the number of subticks, and
+// applies effects at each subtick boundary when streaming.
+//
+// Typical usage:
+//
+//	ep := audio.NewEffectsPatch(synth, audio.EffectDefs{Arpeggio: arp}, 125.0, 4)
+//	streamer := ep.Streamer(sr, note, prevFreq)
+//	speaker.Play(streamer)
+type EffectsPatch struct {
+	synth      *Synth
+	effects    EffectDefs
+	durationMs float64
+	subticks   int
+}
+
+// NewEffectsPatch creates an EffectsPatch from the given Synth definition, effect
+// definitions, note duration in milliseconds, and subtick count.
+// subticks < 1 is clamped to 1.
+func NewEffectsPatch(synth *Synth, fx EffectDefs, durationMs float64, subticks int) *EffectsPatch {
+	if subticks < 1 {
+		subticks = 1
+	}
+	return &EffectsPatch{
+		synth:      synth,
+		effects:    fx,
+		durationMs: durationMs,
+		subticks:   subticks,
 	}
 }
 
-func (e *envelopeGenerator) nextSample() {
-	e.idx++
+// Streamer returns an audio.Streamer that renders the given frequency for
+// durationMs milliseconds, applying effects at each subtick boundary.
+//
+// prevFreq is the frequency of the last note played on the same track; pass 0
+// when there is no previous note. It is only used when Portamento.Ticks > 0.
+func (ep *EffectsPatch) Streamer(sr SampleRate, freq float64, prevFreq float64) Streamer {
+	totalSamples := sr.N(time.Duration(ep.durationMs * float64(time.Millisecond)))
 
-	if e.idx < e.attackSamples {
-		if e.currentStage != StageAttack {
-			e.currentStage = StageAttack
-			e.currentLevel = minEnvelopeLevel
-			e.currentMultiplier = calculateMultiplier(e.currentLevel, 1, e.attackSamples)
+	startFreq := freq
+	gliding := (ep.effects.Portamento.Ticks > 0 || ep.effects.Portamento.StartTick > 0) && prevFreq > 0 && freq > 0
+	if gliding {
+		startFreq = prevFreq
+	}
+
+	subtickSamples := totalSamples / ep.subticks
+	remainder := totalSamples - subtickSamples*ep.subticks
+
+	s := &effectsStreamer{
+		noteFreq:       freq,
+		arp:            ep.effects.Arpeggio,
+		portamento:     ep.effects.Portamento,
+		vibrato:        ep.effects.Vibrato,
+		retrigger:      ep.effects.RetriggerEnvelope,
+		volumeSlide:    ep.effects.VolumeSlide,
+		noteCut:        ep.effects.NoteCut,
+		noteDelay:      ep.effects.NoteDelay,
+		gliding:        gliding,
+		subtickSamples: subtickSamples,
+		remainder:      remainder,
+		totalSubticks:  ep.subticks,
+		currentVolume:  1.0,
+		pendingSubtick: true,
+		// Fields for deferred NoteDelay patch creation.
+		synth:     ep.synth,
+		sr:        sr,
+		startFreq: startFreq,
+		prevFreq:  prevFreq,
+	}
+
+	// Create the patch immediately unless NoteDelay defers it.
+	if !ep.effects.NoteDelay.IsActive() {
+		s.patch = ep.synth.NewPatch(sr, startFreq, totalSamples)
+	}
+
+	return s
+}
+
+type effectsStreamer struct {
+	patch    *Patch // nil before NoteDelay fires
+	noteFreq float64
+
+	arp        ArpeggioEffect
+	portamento PortamentoEffect
+	vibrato    VibratoEffect
+	retrigger  bool
+	gliding    bool // portamento glide in progress
+
+	volumeSlide   VolumeSlideEffect
+	noteCut       NoteCutEffect
+	noteDelay     NoteDelayEffect
+	currentVolume float64 // running volume for VolumeSlide; starts at 1.0
+	cut           bool    // true after NoteCut fires
+
+	subtickSamples int // base samples per subtick (last subtick may be longer)
+	remainder      int // extra samples added to the very last subtick
+	totalSubticks  int
+	currentSubtick int
+	samplesInTick  int
+	pendingSubtick bool
+
+	// Retained for deferred patch creation when NoteDelay is active.
+	synth     *Synth
+	sr        SampleRate
+	startFreq float64
+	prevFreq  float64
+}
+
+// tickSize returns the number of samples in the current subtick.
+// The last subtick absorbs any rounding remainder so the total sample count
+// exactly matches the originally requested duration.
+func (e *effectsStreamer) tickSize() int {
+	if e.currentSubtick == e.totalSubticks-1 {
+		return e.subtickSamples + e.remainder
+	}
+	return e.subtickSamples
+}
+
+// Stream implements audio.Streamer.
+// Effects are applied at the start of each subtick before pulling samples
+// from the underlying Patch.
+func (e *effectsStreamer) Stream(samples [][2]float64) (int, bool) {
+	total := 0
+	for len(samples) > 0 {
+		if e.currentSubtick >= e.totalSubticks {
+			return total, false
 		}
-	} else if e.idx < e.attackSamples+e.decaySamples {
-		if e.currentStage != StageDecay {
-			e.currentStage = StageDecay
-			e.currentLevel = 1.0
-			e.currentMultiplier = calculateMultiplier(e.currentLevel, e.sustain, e.decaySamples)
+
+		if e.pendingSubtick {
+			e.applySubtickEffects()
+			e.pendingSubtick = false
 		}
-	} else if e.idx < e.attackSamples+e.decaySamples+e.sustainSamples {
-		if e.currentStage != StageSustain {
-			e.currentStage = StageSustain
-			e.currentLevel = e.sustain
-			e.currentMultiplier = 1.0
+
+		tickSize := e.tickSize()
+		available := tickSize - e.samplesInTick
+		chunk := samples
+		if len(chunk) > available {
+			chunk = samples[:available]
 		}
-	} else if e.idx < e.attackSamples+e.decaySamples+e.sustainSamples+e.releaseSamples {
-		if e.currentStage != StageRelease {
-			e.currentStage = StageRelease
-			e.currentLevel = e.sustain
-			e.currentMultiplier = calculateMultiplier(e.currentLevel, minEnvelopeLevel, e.releaseSamples)
+
+		var n int
+		var ok bool
+		if e.patch != nil {
+			n, ok = e.patch.Stream(chunk)
+		} else {
+			// NoteDelay: output silence until the patch is created.
+			for i := range chunk {
+				chunk[i] = [2]float64{}
+			}
+			n, ok = len(chunk), true
 		}
-	} else {
-		if e.currentStage != StageOff {
-			e.currentStage = StageOff
-			e.currentLevel = 0.0
-			e.currentMultiplier = 1.0
+
+		total += n
+		e.samplesInTick += n
+		samples = samples[n:]
+
+		if e.samplesInTick >= tickSize {
+			e.currentSubtick++
+			e.samplesInTick = 0
+			if e.currentSubtick < e.totalSubticks {
+				if e.retrigger && e.patch != nil {
+					e.patch.Reset()
+				}
+				e.pendingSubtick = true
+			}
 		}
+
+		if !ok || n == 0 {
+			return total, false
+		}
+	}
+	return total, e.currentSubtick < e.totalSubticks
+}
+
+// applySubtickEffects fires all time-based effects for the current subtick.
+//
+// Pitch priority (highest wins): Arpeggio → Vibrato → Portamento.
+// Volume priority: NoteCut silences permanently; VolumeSlide is suppressed
+// after a cut. Both are independent of the pitch effects.
+func (e *effectsStreamer) applySubtickEffects() {
+	tick := e.currentSubtick
+
+	// NoteDelay: create the patch when the delay tick arrives; return early
+	// for all preceding ticks so no effects fire during the silence period.
+	if e.noteDelay.IsActive() {
+		if e.patch == nil {
+			if tick < e.noteDelay.Tick {
+				return
+			}
+			// Delay fires: create a patch sized for the remaining duration so
+			// the full ADSR envelope applies to exactly the ticks that will play.
+			ticksLeft := e.totalSubticks - tick
+			remainingSamples := ticksLeft*e.subtickSamples + e.remainder
+			e.patch = e.synth.NewPatch(e.sr, e.startFreq, remainingSamples)
+		}
+	}
+
+	if e.patch == nil {
+		return
+	}
+
+	// Effective tick index relative to when the patch started playing
+	// (always 0 on the first active subtick, regardless of NoteDelay).
+	effectiveTick := tick
+	effectiveTotal := e.totalSubticks
+	if e.noteDelay.IsActive() {
+		effectiveTick = tick - e.noteDelay.Tick
+		effectiveTotal = e.totalSubticks - e.noteDelay.Tick
+	}
+
+	// Pitch effects.
+	if e.arp.IsActive() {
+		offset := e.arp.Offsets[effectiveTick%len(e.arp.Offsets)]
+		arpFreq := e.noteFreq * math.Pow(2, float64(offset)/12.0)
+		e.patch.SetFrequency(arpFreq)
+	} else if e.vibrato.IsActive() {
+		phase := 2 * math.Pi * e.vibrato.Rate * float64(effectiveTick) / float64(effectiveTotal)
+		semitoneShift := e.vibrato.Depth * math.Sin(phase)
+		e.patch.SetFrequency(e.noteFreq * math.Pow(2, semitoneShift/12.0))
+	} else if e.gliding {
+		// Three phases: pre-glide (hold prevFreq), glide, post-glide (hold noteFreq).
+		start := e.portamento.StartTick
+		glideEnd := start + e.portamento.Ticks
+		if glideEnd > effectiveTotal {
+			glideEnd = effectiveTotal
+		}
+		switch {
+		case effectiveTick < start:
+			e.patch.SetFrequency(e.prevFreq)
+		case effectiveTick < glideEnd:
+			progress := effectiveTick - start
+			total := glideEnd - start
+			t := float64(progress+1) / float64(total)
+			e.patch.SetFrequency(e.prevFreq * math.Pow(e.noteFreq/e.prevFreq, t))
+		default:
+			e.patch.SetFrequency(e.noteFreq)
+		}
+	}
+
+	// Volume effects. NoteCut fires once and suppresses all subsequent
+	// VolumeSlide steps so the silence cannot be un-done by a slide.
+	if e.noteCut.IsActive() && tick == e.noteCut.Tick {
+		e.cut = true
+		e.patch.SetVolume(0)
+	}
+	if !e.cut && e.volumeSlide.IsActive() {
+		e.currentVolume = math.Max(0, math.Min(1, e.currentVolume+e.volumeSlide.Delta))
+		e.patch.SetVolume(e.currentVolume)
 	}
 }
 
-func (e *envelopeGenerator) Stream(samples [][2]float64) (n int, ok bool) {
-	n, ok = e.Streamer.Stream(samples)
-
-	// Process samples from streamer in context of a note
-	for i := 0; i < n; i++ {
-		e.nextSample()
-
-		samples[i][0] *= e.currentLevel
-		samples[i][1] *= e.currentLevel
-
-		e.currentLevel *= e.currentMultiplier
+// Err implements audio.Streamer.
+func (e *effectsStreamer) Err() error {
+	if e.patch != nil {
+		return e.patch.Err()
 	}
-
-	return n, ok
-}
-
-func calculateMultiplier(startLevel float64, endLevel float64, lengthInSamples int) float64 {
-	return 1.0 + (math.Log(endLevel)-math.Log(startLevel))/float64(lengthInSamples)
-}
-
-func (e *envelopeGenerator) Err() error {
 	return nil
-}
-
-// reset restarts the envelope from the beginning (stage Off, level 0).
-func (e *envelopeGenerator) reset() {
-	e.idx = -1
-	e.currentStage = StageOff
-	e.currentLevel = 0
-	e.currentMultiplier = 1.0
 }

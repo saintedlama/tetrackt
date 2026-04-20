@@ -1,8 +1,6 @@
 package audio
 
 import (
-	"math"
-
 	"github.com/gopxl/beep/v2"
 )
 
@@ -32,7 +30,6 @@ type Synth struct {
 	LFO1           LFO
 	LFO2           LFO
 	LFO3           LFO
-	Portamento     float64  // glide duration in seconds; 0 = snap
 	Meta           Metadata // display-level patch metadata (Bank, Name, Tags)
 }
 
@@ -76,23 +73,12 @@ type Patch struct {
 	env1         *envelopeGenerator
 	env2         *envelopeGenerator
 	env3         *envelopeGenerator
-	gatedEnv1    *gatedEnvelopeGenerator // nil for fixed-duration patches
-	gatedEnv2    *gatedEnvelopeGenerator
-	gatedEnv3    *gatedEnvelopeGenerator
 	filterEnvGen *filterEnvelopeGenerator // nil when FilterEnvelope.Depth == 0 or filter off
 	lfos         []*lfoGenerator
 	pipeline     beep.Streamer
 	noteSamples  int
 	remaining    int
 	volume       float64 // output scalar; 1.0 = unity, 0 = silent
-	portamento   portamento
-}
-
-type portamento struct {
-	fromFrequency float64
-	toFrequency   float64
-	step          int
-	steps         int
 }
 
 // NewPatch instantiates a synthesis pipeline at the given frequency.
@@ -176,114 +162,6 @@ func (s *Synth) NewPatch(sampleRate beep.SampleRate, frequency float64, noteSamp
 	}
 }
 
-// NewGatedPatch builds a synthesis pipeline that sustains until NoteOff is called.
-// Call patch.NoteOn() once to start the envelope; call patch.NoteOff() to
-// begin the release phase. The patch streams until the release completes.
-func (s *Synth) NewGatedPatch(sampleRate beep.SampleRate, frequency float64) *Patch {
-	sr := float64(sampleRate)
-
-	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth, s.Oscillator1.Detune, s.Oscillator1.Wavetable, s.Oscillator1.NoisePeriod)
-	osc2 := NewOscillator(s.Oscillator2.Type, frequency, sampleRate, s.Oscillator2.Phase, s.Oscillator2.PulseWidth, s.Oscillator2.Detune, s.Oscillator2.Wavetable, s.Oscillator2.NoisePeriod)
-	osc3 := NewOscillator(s.Oscillator3.Type, frequency, sampleRate, s.Oscillator3.Phase, s.Oscillator3.PulseWidth, s.Oscillator3.Detune, s.Oscillator3.Wavetable, s.Oscillator3.NoisePeriod)
-
-	var lfos []*lfoGenerator
-	makeLFO := func(dest ModDest) *lfoGenerator {
-		if s.LFO1.Depth > 0 && s.LFO1.Dest == dest {
-			g := newLFOGenerator(s.LFO1, sr)
-			lfos = append(lfos, g)
-			return g
-		}
-		if s.LFO2.Depth > 0 && s.LFO2.Dest == dest {
-			g := newLFOGenerator(s.LFO2, sr)
-			lfos = append(lfos, g)
-			return g
-		}
-		if s.LFO3.Depth > 0 && s.LFO3.Dest == dest {
-			g := newLFOGenerator(s.LFO3, sr)
-			lfos = append(lfos, g)
-			return g
-		}
-		return nil
-	}
-
-	raw1 := newModulatedOscillatorStreamer(osc1, osc1.frequency, osc1.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
-	raw2 := newModulatedOscillatorStreamer(osc2, osc2.frequency, osc2.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
-	raw3 := newModulatedOscillatorStreamer(osc3, osc3.frequency, osc3.pulseWidth, makeLFO(ModPitch), makeLFO(ModPulseWidth), makeLFO(ModDetune))
-
-	gatedEnv1 := newGatedEnvelopeGenerator(raw1, sampleRate, s.Envelope1)
-	gatedEnv2 := newGatedEnvelopeGenerator(raw2, sampleRate, s.Envelope2)
-	gatedEnv3 := newGatedEnvelopeGenerator(raw3, sampleRate, s.Envelope3)
-
-	mod1 := newModulatedVolumeStreamer(gatedEnv1, makeLFO(ModVolume))
-	mod2 := newModulatedVolumeStreamer(gatedEnv2, makeLFO(ModVolume))
-	mod3 := newModulatedVolumeStreamer(gatedEnv3, makeLFO(ModVolume))
-
-	mixed := s.Mixer.Mix(mod1, mod2, mod3)
-	var filterEnvGen *filterEnvelopeGenerator
-	var pipeline beep.Streamer
-	if s.FilterEnvelope.Depth > 0 && s.Filter.Type != FilterOff {
-		filterEnvGen = newFilterEnvelopeGenerator(mixed, sampleRate, math.MaxInt, s.Filter, s.FilterEnvelope, makeLFO(ModCutoff))
-		pipeline = filterEnvGen
-	} else {
-		pipeline = NewModulatedFilterStreamer(mixed, sampleRate, s.Filter, makeLFO(ModCutoff))
-	}
-
-	var modOsc1, modOsc2, modOsc3 *modulatedOscillatorStreamer
-	if mos, ok := raw1.(*modulatedOscillatorStreamer); ok {
-		modOsc1 = mos
-	}
-	if mos, ok := raw2.(*modulatedOscillatorStreamer); ok {
-		modOsc2 = mos
-	}
-	if mos, ok := raw3.(*modulatedOscillatorStreamer); ok {
-		modOsc3 = mos
-	}
-
-	return &Patch{
-		osc1:         osc1,
-		osc2:         osc2,
-		osc3:         osc3,
-		modOsc1:      modOsc1,
-		modOsc2:      modOsc2,
-		modOsc3:      modOsc3,
-		gatedEnv1:    gatedEnv1,
-		gatedEnv2:    gatedEnv2,
-		gatedEnv3:    gatedEnv3,
-		filterEnvGen: filterEnvGen,
-		lfos:         lfos,
-		pipeline:     pipeline,
-		noteSamples:  math.MaxInt,
-		remaining:    math.MaxInt,
-		volume:       1.0,
-	}
-}
-
-// NoteOn starts the envelope attack. No-op for fixed-duration patches.
-func (p *Patch) NoteOn() {
-	if p.gatedEnv1 != nil {
-		p.gatedEnv1.NoteOn()
-	}
-	if p.gatedEnv2 != nil {
-		p.gatedEnv2.NoteOn()
-	}
-	if p.gatedEnv3 != nil {
-		p.gatedEnv3.NoteOn()
-	}
-}
-
-// NoteOff triggers the release phase. No-op for fixed-duration patches.
-func (p *Patch) NoteOff() {
-	if p.gatedEnv1 != nil {
-		p.gatedEnv1.NoteOff()
-	}
-	if p.gatedEnv2 != nil {
-		p.gatedEnv2.NoteOff()
-	}
-	if p.gatedEnv3 != nil {
-		p.gatedEnv3.NoteOff()
-	}
-}
-
 // SetVolume sets the output amplitude scalar applied to all streamed samples.
 // 1.0 = unity gain, 0 = silent. Use for per-tick effects such as VolumeSlide and NoteCut.
 func (p *Patch) SetVolume(v float64) {
@@ -308,34 +186,6 @@ func (p *Patch) SetFrequency(frequency float64) {
 	}
 }
 
-// StartPortamento begins a stepped frequency glide from fromFrequency to toFrequency
-// over ticks player sub-ticks. Each call to TickPortamento advances
-// one step. Calling with ticks <= 0 or fromFrequency <= 0 is a no-op.
-func (p *Patch) StartPortamento(fromFrequency, toFrequency float64, ticks int) {
-	if ticks <= 0 || fromFrequency <= 0 {
-		return
-	}
-	p.portamento.fromFrequency = fromFrequency
-	p.portamento.toFrequency = toFrequency
-	p.portamento.step = 0
-	p.portamento.steps = ticks
-	p.SetFrequency(fromFrequency)
-}
-
-// TickPortamento advances the portamento glide by one step and updates the
-// oscillator frequency. Call once per player sub-tick. Does nothing when no
-// glide is in progress or when the glide has completed.
-func (p *Patch) TickPortamento() {
-	if p.portamento.steps == 0 || p.portamento.step >= p.portamento.steps {
-		return
-	}
-	p.portamento.step++
-	t := float64(p.portamento.step) / float64(p.portamento.steps)
-	// Exponential interpolation = perceptually linear (equal semitones per tick)
-	freq := p.portamento.fromFrequency * math.Pow(p.portamento.toFrequency/p.portamento.fromFrequency, t)
-	p.SetFrequency(freq)
-}
-
 // Reset restarts the ADSR envelopes and all LFOs from the beginning.
 // Oscillator phases are preserved to avoid audible clicks.
 func (p *Patch) Reset() {
@@ -349,7 +199,6 @@ func (p *Patch) Reset() {
 		lfo.reset()
 	}
 	p.remaining = p.noteSamples
-	p.portamento = portamento{}
 }
 
 // Stream implements beep.Streamer — pulls the next samples from the pipeline.

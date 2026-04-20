@@ -72,7 +72,7 @@ func renderSynthInfo(synth *audio.Synth) string {
 		sb.WriteString(renderLFOLine("LFO"+v.num, v.lfo, v.clr))
 		sb.WriteString("\n\n")
 	}
-	sb.WriteString(renderMixLine(synth.Mixer, synth.Portamento))
+	sb.WriteString(renderMixLine(synth.Mixer))
 	sb.WriteString("\n")
 	sb.WriteString(renderFilterLine(synth.Filter))
 	return sb.String()
@@ -118,17 +118,13 @@ func renderLFOLine(label string, lfo audio.LFO, clr color.Color) string {
 	)
 }
 
-func renderMixLine(m audio.Mixer, portamento float64) string {
-	s := fmt.Sprintf("%s %s%d%% %s%d%% %s%d%%",
+func renderMixLine(m audio.Mixer) string {
+	return fmt.Sprintf("%s %s%d%% %s%d%% %s%d%%",
 		lbl("Mix:"),
 		lbl("Osc1:"), int(m.Volume1*100),
 		lbl("Osc2:"), int(m.Volume2*100),
 		lbl("Osc3:"), int(m.Volume3*100),
 	)
-	if portamento > 0 {
-		s += fmt.Sprintf(" %s%.2fs", lbl("Glide:"), portamento)
-	}
-	return s
 }
 
 func renderFilterLine(f audio.Filter) string {

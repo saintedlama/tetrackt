@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/tetrackt/tetrackt/notes"
 	utracker "github.com/tetrackt/tetrackt/ui/tracker"
 )
 
@@ -218,7 +219,6 @@ type SavedSynth struct {
 	Mixer          SavedMixer          `json:"mixer"`
 	Filter         SavedFilter         `json:"filter"`
 	FilterEnvelope SavedFilterEnvelope `json:"filter_envelope,omitempty"`
-	Portamento     float64             `json:"portamento,omitempty"`
 }
 
 func toSavedSynth(s *audio.Synth) SavedSynth {
@@ -235,7 +235,6 @@ func toSavedSynth(s *audio.Synth) SavedSynth {
 		Mixer:          toSavedMixer(s.Mixer),
 		Filter:         toSavedFilter(s.Filter),
 		FilterEnvelope: toSavedFilterEnvelope(s.FilterEnvelope),
-		Portamento:     s.Portamento,
 	}
 }
 
@@ -253,7 +252,6 @@ func fromSavedSynth(s SavedSynth) *audio.Synth {
 		fromSavedLFO(s.LFO2),
 		fromSavedLFO(s.LFO3),
 	)
-	synth.Portamento = s.Portamento
 	synth.FilterEnvelope = fromSavedFilterEnvelope(s.FilterEnvelope)
 	return synth
 }
@@ -264,8 +262,8 @@ type SavedTrackRow struct {
 	Octave          int    `json:"octave"`
 	Volume          int    `json:"volume"`
 	Ticks           int    `json:"ticks,omitempty"`
-	Continuous      bool   `json:"continuous,omitempty"`
 	ArpeggioOffsets []int  `json:"arpeggio_offsets,omitempty"`
+	Portamento      int    `json:"portamento,omitempty"`
 	EffectType      int    `json:"effect_type,omitempty"`
 	EffectParam     int    `json:"effect_param,omitempty"`
 }
@@ -309,8 +307,8 @@ func TracksToModule(tracker *utracker.TrackerModel) *SavedModule {
 				Octave:          int(row.Note.Octave),
 				Volume:          row.Volume,
 				Ticks:           row.Ticks,
-				Continuous:      row.Continuous,
 				ArpeggioOffsets: row.Arpeggio.Offsets,
+				Portamento:      row.Portamento,
 				EffectType:      int(row.Effect.Type),
 				EffectParam:     row.Effect.Param,
 			}
@@ -370,13 +368,13 @@ func ModuleToTracks(mod *SavedModule, tracker *utracker.TrackerModel) {
 		for j, row := range savedTrack.Rows {
 			if j < len(track.Rows) {
 				track.Rows[j] = utracker.TrackRow{
-					Note:       audio.Note{Base: audio.Base(row.Base), Octave: audio.Octave(row.Octave)},
-					Volume:     row.Volume,
-					Ticks:      row.Ticks,
-					Continuous: row.Continuous,
+					Note:   notes.Note{Base: notes.Base(row.Base), Octave: notes.Octave(row.Octave)},
+					Volume: row.Volume,
+					Ticks:  row.Ticks,
 					Arpeggio: audio.ArpeggioEffect{
 						Offsets: row.ArpeggioOffsets,
 					},
+					Portamento: row.Portamento,
 					Effect: utracker.TrackerEffect{
 						Type:  utracker.EffectType(row.EffectType),
 						Param: row.EffectParam,

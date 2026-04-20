@@ -70,7 +70,6 @@ func leadPatches() []SynthPatch {
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Decay: 20 * ms, Sustain: 0.8, Release: 60 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
-				Portamento:  0.04,
 			}},
 		{Name: "DMG Lead", Bank: "Lead", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
@@ -236,7 +235,6 @@ func bassPatches() []SynthPatch {
 				Envelope1:   audio.Envelope{Attack: 3 * ms, Sustain: 1.0, Release: 30 * ms},
 				Mixer:       audio.Mixer{Volume1: 1.0, Mode: audio.MixNESPulse},
 				Filter:      audio.Filter{Type: audio.FilterOff},
-				Portamento:  0.06,
 			}},
 		{Name: "DMG Bass", Bank: "Bass", Tags: []string{"Gameboy"},
 			Synth: &audio.Synth{
@@ -320,7 +318,6 @@ func bassPatches() []SynthPatch {
 				Mixer:          audio.Mixer{Volume1: 1.0},
 				Filter:         audio.Filter{Type: audio.FilterLowPass, Cutoff: 0.3, Resonance: 0.5},
 				FilterEnvelope: audio.FilterEnvelope{Attack: 5 * ms, Decay: 200 * ms, Sustain: 0.1, Release: 200 * ms, Depth: 0.5},
-				Portamento:     0.05,
 			}},
 		{Name: "Acid Techno", Bank: "Bass", Tags: []string{"Analog"},
 			Synth: &audio.Synth{

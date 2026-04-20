@@ -2,15 +2,9 @@ package render
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/tetrackt/tetrackt/audio"
 )
-
-type channelEffectState struct {
-	vibratoPhase float64
-	volume       float64
-}
 
 type RenderConfig struct {
 	SampleRate   audio.SampleRate
@@ -23,11 +17,8 @@ type RenderConfig struct {
 type RenderEngine struct {
 	pattern         *Pattern
 	cfg             RenderConfig
-	currentPatches  []*audio.Patch
-	activeVoices    []*audio.Patch
+	activeVoices    []audio.Streamer
 	prevFrequencies []float64
-	arpTickIdx      []int
-	effectStates    []channelEffectState
 }
 
 func NewRenderEngine(pattern *Pattern, cfg RenderConfig) *RenderEngine {
@@ -69,7 +60,6 @@ func (e *RenderEngine) Run(sink RenderSink) error {
 		}
 	}
 
-	e.releaseCurrentPatches()
 	if err := e.drainVoices(sink); err != nil {
 		return err
 	}
@@ -93,119 +83,48 @@ func RenderToStream(pattern *Pattern, cfg RenderConfig, loop bool) (audio.Stream
 }
 
 func (e *RenderEngine) resetState() {
-	e.currentPatches = make([]*audio.Patch, e.pattern.NumTracks)
 	e.activeVoices = nil
 	e.prevFrequencies = make([]float64, e.pattern.NumTracks)
-	e.arpTickIdx = make([]int, e.pattern.NumTracks)
-	e.effectStates = make([]channelEffectState, e.pattern.NumTracks)
-	for i := range e.arpTickIdx {
-		e.arpTickIdx[i] = -1
-	}
 }
 
 func (e *RenderEngine) renderRow(rowIdx int, sink RenderSink) error {
 	e.startRow(rowIdx)
-	ticks := e.pattern.RowTicks(rowIdx)
-
-	for subTick := range ticks {
-		tickSamples := e.tickSampleCount(rowIdx, subTick)
-		e.applyTick(rowIdx, subTick)
-		if err := e.mixActiveVoices(tickSamples, sink); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	rowSamples := int(e.cfg.SampleRate.N(e.pattern.RowDuration))
+	return e.mixActiveVoices(rowSamples, sink)
 }
 
 func (e *RenderEngine) startRow(rowIdx int) {
-	noteSamples := int(e.cfg.SampleRate.N(e.pattern.RowDuration))
-	e.releaseCurrentPatches()
+	ticks := e.pattern.RowTicks(rowIdx)
+	durationMs := float64(e.pattern.RowDuration.Milliseconds())
 
 	for trackIdx := 0; trackIdx < e.pattern.NumTracks; trackIdx++ {
 		track := e.pattern.Tracks[trackIdx]
 		row := track.Rows[rowIdx]
 
-		e.currentPatches[trackIdx] = nil
 		if row.Frequency == 0 {
 			e.prevFrequencies[trackIdx] = 0
-			e.arpTickIdx[trackIdx] = -1
-			e.effectStates[trackIdx] = channelEffectState{volume: 1.0}
 			continue
 		}
 
-		patch := track.Synth.NewGatedPatch(e.cfg.SampleRate, row.Frequency)
-		if row.Volume > 0 {
-			patch.SetVolume(row.Volume)
+		subticks := ticks
+		if subticks <= 0 {
+			subticks = 1
 		}
-		if track.Synth.Portamento > 0 && e.prevFrequencies[trackIdx] > 0 {
-			ticks := int(math.Round(track.Synth.Portamento * float64(e.cfg.SampleRate) / float64(noteSamples)))
-			patch.StartPortamento(e.prevFrequencies[trackIdx], row.Frequency, ticks)
-		}
+		fx := rowToEffectDefs(row, subticks)
+		ep := audio.NewEffectsPatch(track.Synth, fx, durationMs, subticks)
+		streamer := ep.Streamer(e.cfg.SampleRate, row.Frequency, e.prevFrequencies[trackIdx])
 		e.prevFrequencies[trackIdx] = row.Frequency
-		e.arpTickIdx[trackIdx] = -1
-		e.effectStates[trackIdx] = channelEffectState{volume: 1.0}
-		if row.Effect.Type != EffectNoteDelay {
-			patch.NoteOn()
-		}
-		e.currentPatches[trackIdx] = patch
-		e.activeVoices = append(e.activeVoices, patch)
-	}
-}
 
-func (e *RenderEngine) releaseCurrentPatches() {
-	for trackIdx, patch := range e.currentPatches {
-		if patch == nil {
-			continue
-		}
-		patch.NoteOff()
-		e.currentPatches[trackIdx] = nil
-	}
-}
-
-func (e *RenderEngine) applyTick(rowIdx, subTick int) {
-	for trackIdx, patch := range e.currentPatches {
-		if patch == nil || trackIdx >= len(e.pattern.Tracks) {
-			continue
-		}
-		row := e.pattern.Tracks[trackIdx].Rows[rowIdx]
-
-		if row.Arpeggio.IsActive() {
-			e.arpTickIdx[trackIdx]++
-			idx := e.arpTickIdx[trackIdx] % len(row.Arpeggio.Offsets)
-			mult := math.Pow(2, float64(row.Arpeggio.Offsets[idx])/12)
-			patch.SetFrequency(e.prevFrequencies[trackIdx] * mult)
+		vol := e.cfg.GlobalVolume
+		if row.Volume > 0 {
+			vol *= row.Volume
 		}
 
-		state := &e.effectStates[trackIdx]
-		switch row.Effect.Type {
-		case EffectVibrato:
-			vibratoSpeed := (row.Effect.Param >> 4) & 0xF
-			vibratoDepth := float64(row.Effect.Param & 0xF)
-			if vibratoSpeed > 0 {
-				state.vibratoPhase += (2 * math.Pi) / float64(vibratoSpeed)
-			}
-			semitones := (vibratoDepth / 4.0) * math.Sin(state.vibratoPhase)
-			mult := math.Pow(2, semitones/12)
-			patch.SetFrequency(e.prevFrequencies[trackIdx] * mult)
-		case EffectVolumeSlide:
-			delta := row.Effect.Param
-			if delta > 127 {
-				delta = int(int8(uint8(delta)))
-			}
-			state.volume = math.Max(0, math.Min(1, state.volume+float64(delta)/64.0))
-			patch.SetVolume(state.volume)
-		case EffectNoteCut:
-			if subTick == row.Effect.Param {
-				patch.SetVolume(0)
-			}
-		case EffectNoteDelay:
-			if subTick == row.Effect.Param {
-				patch.NoteOn()
-			}
+		if vol != 1.0 {
+			e.activeVoices = append(e.activeVoices, &scaledStreamer{s: streamer, scale: vol})
+		} else {
+			e.activeVoices = append(e.activeVoices, streamer)
 		}
-
-		patch.TickPortamento()
 	}
 }
 
@@ -220,25 +139,18 @@ func (e *RenderEngine) mixActiveVoices(samplesPerTick int, sink RenderSink) erro
 	}
 
 	remaining := e.activeVoices[:0]
-	for _, patch := range e.activeVoices {
+	for _, voice := range e.activeVoices {
 		voiceBuf := make([][2]float64, samplesPerTick)
-		n, ok := patch.Stream(voiceBuf)
-		for i := 0; i < n; i++ {
+		n, ok := voice.Stream(voiceBuf)
+		for i := range n {
 			mixBuf[i][0] += voiceBuf[i][0]
 			mixBuf[i][1] += voiceBuf[i][1]
 		}
 		if ok {
-			remaining = append(remaining, patch)
+			remaining = append(remaining, voice)
 		}
 	}
 	e.activeVoices = remaining
-
-	if e.cfg.GlobalVolume != 1.0 {
-		for i := range mixBuf {
-			mixBuf[i][0] *= e.cfg.GlobalVolume
-			mixBuf[i][1] *= e.cfg.GlobalVolume
-		}
-	}
 
 	return sink.Write(mixBuf)
 }
@@ -252,13 +164,19 @@ func (e *RenderEngine) drainVoices(sink RenderSink) error {
 	return nil
 }
 
-func (e *RenderEngine) tickSampleCount(rowIdx, subTick int) int {
-	ticks := e.pattern.RowTicks(rowIdx)
-	rowSamples := int(e.cfg.SampleRate.N(e.pattern.RowDuration))
-	baseTickSamples := rowSamples / ticks
-	remainder := rowSamples % ticks
-	if subTick < remainder {
-		return baseTickSamples + 1
-	}
-	return baseTickSamples
+// scaledStreamer wraps an audio.Streamer and applies a constant volume scale.
+type scaledStreamer struct {
+	s     audio.Streamer
+	scale float64
 }
+
+func (ss *scaledStreamer) Stream(samples [][2]float64) (int, bool) {
+	n, ok := ss.s.Stream(samples)
+	for i := range n {
+		samples[i][0] *= ss.scale
+		samples[i][1] *= ss.scale
+	}
+	return n, ok
+}
+
+func (ss *scaledStreamer) Err() error { return ss.s.Err() }
