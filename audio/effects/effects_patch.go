@@ -19,11 +19,16 @@ type VibratoEffect struct {
 func (v VibratoEffect) IsActive() bool { return v.Depth > 0 && v.Rate > 0 }
 
 // PortamentoEffect controls pitch glide from a previous note.
-// When Active and a non-zero prevFreq is passed to Streamer, the pitch slides
-// over every subtick from prevFreq to the target note's frequency.
+// When Ticks > 0 and a non-zero prevFreq is passed to Streamer, the pitch
+// slides exponentially from prevFreq to the target note's frequency.
+// The glide spans exactly min(Ticks, available sub-ticks) steps and always
+// arrives at the target frequency on the last glide step. Sub-ticks after the
+// glide stay at the target frequency.
+// Ticks = 0 means snap (no glide). Row granularity (smoothness) is controlled
+// by the row's sub-tick count: more sub-ticks → smoother glide.
 // Not designed to be combined with RetriggerEnvelope (Reset clears the glide).
 type PortamentoEffect struct {
-	Active bool
+	Ticks int // number of sub-ticks for the glide; 0 = snap (no glide)
 }
 
 // VolumeSlideEffect adjusts the output volume by a fixed delta at every subtick.
@@ -106,13 +111,12 @@ func NewEffectsPatch(synth *audio.Synth, fx EffectDefs, durationMs float64, subt
 // durationMs milliseconds, applying effects at each subtick boundary.
 //
 // prevFreq is the frequency of the last note played on the same track; pass 0
-// when there is no previous note. It is only used when Portamento.Active is
-// true.
+// when there is no previous note. It is only used when Portamento.Ticks > 0.
 func (ep *EffectsPatch) Streamer(sr audio.SampleRate, freq float64, prevFreq float64) audio.Streamer {
 	totalSamples := sr.N(time.Duration(ep.durationMs * float64(time.Millisecond)))
 
 	startFreq := freq
-	gliding := ep.effects.Portamento.Active && prevFreq > 0 && freq > 0
+	gliding := ep.effects.Portamento.Ticks > 0 && prevFreq > 0 && freq > 0
 	if gliding {
 		startFreq = prevFreq
 	}
@@ -266,9 +270,6 @@ func (e *effectsStreamer) applySubtickEffects() {
 			ticksLeft := e.totalSubticks - tick
 			remainingSamples := ticksLeft*e.subtickSamples + e.remainder
 			e.patch = e.synth.NewPatch(e.sr, e.startFreq, remainingSamples)
-			if e.gliding {
-				e.patch.StartPortamento(e.prevFreq, e.noteFreq, ticksLeft)
-			}
 		}
 	}
 
@@ -294,13 +295,22 @@ func (e *effectsStreamer) applySubtickEffects() {
 		phase := 2 * math.Pi * e.vibrato.Rate * float64(effectiveTick) / float64(effectiveTotal)
 		semitoneShift := e.vibrato.Depth * math.Sin(phase)
 		e.patch.SetFrequency(e.noteFreq * math.Pow(2, semitoneShift/12.0))
-	} else if e.portamento.Active && e.gliding {
-		// Exponential glide: same formula as Patch.TickPortamento.
-		// effectiveTick goes 0..N-1; step 0 advances to t=1/N so the glide
-		// reaches the target frequency exactly on the last subtick.
-		t := float64(effectiveTick+1) / float64(effectiveTotal)
-		glideFreq := e.prevFreq * math.Pow(e.noteFreq/e.prevFreq, t)
-		e.patch.SetFrequency(glideFreq)
+	} else if e.portamento.Ticks > 0 && e.gliding {
+		// Exponential glide from prevFreq to noteFreq over min(Ticks, effectiveTotal)
+		// sub-ticks. Clamping ensures the glide always arrives at noteFreq on the
+		// last glide step, even when Ticks exceeds the available sub-tick count.
+		// Sub-ticks after the glide snap to noteFreq.
+		glideTotal := e.portamento.Ticks
+		if glideTotal > effectiveTotal {
+			glideTotal = effectiveTotal
+		}
+		if effectiveTick < glideTotal {
+			t := float64(effectiveTick+1) / float64(glideTotal)
+			glideFreq := e.prevFreq * math.Pow(e.noteFreq/e.prevFreq, t)
+			e.patch.SetFrequency(glideFreq)
+		} else {
+			e.patch.SetFrequency(e.noteFreq)
+		}
 	}
 
 	// Volume effects. NoteCut fires once and suppresses all subsequent

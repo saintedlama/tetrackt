@@ -1,8 +1,6 @@
 package audio
 
 import (
-	"math"
-
 	"github.com/gopxl/beep/v2"
 )
 
@@ -32,7 +30,6 @@ type Synth struct {
 	LFO1           LFO
 	LFO2           LFO
 	LFO3           LFO
-	Portamento     float64  // glide duration in seconds; 0 = snap
 	Meta           Metadata // display-level patch metadata (Bank, Name, Tags)
 }
 
@@ -82,14 +79,6 @@ type Patch struct {
 	noteSamples  int
 	remaining    int
 	volume       float64 // output scalar; 1.0 = unity, 0 = silent
-	portamento   portamento
-}
-
-type portamento struct {
-	fromFrequency float64
-	toFrequency   float64
-	step          int
-	steps         int
 }
 
 // NewPatch instantiates a synthesis pipeline at the given frequency.
@@ -197,34 +186,6 @@ func (p *Patch) SetFrequency(frequency float64) {
 	}
 }
 
-// StartPortamento begins a stepped frequency glide from fromFrequency to toFrequency
-// over ticks player sub-ticks. Each call to TickPortamento advances
-// one step. Calling with ticks <= 0 or fromFrequency <= 0 is a no-op.
-func (p *Patch) StartPortamento(fromFrequency, toFrequency float64, ticks int) {
-	if ticks <= 0 || fromFrequency <= 0 {
-		return
-	}
-	p.portamento.fromFrequency = fromFrequency
-	p.portamento.toFrequency = toFrequency
-	p.portamento.step = 0
-	p.portamento.steps = ticks
-	p.SetFrequency(fromFrequency)
-}
-
-// TickPortamento advances the portamento glide by one step and updates the
-// oscillator frequency. Call once per player sub-tick. Does nothing when no
-// glide is in progress or when the glide has completed.
-func (p *Patch) TickPortamento() {
-	if p.portamento.steps == 0 || p.portamento.step >= p.portamento.steps {
-		return
-	}
-	p.portamento.step++
-	t := float64(p.portamento.step) / float64(p.portamento.steps)
-	// Exponential interpolation = perceptually linear (equal semitones per tick)
-	freq := p.portamento.fromFrequency * math.Pow(p.portamento.toFrequency/p.portamento.fromFrequency, t)
-	p.SetFrequency(freq)
-}
-
 // Reset restarts the ADSR envelopes and all LFOs from the beginning.
 // Oscillator phases are preserved to avoid audible clicks.
 func (p *Patch) Reset() {
@@ -238,7 +199,6 @@ func (p *Patch) Reset() {
 		lfo.reset()
 	}
 	p.remaining = p.noteSamples
-	p.portamento = portamento{}
 }
 
 // Stream implements beep.Streamer — pulls the next samples from the pipeline.

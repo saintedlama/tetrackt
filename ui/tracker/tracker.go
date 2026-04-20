@@ -104,6 +104,7 @@ const (
 	columnNote trackerColumn = iota
 	columnVolume
 	columnArpeggio
+	columnPortamento
 	columnEffect
 	columnParam
 	trackerColumnCount
@@ -178,11 +179,12 @@ type Track struct {
 
 // TrackRow represents a single row in a track
 type TrackRow struct {
-	Note     notes.Note
-	Volume   int // 0-64
-	Ticks    int // sub-ticks to play for this row; 0 = no subdivision
-	Arpeggio audio.ArpeggioEffect
-	Effect   TrackerEffect
+	Note       notes.Note
+	Volume     int // 0-64
+	Ticks      int // sub-ticks to play for this row; 0 = no subdivision
+	Arpeggio   audio.ArpeggioEffect
+	Portamento int // sub-tick glide count; 0 = snap
+	Effect     TrackerEffect
 }
 
 // NewTracker creates a new pattern with the specified number of tracks and rows
@@ -252,14 +254,14 @@ func (m *TrackerModel) View() string {
 			trackHeader = headerStyle.Foreground(common.ColorGray).Render(trackHeader)
 		}
 		tracks.WriteString(trackHeader)
-		tracks.WriteString("        ")
+		tracks.WriteString("            ")
 	}
 	tracks.WriteString("\n")
 
 	// Separator
 	tracks.WriteString("    ")
 	for i := 0; i < m.NumTracks; i++ {
-		tracks.WriteString(strings.Repeat("─", 14))
+		tracks.WriteString(strings.Repeat("─", 18))
 		tracks.WriteString("   ")
 	}
 	tracks.WriteString("\n")
@@ -292,6 +294,7 @@ func (m *TrackerModel) View() string {
 				fmt.Sprintf("%-3s", formatNote(trackRow.Note)),
 				formatVolume(trackRow.Volume),
 				effects.FormatArpeggio(trackRow.Arpeggio),
+				formatPortamento(trackRow.Portamento),
 				effects.Type(trackRow.Effect.Type).Format(),
 				effects.Type(trackRow.Effect.Type).FormatParam(trackRow.Effect.Param),
 			}
@@ -301,7 +304,7 @@ func (m *TrackerModel) View() string {
 			for colIdx, part := range parts {
 				col := trackerColumn(colIdx)
 				isNibblePending := isCursorCell && m.nibbleHi != nil &&
-					(col == columnVolume || col == columnArpeggio || col == columnParam)
+					(col == columnVolume || col == columnArpeggio || col == columnPortamento || col == columnParam)
 
 				if isNibblePending && col == m.CursorCol {
 					switch col {
@@ -309,6 +312,8 @@ func (m *TrackerModel) View() string {
 						part = formatVolumePending(*m.nibbleHi)
 					case columnArpeggio:
 						part = formatArpPending(*m.nibbleHi)
+					case columnPortamento:
+						part = formatPortamentoPending(*m.nibbleHi)
 					case columnParam:
 						part = formatParamPending(*m.nibbleHi)
 					}
@@ -580,6 +585,15 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 				return nil, true
 			}
 		}
+	case columnPortamento:
+		if v, ok := parseHexNibble(key); ok {
+			val := m.pushNibble(v)
+			if val != nil {
+				row.Portamento = *val
+				m.advanceByEditStep()
+				return nil, true
+			}
+		}
 	case columnEffect:
 		if typ, ok := effects.ParseKey(key); ok {
 			row.Effect.Type = EffectType(typ)
@@ -617,6 +631,8 @@ func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 		row.Volume = 0
 	case columnArpeggio:
 		row.Arpeggio = audio.ArpeggioEffect{}
+	case columnPortamento:
+		row.Portamento = 0
 	case columnEffect:
 		switch row.Effect.Type {
 		case EffectRowTicks:
@@ -725,6 +741,7 @@ func (m *TrackerModel) pasteClipboardEffectsOnly() bool {
 			dst := &m.Tracks[dstTrack].Rows[dstRow]
 			dst.Volume = src.Volume
 			dst.Arpeggio = src.Arpeggio
+			dst.Portamento = src.Portamento
 			dst.Ticks = src.Ticks
 			dst.Effect = src.Effect
 		}
@@ -822,6 +839,21 @@ func formatArpPending(hi int) string {
 // e.g. hi=B -> "B."
 func formatParamPending(hi int) string {
 	return fmt.Sprintf("%X.", hi)
+}
+
+// formatPortamento formats the portamento glide count for display.
+// Returns "---" for 0, or "G" followed by two hex digits for non-zero.
+func formatPortamento(p int) string {
+	if p == 0 {
+		return "---"
+	}
+	return fmt.Sprintf("G%02X", p)
+}
+
+// formatPortamentoPending renders the first nibble of a portamento entry in progress.
+// e.g. hi=3 -> "G3."
+func formatPortamentoPending(hi int) string {
+	return fmt.Sprintf("G%X.", hi)
 }
 
 func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {

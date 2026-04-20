@@ -163,7 +163,7 @@ func TestEffectsPatchPortamento(t *testing.T) {
 	const durationMs = 100.0
 	subtickSamples := sr.N(time.Duration(durationMs / 2 * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{Portamento: PortamentoEffect{Active: true}}, durationMs, 2)
+	ep := NewEffectsPatch(sineSynth(), EffectDefs{Portamento: PortamentoEffect{Ticks: 2}}, durationMs, 2)
 	streamer := ep.Streamer(sr, 440.0, 220.0)
 
 	buf0 := make([][2]float64, subtickSamples)
@@ -179,13 +179,48 @@ func TestEffectsPatchPortamento(t *testing.T) {
 		"expected more crossings in subtick 1 (higher freq after glide): subtick0=%d subtick1=%d", c0, c1)
 }
 
+func TestEffectsPatchPortamentoTicksExceedsSubticks(t *testing.T) {
+	// Portamento.Ticks (8) greater than row subtick count (4).
+	// The glide should still reach the target frequency by the last subtick.
+	// Verify by checking the final subtick's crossing count matches a
+	// reference patch playing directly at the target frequency.
+	const sr = beep.SampleRate(44100)
+	const durationMs = 100.0
+	const subticks = 4
+	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+
+	ep := NewEffectsPatch(sineSynth(), EffectDefs{Portamento: PortamentoEffect{Ticks: 8}}, durationMs, subticks)
+	streamer := ep.Streamer(sr, 440.0, 220.0)
+
+	// Consume subticks 0–2.
+	buf := make([][2]float64, subtickSamples)
+	for range subticks - 1 {
+		streamer.Stream(buf)
+	}
+
+	// Subtick 3 (last): glide must have completed → 440 Hz.
+	bufLast := make([][2]float64, subtickSamples)
+	n, _ := streamer.Stream(bufLast)
+
+	// Reference: direct patch at 440 Hz for the same duration.
+	ref := sineSynth().NewPatch(sr, 440.0, subtickSamples)
+	bufRef := make([][2]float64, subtickSamples)
+	ref.Stream(bufRef)
+
+	cLast := countZeroCrossings(bufLast[:n])
+	cRef := countZeroCrossings(bufRef)
+
+	assert.InDelta(t, float64(cRef), float64(cLast), float64(cRef)*0.15,
+		"last subtick should be at target freq (440 Hz): got %d crossings, reference %d", cLast, cRef)
+}
+
 func TestEffectsPatchPortamentoNoPrevFreq(t *testing.T) {
 	// With portamento active but prevFreq=0, it should behave like no portamento.
 	const sr = beep.SampleRate(44100)
 	const durationMs = 50.0
 	totalSamples := sr.N(time.Duration(durationMs * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{Portamento: PortamentoEffect{Active: true}}, durationMs, 4)
+	ep := NewEffectsPatch(sineSynth(), EffectDefs{Portamento: PortamentoEffect{Ticks: 4}}, durationMs, 4)
 
 	samples := streamAll(ep.Streamer(sr, 440.0, 0))
 	assert.Equal(t, totalSamples, len(samples))

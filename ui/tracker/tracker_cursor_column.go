@@ -8,6 +8,8 @@ func (m *TrackerModel) cursorColumnLabel() string {
 		return "VOL"
 	case columnArpeggio:
 		return "ARP"
+	case columnPortamento:
+		return "GLIDE"
 	case columnEffect:
 		return "FX"
 	case columnParam:

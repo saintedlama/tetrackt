@@ -27,11 +27,12 @@ type RowEffect struct {
 // Row is the frequency-domain representation of a single pattern cell.
 // It contains no display strings — all note data has been converted to Hz.
 type Row struct {
-	Frequency float64 // Hz; 0 = rest (no note)
-	Volume    float64 // 0 = use synth default; range 0..1
-	Arpeggio  audio.ArpeggioEffect
-	Effect    RowEffect
-	Ticks     int // sub-ticks per row; 0 = no subdivision
+	Frequency  float64 // Hz; 0 = rest (no note)
+	Volume     float64 // 0 = use synth default; range 0..1
+	Arpeggio   audio.ArpeggioEffect
+	Portamento int // sub-tick count for the glide; 0 = snap
+	Effect     RowEffect
+	Ticks      int // sub-ticks per row; 0 = no subdivision
 }
 
 // Track is one channel of a Pattern.
@@ -63,12 +64,11 @@ func (s *Pattern) RowTicks(rowIdx int) int {
 }
 
 // rowToEffectDefs converts a Row's effect into the effects.EffectDefs used by
-// EffectsPatch. subticks is the number of sub-ticks in the row; portamento
-// indicates whether the synth has portamento enabled.
-func rowToEffectDefs(row Row, subticks int, portamento bool) effects.EffectDefs {
+// EffectsPatch. subticks is the number of sub-ticks in the row.
+func rowToEffectDefs(row Row, subticks int) effects.EffectDefs {
 	fx := effects.EffectDefs{
 		Arpeggio:   row.Arpeggio,
-		Portamento: effects.PortamentoEffect{Active: portamento},
+		Portamento: effects.PortamentoEffect{Ticks: row.Portamento},
 	}
 
 	switch row.Effect.Type {

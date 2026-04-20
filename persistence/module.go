@@ -219,7 +219,6 @@ type SavedSynth struct {
 	Mixer          SavedMixer          `json:"mixer"`
 	Filter         SavedFilter         `json:"filter"`
 	FilterEnvelope SavedFilterEnvelope `json:"filter_envelope,omitempty"`
-	Portamento     float64             `json:"portamento,omitempty"`
 }
 
 func toSavedSynth(s *audio.Synth) SavedSynth {
@@ -236,7 +235,6 @@ func toSavedSynth(s *audio.Synth) SavedSynth {
 		Mixer:          toSavedMixer(s.Mixer),
 		Filter:         toSavedFilter(s.Filter),
 		FilterEnvelope: toSavedFilterEnvelope(s.FilterEnvelope),
-		Portamento:     s.Portamento,
 	}
 }
 
@@ -254,7 +252,6 @@ func fromSavedSynth(s SavedSynth) *audio.Synth {
 		fromSavedLFO(s.LFO2),
 		fromSavedLFO(s.LFO3),
 	)
-	synth.Portamento = s.Portamento
 	synth.FilterEnvelope = fromSavedFilterEnvelope(s.FilterEnvelope)
 	return synth
 }
@@ -266,6 +263,7 @@ type SavedTrackRow struct {
 	Volume          int    `json:"volume"`
 	Ticks           int    `json:"ticks,omitempty"`
 	ArpeggioOffsets []int  `json:"arpeggio_offsets,omitempty"`
+	Portamento      int    `json:"portamento,omitempty"`
 	EffectType      int    `json:"effect_type,omitempty"`
 	EffectParam     int    `json:"effect_param,omitempty"`
 }
@@ -310,6 +308,7 @@ func TracksToModule(tracker *utracker.TrackerModel) *SavedModule {
 				Volume:          row.Volume,
 				Ticks:           row.Ticks,
 				ArpeggioOffsets: row.Arpeggio.Offsets,
+				Portamento:      row.Portamento,
 				EffectType:      int(row.Effect.Type),
 				EffectParam:     row.Effect.Param,
 			}
@@ -375,6 +374,7 @@ func ModuleToTracks(mod *SavedModule, tracker *utracker.TrackerModel) {
 					Arpeggio: audio.ArpeggioEffect{
 						Offsets: row.ArpeggioOffsets,
 					},
+					Portamento: row.Portamento,
 					Effect: utracker.TrackerEffect{
 						Type:  utracker.EffectType(row.EffectType),
 						Param: row.EffectParam,

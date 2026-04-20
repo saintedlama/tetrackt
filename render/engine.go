@@ -111,7 +111,7 @@ func (e *RenderEngine) startRow(rowIdx int) {
 		if subticks <= 0 {
 			subticks = 1
 		}
-		fx := rowToEffectDefs(row, subticks, track.Synth.Portamento > 0)
+		fx := rowToEffectDefs(row, subticks)
 		ep := effects.NewEffectsPatch(track.Synth, fx, durationMs, subticks)
 		streamer := ep.Streamer(e.cfg.SampleRate, row.Frequency, e.prevFrequencies[trackIdx])
 		e.prevFrequencies[trackIdx] = row.Frequency

@@ -35,7 +35,8 @@ func ToRenderRow(row TrackRow) render.Row {
 
 func toRenderRow(row TrackRow) render.Row {
 	rr := render.Row{
-		Arpeggio: row.Arpeggio,
+		Arpeggio:   row.Arpeggio,
+		Portamento: row.Portamento,
 		Effect: render.RowEffect{
 			Type:  render.EffectType(row.Effect.Type),
 			Param: row.Effect.Param,
