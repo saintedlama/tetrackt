@@ -63,61 +63,61 @@ func TestEffectsPatchSampleCount(t *testing.T) {
 	const durationMs = 100.0
 	totalSamples := sr.N(time.Duration(durationMs * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(silentSynth(), EffectDefs{}, durationMs, 4)
+	ep := NewEffectsPatch(silentSynth(), EffectDefinitions{Ticks: 4}, durationMs)
 	samples := streamAll(ep.Streamer(sr, 440.0, 0))
 
 	assert.Equal(t, totalSamples, len(samples))
 }
 
 func TestEffectsPatchSampleCountOddDivision(t *testing.T) {
-	// 7 subticks into 100ms: remainder must be absorbed so total is exact.
+	// 7 ticks into 100ms: remainder must be absorbed so total is exact.
 	const sr = SampleRate(44100)
 	const durationMs = 100.0
 	totalSamples := sr.N(time.Duration(durationMs * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(silentSynth(), EffectDefs{}, durationMs, 7)
+	ep := NewEffectsPatch(silentSynth(), EffectDefinitions{Ticks: 7}, durationMs)
 	samples := streamAll(ep.Streamer(sr, 440.0, 0))
 
 	assert.Equal(t, totalSamples, len(samples))
 }
 
-func TestEffectsPatchSampleCountSingleSubtick(t *testing.T) {
+func TestEffectsPatchSampleCountSingleTick(t *testing.T) {
 	const sr = SampleRate(44100)
 	const durationMs = 50.0
 	totalSamples := sr.N(time.Duration(durationMs * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(silentSynth(), EffectDefs{}, durationMs, 1)
+	ep := NewEffectsPatch(silentSynth(), EffectDefinitions{Ticks: 1}, durationMs)
 	samples := streamAll(ep.Streamer(sr, 440.0, 0))
 
 	assert.Equal(t, totalSamples, len(samples))
 }
 
-func TestEffectsPatchSubticksClampedToOne(t *testing.T) {
+func TestEffectsPatchTicksClampedToOne(t *testing.T) {
 	const sr = SampleRate(44100)
 	const durationMs = 50.0
 	totalSamples := sr.N(time.Duration(durationMs * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(silentSynth(), EffectDefs{}, durationMs, 0)
+	ep := NewEffectsPatch(silentSynth(), EffectDefinitions{}, durationMs)
 	samples := streamAll(ep.Streamer(sr, 440.0, 0))
 
 	assert.Equal(t, totalSamples, len(samples))
 }
 
 func TestEffectsPatchArpeggio(t *testing.T) {
-	// ARP [0, 12]: subtick 0 = A4 (440 Hz), subtick 1 = A5 (880 Hz).
-	// Expect ~2x zero crossings in subtick 1.
+	// ARP [0, 12]: tick 0 = A4 (440 Hz), tick 1 = A5 (880 Hz).
+	// Expect ~2x zero crossings in tick 1.
 	const sr = SampleRate(44100)
 	const durationMs = 100.0
-	subtickSamples := sr.N(time.Duration(durationMs / 2 * float64(time.Millisecond)))
+	tickSamples := sr.N(time.Duration(durationMs / 2 * float64(time.Millisecond)))
 
 	arp := ArpeggioEffect{Offsets: []int{0, 12}}
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{Arpeggio: arp}, durationMs, 2)
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: 2, Pitch: PitchEffect{Arpeggio: &arp}}, durationMs)
 	streamer := ep.Streamer(sr, 440.0, 0)
 
-	buf0 := make([][2]float64, subtickSamples)
+	buf0 := make([][2]float64, tickSamples)
 	n0, _ := streamer.Stream(buf0)
 
-	buf1 := make([][2]float64, subtickSamples)
+	buf1 := make([][2]float64, tickSamples)
 	n1, _ := streamer.Stream(buf1)
 
 	c0 := countZeroCrossings(buf0[:n0])
@@ -125,91 +125,93 @@ func TestEffectsPatchArpeggio(t *testing.T) {
 
 	ratio := float64(c1) / float64(c0)
 	assert.InDelta(t, 2.0, ratio, 0.3,
-		"expected ~2x crossings for +12 semitone ARP (subtick0=%d subtick1=%d)", c0, c1)
+		"expected ~2x crossings for +12 semitone ARP (tick0=%d tick1=%d)", c0, c1)
 }
 
 func TestEffectsPatchArpeggioWraps(t *testing.T) {
-	// 3-entry ARP over 6 subticks: pattern repeats twice.
+	// 3-entry ARP over 6 ticks: pattern repeats twice.
 	const sr = SampleRate(44100)
 	const durationMs = 120.0
-	subtickSamples := sr.N(time.Duration(durationMs / 6 * float64(time.Millisecond)))
+	tickSamples := sr.N(time.Duration(durationMs / 6 * float64(time.Millisecond)))
 
 	arp := ArpeggioEffect{Offsets: []int{0, 7, 12}}
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{Arpeggio: arp}, durationMs, 6)
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: 6, Pitch: PitchEffect{Arpeggio: &arp}}, durationMs)
 	streamer := ep.Streamer(sr, 440.0, 0)
 
-	buf := make([][2]float64, subtickSamples)
+	buf := make([][2]float64, tickSamples)
 
-	// Collect zero crossings for all 6 subticks.
+	// Collect zero crossings for all 6 ticks.
 	crossings := make([]int, 6)
 	for i := range crossings {
 		n, _ := streamer.Stream(buf)
 		crossings[i] = countZeroCrossings(buf[:n])
 	}
 
-	// Subtick 0 and 3 both use offset 0 → same base frequency → similar count.
+	// tick 0 and 3 both use offset 0 → same base frequency → similar count.
 	ratio03 := float64(crossings[3]) / float64(crossings[0])
 	assert.InDelta(t, 1.0, ratio03, 0.2,
-		"subtick 0 and 3 share offset 0, expected similar crossings (%d vs %d)",
+		"tick 0 and 3 share offset 0, expected similar crossings (%d vs %d)",
 		crossings[0], crossings[3])
 }
 
 func TestEffectsPatchPortamento(t *testing.T) {
-	// Glide from 220 Hz to 440 Hz over 2 subticks.
-	// Subtick 1 should have more zero crossings than subtick 0.
+	// Glide from 220 Hz to 440 Hz over 2 ticks.
+	// tick 1 should have more zero crossings than tick 0.
 	const sr = SampleRate(44100)
 	const durationMs = 100.0
-	subtickSamples := sr.N(time.Duration(durationMs / 2 * float64(time.Millisecond)))
+	tickSamples := sr.N(time.Duration(durationMs / 2 * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{Portamento: PortamentoEffect{Ticks: 2}}, durationMs, 2)
+	port := PortamentoEffect{Ticks: 2}
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: 2, Pitch: PitchEffect{Portamento: &port}}, durationMs)
 	streamer := ep.Streamer(sr, 440.0, 220.0)
 
-	buf0 := make([][2]float64, subtickSamples)
+	buf0 := make([][2]float64, tickSamples)
 	n0, _ := streamer.Stream(buf0)
 
-	buf1 := make([][2]float64, subtickSamples)
+	buf1 := make([][2]float64, tickSamples)
 	n1, _ := streamer.Stream(buf1)
 
 	c0 := countZeroCrossings(buf0[:n0])
 	c1 := countZeroCrossings(buf1[:n1])
 
 	assert.Greater(t, c1, c0,
-		"expected more crossings in subtick 1 (higher freq after glide): subtick0=%d subtick1=%d", c0, c1)
+		"expected more crossings in tick 1 (higher freq after glide): tick0=%d tick1=%d", c0, c1)
 }
 
-func TestEffectsPatchPortamentoTicksExceedsSubticks(t *testing.T) {
-	// Portamento.Ticks (8) greater than row subtick count (4).
-	// The glide should still reach the target frequency by the last subtick.
-	// Verify by checking the final subtick's crossing count matches a
+func TestEffectsPatchPortamentoExceedsTicks(t *testing.T) {
+	// Portamento.Ticks (8) greater than row tick count (4).
+	// The glide should still reach the target frequency by the last tick.
+	// Verify by checking the final tick's crossing count matches a
 	// reference patch playing directly at the target frequency.
 	const sr = SampleRate(44100)
 	const durationMs = 100.0
-	const subticks = 4
-	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+	const ticks = 4
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{Portamento: PortamentoEffect{Ticks: 8}}, durationMs, subticks)
+	port8 := PortamentoEffect{Ticks: 8}
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: ticks, Pitch: PitchEffect{Portamento: &port8}}, durationMs)
 	streamer := ep.Streamer(sr, 440.0, 220.0)
 
-	// Consume subticks 0–2.
-	buf := make([][2]float64, subtickSamples)
-	for range subticks - 1 {
+	// Consume ticks 0–2.
+	buf := make([][2]float64, tickSamples)
+	for range ticks - 1 {
 		streamer.Stream(buf)
 	}
 
-	// Subtick 3 (last): glide must have completed → 440 Hz.
-	bufLast := make([][2]float64, subtickSamples)
+	// tick 3 (last): glide must have completed → 440 Hz.
+	bufLast := make([][2]float64, tickSamples)
 	n, _ := streamer.Stream(bufLast)
 
 	// Reference: direct patch at 440 Hz for the same duration.
-	ref := sineSynth().NewPatch(sr, 440.0, subtickSamples)
-	bufRef := make([][2]float64, subtickSamples)
+	ref := sineSynth().NewPatch(sr, 440.0, tickSamples)
+	bufRef := make([][2]float64, tickSamples)
 	ref.Stream(bufRef)
 
 	cLast := countZeroCrossings(bufLast[:n])
 	cRef := countZeroCrossings(bufRef)
 
 	assert.InDelta(t, float64(cRef), float64(cLast), float64(cRef)*0.15,
-		"last subtick should be at target freq (440 Hz): got %d crossings, reference %d", cLast, cRef)
+		"last tick should be at target freq (440 Hz): got %d crossings, reference %d", cLast, cRef)
 }
 
 func TestEffectsPatchPortamentoNoPrevFreq(t *testing.T) {
@@ -218,61 +220,64 @@ func TestEffectsPatchPortamentoNoPrevFreq(t *testing.T) {
 	const durationMs = 50.0
 	totalSamples := sr.N(time.Duration(durationMs * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{Portamento: PortamentoEffect{Ticks: 4}}, durationMs, 4)
+	port4 := PortamentoEffect{Ticks: 4}
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: 4, Pitch: PitchEffect{Portamento: &port4}}, durationMs)
 
 	samples := streamAll(ep.Streamer(sr, 440.0, 0))
 	assert.Equal(t, totalSamples, len(samples))
 }
 
 func TestEffectsPatchPortamentoDelayedGlide(t *testing.T) {
-	// StartTick=2, Ticks=2 in a 4-subtick note:
-	// subticks 0-1 hold prevFreq (220 Hz), subticks 2-3 glide to noteFreq (440 Hz).
-	// Subtick 0 should have fewer zero crossings than subtick 3 (higher freq after glide).
+	// StartTick=2, Ticks=2 in a 4-tick note:
+	// ticks 0-1 hold prevFreq (220 Hz), ticks 2-3 glide to noteFreq (440 Hz).
+	// tick 0 should have fewer zero crossings than tick 3 (higher freq after glide).
 	const sr = SampleRate(44100)
 	const durationMs = 100.0
-	const subticks = 4
-	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+	const ticks = 4
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
 
+	portDelayed := PortamentoEffect{StartTick: 2, Ticks: 2}
 	ep := NewEffectsPatch(sineSynth(),
-		EffectDefs{Portamento: PortamentoEffect{StartTick: 2, Ticks: 2}},
-		durationMs, subticks)
+		EffectDefinitions{Ticks: ticks, Pitch: PitchEffect{Portamento: &portDelayed}},
+		durationMs)
 	streamer := ep.Streamer(sr, 440.0, 220.0)
 
-	buf := make([][2]float64, subtickSamples)
+	buf := make([][2]float64, tickSamples)
 
 	streamer.Stream(buf)
 	c0 := countZeroCrossings(buf)
 
-	streamer.Stream(buf) // subtick 1: still at prevFreq
+	streamer.Stream(buf) // tick 1: still at prevFreq
 	c1 := countZeroCrossings(buf)
 
-	streamer.Stream(buf) // subtick 2: glide starts
-	streamer.Stream(buf) // subtick 3: glide ends at noteFreq
+	streamer.Stream(buf) // tick 2: glide starts
+	streamer.Stream(buf) // tick 3: glide ends at noteFreq
 	c3 := countZeroCrossings(buf)
 
-	// subticks 0 and 1 both hold prevFreq (220 Hz) → similar crossing counts
+	// ticks 0 and 1 both hold prevFreq (220 Hz) → similar crossing counts
 	assert.InDelta(t, float64(c0), float64(c1), float64(c0)*0.2,
-		"subtick 0 and 1 should hold prevFreq: c0=%d c1=%d", c0, c1)
+		"tick 0 and 1 should hold prevFreq: c0=%d c1=%d", c0, c1)
 
-	// subtick 3 should be near noteFreq (440 Hz) → ~2x crossings
+	// tick 3 should be near noteFreq (440 Hz) → ~2x crossings
 	ratio := float64(c3) / float64(c0)
 	assert.InDelta(t, 2.0, ratio, 0.3,
 		"expected ~2x crossings after glide to 440 Hz: c0=%d c3=%d", c0, c3)
 }
 
 func TestEffectsPatchPortamentoDelayedSnap(t *testing.T) {
-	// StartTick=2, Ticks=0: hold prevFreq (220 Hz) for subticks 0-1, snap to noteFreq at tick 2.
+	// StartTick=2, Ticks=0: hold prevFreq (220 Hz) for ticks 0-1, snap to noteFreq at tick 2.
 	const sr = SampleRate(44100)
 	const durationMs = 100.0
-	const subticks = 4
-	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+	const ticks = 4
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
 
+	portSnap := PortamentoEffect{StartTick: 2, Ticks: 0}
 	ep := NewEffectsPatch(sineSynth(),
-		EffectDefs{Portamento: PortamentoEffect{StartTick: 2, Ticks: 0}},
-		durationMs, subticks)
+		EffectDefinitions{Ticks: ticks, Pitch: PitchEffect{Portamento: &portSnap}},
+		durationMs)
 	streamer := ep.Streamer(sr, 440.0, 220.0)
 
-	buf := make([][2]float64, subtickSamples)
+	buf := make([][2]float64, tickSamples)
 
 	streamer.Stream(buf)
 	c0 := countZeroCrossings(buf) // prevFreq 220 Hz
@@ -286,67 +291,68 @@ func TestEffectsPatchPortamentoDelayedSnap(t *testing.T) {
 	streamer.Stream(buf)
 	c3 := countZeroCrossings(buf) // still noteFreq
 
-	// subticks 0 and 1 at prevFreq → similar
+	// ticks 0 and 1 at prevFreq → similar
 	assert.InDelta(t, float64(c0), float64(c1), float64(c0)*0.2,
-		"subtick 0 and 1 should hold prevFreq: c0=%d c1=%d", c0, c1)
+		"tick 0 and 1 should hold prevFreq: c0=%d c1=%d", c0, c1)
 
-	// subticks 2 and 3 at noteFreq → ~2x crossings vs prevFreq
+	// ticks 2 and 3 at noteFreq → ~2x crossings vs prevFreq
 	ratio2 := float64(c2) / float64(c0)
 	assert.InDelta(t, 2.0, ratio2, 0.3,
 		"expected ~2x crossings after snap: c0=%d c2=%d", c0, c2)
 	assert.InDelta(t, float64(c2), float64(c3), float64(c2)*0.2,
-		"subtick 2 and 3 should both be at noteFreq: c2=%d c3=%d", c2, c3)
+		"tick 2 and 3 should both be at noteFreq: c2=%d c3=%d", c2, c3)
 }
 
 func TestEffectsPatchPortamentoFastGlideThenHold(t *testing.T) {
-	// StartTick=0, Ticks=2 in a 4-subtick note: glide over first 2 ticks, hold at noteFreq.
-	// Subtick 3 should be at noteFreq (440 Hz), ~2x crossings of prevFreq (220 Hz).
+	// StartTick=0, Ticks=2 in a 4-tick note: glide over first 2 ticks, hold at noteFreq.
+	// tick 3 should be at noteFreq (440 Hz), ~2x crossings of prevFreq (220 Hz).
 	const sr = SampleRate(44100)
 	const durationMs = 100.0
-	const subticks = 4
-	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+	const ticks = 4
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
 
+	portFast := PortamentoEffect{StartTick: 0, Ticks: 2}
 	ep := NewEffectsPatch(sineSynth(),
-		EffectDefs{Portamento: PortamentoEffect{StartTick: 0, Ticks: 2}},
-		durationMs, subticks)
+		EffectDefinitions{Ticks: ticks, Pitch: PitchEffect{Portamento: &portFast}},
+		durationMs)
 	streamer := ep.Streamer(sr, 440.0, 220.0)
 
-	buf := make([][2]float64, subtickSamples)
+	buf := make([][2]float64, tickSamples)
 
 	streamer.Stream(buf)
 	c0 := countZeroCrossings(buf) // mid-glide
 
 	streamer.Stream(buf) // glide ends here
-	streamer.Stream(buf) // subtick 2: hold at noteFreq
-	streamer.Stream(buf) // subtick 3: hold at noteFreq
+	streamer.Stream(buf) // tick 2: hold at noteFreq
+	streamer.Stream(buf) // tick 3: hold at noteFreq
 	c3 := countZeroCrossings(buf)
 
 	// Reference: direct patch at 220 Hz to get baseline crossing count
-	refLow := sineSynth().NewPatch(sr, 220.0, subtickSamples)
-	bufRef := make([][2]float64, subtickSamples)
+	refLow := sineSynth().NewPatch(sr, 220.0, tickSamples)
+	bufRef := make([][2]float64, tickSamples)
 	refLow.Stream(bufRef)
 	cRef := countZeroCrossings(bufRef)
 
-	// Subtick 0 is mid-glide so higher than prevFreq
-	assert.Greater(t, c0, cRef, "mid-glide subtick should be above prevFreq crossing rate")
+	// tick 0 is mid-glide so higher than prevFreq
+	assert.Greater(t, c0, cRef, "mid-glide tick should be above prevFreq crossing rate")
 
-	// Subtick 3 should be at noteFreq (~2x prevFreq)
+	// tick 3 should be at noteFreq (~2x prevFreq)
 	ratio := float64(c3) / float64(cRef)
 	assert.InDelta(t, 2.0, ratio, 0.3,
-		"subtick 3 should be at noteFreq after fast glide: c3=%d cRef=%d", c3, cRef)
+		"tick 3 should be at noteFreq after fast glide: c3=%d cRef=%d", c3, cRef)
 }
 
 func TestEffectsPatchVolumeSlideDecreases(t *testing.T) {
-	// A negative delta should fade the note out over subticks.
+	// A negative delta should fade the note out over ticks.
 	// RMS of the second half of the note must be lower than the first.
 	const sr = SampleRate(44100)
 	const durationMs = 100.0
-	const subticks = 8
+	const ticks = 8
 	halfSamples := sr.N(time.Duration(durationMs / 2 * float64(time.Millisecond)))
 
 	// delta = -0.15/tick: after 4 ticks volume = 1 - 4*0.15 = 0.4
 	slide := VolumeSlideEffect{Delta: -0.15}
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{VolumeSlide: slide}, durationMs, subticks)
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: ticks, VolumeSlide: slide}, durationMs)
 	samples := streamAll(ep.Streamer(sr, 440.0, 0))
 
 	firstHalf := rmsSlice(samples[:halfSamples])
@@ -360,80 +366,81 @@ func TestEffectsPatchVolumeSlideClampsAtZero(t *testing.T) {
 	// A very large negative delta should clamp at 0, not go negative.
 	const sr = SampleRate(44100)
 	const durationMs = 100.0
-	const subticks = 4
+	const ticks = 4
 
 	slide := VolumeSlideEffect{Delta: -1.0} // max drop per tick; hits 0 on tick 1
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{VolumeSlide: slide}, durationMs, subticks)
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: ticks, VolumeSlide: slide}, durationMs)
 
-	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
 	streamer := ep.Streamer(sr, 440.0, 0)
 
-	// Skip subtick 0 (volume drops from 1 to 0 on first applySubtickEffects).
-	buf := make([][2]float64, subtickSamples)
+	// Skip tick 0 (audible at initial volume 1.0; slide has not yet stepped).
+	buf := make([][2]float64, tickSamples)
 	streamer.Stream(buf)
 
-	// Remaining subticks 1-3 should be silent (volume clamped at 0).
+	// Remaining ticks 1-3 should be silent (slide drops volume to 0 on tick 1).
 	rest := streamAll(streamer)
 	assert.InDelta(t, 0.0, rmsSlice(rest), 1e-9,
 		"expected silence after volume clamped to zero")
 }
 
 func TestEffectsPatchNoteCut(t *testing.T) {
-	// NoteCut at subtick 1 (out of 3): subtick 0 is audible, subtick 1+ is silent.
+	// NoteCut at tick 1 (out of 3): tick 0 is audible, tick 1+ is silent.
 	const sr = SampleRate(44100)
 	const durationMs = 60.0
-	const subticks = 3
-	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+	const ticks = 3
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{NoteCut: NoteCutEffect{Tick: 1}}, durationMs, subticks)
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: ticks, NoteCut: NoteCutEffect{Tick: 1}}, durationMs)
 	streamer := ep.Streamer(sr, 440.0, 0)
 
-	buf0 := make([][2]float64, subtickSamples)
+	buf0 := make([][2]float64, tickSamples)
 	streamer.Stream(buf0)
 
-	// Subticks 1 and 2 should both be silent.
+	// ticks 1 and 2 should both be silent.
 	rest := streamAll(streamer)
 
 	assert.Greater(t, rmsSlice(buf0), 0.1,
-		"expected audible output in subtick 0 before the cut")
+		"expected audible output in tick 0 before the cut")
 	assert.InDelta(t, 0.0, rmsSlice(rest), 1e-9,
-		"expected silence after NoteCut at subtick 1")
+		"expected silence after NoteCut at tick 1")
 }
 
 func TestEffectsPatchNoteCutDoesNotInteractWithVolumeSlide(t *testing.T) {
 	// When NoteCut fires, subsequent VolumeSlide steps must not re-enable volume.
 	const sr = SampleRate(44100)
 	const durationMs = 80.0
-	const subticks = 4
-	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+	const ticks = 4
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
 
-	fx := EffectDefs{
+	fx := EffectDefinitions{
+		Ticks:       ticks,
 		NoteCut:     NoteCutEffect{Tick: 1},
 		VolumeSlide: VolumeSlideEffect{Delta: 0.5}, // positive slide would raise volume if unchecked
 	}
-	ep := NewEffectsPatch(sineSynth(), EffectDefs(fx), durationMs, subticks)
+	ep := NewEffectsPatch(sineSynth(), fx, durationMs)
 	streamer := ep.Streamer(sr, 440.0, 0)
 
-	buf := make([][2]float64, subtickSamples)
-	streamer.Stream(buf) // subtick 0
+	buf := make([][2]float64, tickSamples)
+	streamer.Stream(buf) // tick 0
 
-	rest := streamAll(streamer) // subticks 1-3: cut fires on 1, slide on 1-3
+	rest := streamAll(streamer) // ticks 1-3: cut fires on 1, slide on 1-3
 
 	assert.InDelta(t, 0.0, rmsSlice(rest), 1e-9,
 		"VolumeSlide must not un-silence a note after NoteCut")
 }
 
 func TestEffectsPatchNoteDelayOutputsSilenceBeforeTick(t *testing.T) {
-	// NoteDelay at tick 2 out of 4: first two subticks must be all zeros.
+	// NoteDelay at tick 2 out of 4: first two ticks must be all zeros.
 	const sr = SampleRate(44100)
 	const durationMs = 80.0
-	const subticks = 4
-	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+	const ticks = 4
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{NoteDelay: NoteDelayEffect{Tick: 2}}, durationMs, subticks)
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: ticks, NoteDelay: NoteDelayEffect{Tick: 2}}, durationMs)
 	streamer := ep.Streamer(sr, 440.0, 0)
 
-	pre := make([][2]float64, subtickSamples*2)
+	pre := make([][2]float64, tickSamples*2)
 	streamer.Stream(pre)
 
 	for i, s := range pre {
@@ -442,19 +449,19 @@ func TestEffectsPatchNoteDelayOutputsSilenceBeforeTick(t *testing.T) {
 }
 
 func TestEffectsPatchNoteDelayPlaysAfterTick(t *testing.T) {
-	// NoteDelay at tick 2: subticks 2-3 must contain actual audio.
+	// NoteDelay at tick 2: ticks 2-3 must contain actual audio.
 	const sr = SampleRate(44100)
 	const durationMs = 80.0
-	const subticks = 4
-	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+	const ticks = 4
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{NoteDelay: NoteDelayEffect{Tick: 2}}, durationMs, subticks)
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: ticks, NoteDelay: NoteDelayEffect{Tick: 2}}, durationMs)
 	streamer := ep.Streamer(sr, 440.0, 0)
 
-	pre := make([][2]float64, subtickSamples*2)
+	pre := make([][2]float64, tickSamples*2)
 	streamer.Stream(pre) // consume the silent pre-delay ticks
 
-	post := streamAll(streamer) // subticks 2-3: should be audible
+	post := streamAll(streamer) // ticks 2-3: should be audible
 	assert.Greater(t, rmsSlice(post), 0.1,
 		"expected audible output after NoteDelay fires")
 }
@@ -465,33 +472,33 @@ func TestEffectsPatchNoteDelaySampleCount(t *testing.T) {
 	const durationMs = 100.0
 	totalSamples := sr.N(time.Duration(durationMs * float64(time.Millisecond)))
 
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{NoteDelay: NoteDelayEffect{Tick: 3}}, durationMs, 8)
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: 8, NoteDelay: NoteDelayEffect{Tick: 3}}, durationMs)
 	samples := streamAll(ep.Streamer(sr, 440.0, 0))
 
 	assert.Equal(t, totalSamples, len(samples))
 }
 
 func TestEffectsPatchNoteDelayEnvelopeStartsAtDelay(t *testing.T) {
-	// With a 40ms attack at sr=1000 and NoteDelay at subtick 1, the attack
+	// With a 40ms attack at sr=1000 and NoteDelay at tick 1, the attack
 	// begins at the delay tick. The first samples after the delay should
 	// have low amplitude (start of attack), not full sustain.
 	const sr = SampleRate(1000) // 1 sample = 1 ms
 	const durationMs = 100.0
-	const subticks = 2
-	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+	const ticks = 2
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
 
 	synth := &Synth{
 		Oscillator1: Oscillator{Type: Sine},
 		Envelope1:   Envelope{Attack: 40 * time.Millisecond, Sustain: 1.0},
 		Mixer:       Mixer{Volume1: 1.0},
 	}
-	ep := NewEffectsPatch(synth, EffectDefs{NoteDelay: NoteDelayEffect{Tick: 1}}, durationMs, subticks)
+	ep := NewEffectsPatch(synth, EffectDefinitions{Ticks: ticks, NoteDelay: NoteDelayEffect{Tick: 1}}, durationMs)
 	streamer := ep.Streamer(sr, 440.0, 0)
 
-	pre := make([][2]float64, subtickSamples)
-	streamer.Stream(pre) // subtick 0: silence
+	pre := make([][2]float64, tickSamples)
+	streamer.Stream(pre) // tick 0: silence
 
-	post := streamAll(streamer) // subtick 1: attack starts here
+	post := streamAll(streamer) // tick 1: attack starts here
 
 	// First 5 samples after delay should have lower amplitude than last 5
 	// (envelope is in early attack vs sustain).
@@ -504,14 +511,14 @@ func TestEffectsPatchNoteDelayEnvelopeStartsAtDelay(t *testing.T) {
 
 func TestEffectsPatchRetriggerRestartsEnvelope(t *testing.T) {
 	// sr=1000 means 1 sample = 1 ms: easy to reason about timing.
-	// 100ms note, 2 subticks → 50 samples each.
+	// 100ms note, 2 ticks → 50 samples each.
 	// 30ms attack: by sample 30 the envelope is at full sustain.
-	// With retrigger, subtick 1 restarts the attack so its first samples
-	// have near-zero amplitude while the last samples of subtick 0 are near full.
+	// With retrigger, tick 1 restarts the attack so its first samples
+	// have near-zero amplitude while the last samples of tick 0 are near full.
 	const sr = SampleRate(1000)
 	const durationMs = 100.0
-	const subticks = 2
-	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+	const ticks = 2
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
 
 	synth := &Synth{
 		Oscillator1: Oscillator{Type: Sine},
@@ -519,17 +526,17 @@ func TestEffectsPatchRetriggerRestartsEnvelope(t *testing.T) {
 		Mixer:       Mixer{Volume1: 1.0},
 	}
 
-	ep := NewEffectsPatch(synth, EffectDefs{RetriggerEnvelope: true}, durationMs, subticks)
+	ep := NewEffectsPatch(synth, EffectDefinitions{Ticks: ticks, RetriggerEnvelope: true}, durationMs)
 	streamer := ep.Streamer(sr, 440.0, 0)
 
-	buf0 := make([][2]float64, subtickSamples)
+	buf0 := make([][2]float64, tickSamples)
 	streamer.Stream(buf0)
 
-	buf1 := make([][2]float64, subtickSamples)
+	buf1 := make([][2]float64, tickSamples)
 	streamer.Stream(buf1)
 
-	// Last 10 samples of subtick 0 should be at sustain (high amplitude).
-	// First 10 samples of subtick 1 should be near the attack floor (low amplitude).
+	// Last 10 samples of tick 0 should be at sustain (high amplitude).
+	// First 10 samples of tick 1 should be near the attack floor (low amplitude).
 	endRMS := rmsSlice(buf0[len(buf0)-10:])
 	startRMS := rmsSlice(buf1[:10])
 
@@ -539,7 +546,7 @@ func TestEffectsPatchRetriggerRestartsEnvelope(t *testing.T) {
 }
 
 func TestEffectsPatchNoEffectsMatchesDirectPatch(t *testing.T) {
-	// With no effects and a single subtick, EffectsPatch must produce the same
+	// With no effects and a single tick, EffectsPatch must produce the same
 	// zero-crossing count as calling Synth.NewPatch directly.
 	const sr = SampleRate(44100)
 	const durationMs = 20.0
@@ -548,7 +555,7 @@ func TestEffectsPatchNoEffectsMatchesDirectPatch(t *testing.T) {
 
 	synth := sineSynth()
 
-	epSamples := streamAll(NewEffectsPatch(synth, EffectDefs{}, durationMs, 1).Streamer(sr, freq, 0))
+	epSamples := streamAll(NewEffectsPatch(synth, EffectDefinitions{Ticks: 1}, durationMs).Streamer(sr, freq, 0))
 
 	directSamples := make([][2]float64, totalSamples)
 	synth.NewPatch(sr, freq, totalSamples).Stream(directSamples)
@@ -563,25 +570,25 @@ func TestEffectsPatchNoEffectsMatchesDirectPatch(t *testing.T) {
 
 func TestEffectsPatchVibratoModulatesFrequency(t *testing.T) {
 	// Vibrato with depth=3 semitones and 1 full cycle over the note.
-	// The frequency should deviate from the base (440 Hz) across subticks.
+	// The frequency should deviate from the base (440 Hz) across ticks.
 	// We verify by checking that the crossing counts are not all identical.
 	const sr = SampleRate(44100)
 	const durationMs = 80.0
-	const subticks = 8
-	subtickSamples := sr.N(time.Duration(durationMs / subticks * float64(time.Millisecond)))
+	const ticks = 8
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
 
 	vib := VibratoEffect{Depth: 3.0, Rate: 1.0}
-	ep := NewEffectsPatch(sineSynth(), EffectDefs{Vibrato: vib}, durationMs, subticks)
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: ticks, Pitch: PitchEffect{Vibrato: &vib}}, durationMs)
 	streamer := ep.Streamer(sr, 440.0, 0)
 
-	crossings := make([]int, subticks)
-	buf := make([][2]float64, subtickSamples)
+	crossings := make([]int, ticks)
+	buf := make([][2]float64, tickSamples)
 	for i := range crossings {
 		n, _ := streamer.Stream(buf)
 		crossings[i] = countZeroCrossings(buf[:n])
 	}
 
-	// At least some subticks should differ (vibrato changes pitch).
+	// At least some ticks should differ (vibrato changes pitch).
 	allEqual := true
 	for i := 1; i < len(crossings); i++ {
 		if crossings[i] != crossings[0] {
@@ -590,4 +597,88 @@ func TestEffectsPatchVibratoModulatesFrequency(t *testing.T) {
 		}
 	}
 	assert.False(t, allEqual, "vibrato should produce varying zero-crossing counts: %v", crossings)
+}
+
+func TestEffectsPatchVolumeReducesAmplitude(t *testing.T) {
+	// Volume at 0.5 should produce ~half the RMS of the same note at full volume.
+	const sr = SampleRate(44100)
+	const durationMs = 50.0
+
+	full := streamAll(NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: 1}, durationMs).Streamer(sr, 440.0, 0))
+	half := streamAll(NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: 1, Volume: VolumeEffect{Level: 0.5, Active: true}}, durationMs).Streamer(sr, 440.0, 0))
+
+	assert.InDelta(t, rmsSlice(full)*0.5, rmsSlice(half), rmsSlice(full)*0.05,
+		"Volume 0.5 should halve RMS: full=%v half=%v", rmsSlice(full), rmsSlice(half))
+}
+
+func TestEffectsPatchVolumeSilence(t *testing.T) {
+	// Volume at 0.0 should produce silence.
+	const sr = SampleRate(44100)
+	const durationMs = 50.0
+
+	samples := streamAll(NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: 1, Volume: VolumeEffect{Level: 0.0, Active: true}}, durationMs).Streamer(sr, 440.0, 0))
+
+	assert.InDelta(t, 0.0, rmsSlice(samples), 1e-9, "Volume 0 should produce silence")
+}
+
+func TestEffectsPatchVolumeInactiveIsFullAmplitude(t *testing.T) {
+	// When Volume is not active the output should match a patch with no effects.
+	const sr = SampleRate(44100)
+	const durationMs = 50.0
+
+	noFX := streamAll(NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: 1}, durationMs).Streamer(sr, 440.0, 0))
+	inactive := streamAll(NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: 1, Volume: VolumeEffect{Level: 0.0, Active: false}}, durationMs).Streamer(sr, 440.0, 0))
+
+	assert.InDelta(t, rmsSlice(noFX), rmsSlice(inactive), rmsSlice(noFX)*0.01,
+		"inactive Volume should not affect amplitude")
+}
+
+func TestEffectsPatchVolumeWithVolumeSlideStartsFromLevel(t *testing.T) {
+	// Volume 0.5 + VolumeSlide delta -0.5 over 2 ticks:
+	// tick 0 starts at 0.5, tick 1 drops to 0.0.
+	// The second half should be silent.
+	const sr = SampleRate(44100)
+	const durationMs = 100.0
+	const ticks = 2
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
+
+	vol := VolumeEffect{Level: 0.5, Active: true}
+	slide := VolumeSlideEffect{Delta: -0.5}
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: ticks, Volume: vol, VolumeSlide: slide}, durationMs)
+	streamer := ep.Streamer(sr, 440.0, 0)
+
+	buf0 := make([][2]float64, tickSamples)
+	streamer.Stream(buf0)
+
+	buf1 := make([][2]float64, tickSamples)
+	streamer.Stream(buf1)
+
+	assert.Greater(t, rmsSlice(buf0), 0.1,
+		"tick 0 at volume 0.5 should be audible")
+	assert.InDelta(t, 0.0, rmsSlice(buf1), 1e-9,
+		"tick 1 should be silent after slide brings volume to 0")
+}
+
+func TestEffectsPatchVolumeWithNoteDelay(t *testing.T) {
+	// NoteDelay at tick 1 + Volume 0.5: the post-delay ticks should play at 0.5.
+	const sr = SampleRate(44100)
+	const durationMs = 80.0
+	const ticks = 4
+	tickSamples := sr.N(time.Duration(durationMs / ticks * float64(time.Millisecond)))
+
+	vol := VolumeEffect{Level: 0.5, Active: true}
+	ep := NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: ticks, Volume: vol, NoteDelay: NoteDelayEffect{Tick: 2}}, durationMs)
+	streamer := ep.Streamer(sr, 440.0, 0)
+
+	// Consume the two silent pre-delay ticks.
+	pre := make([][2]float64, tickSamples*2)
+	streamer.Stream(pre)
+
+	// Post-delay ticks should be audible but quieter than full volume.
+	post := streamAll(streamer)
+	full := streamAll(NewEffectsPatch(sineSynth(), EffectDefinitions{Ticks: 1}, durationMs/ticks*2).Streamer(sr, 440.0, 0))
+
+	assert.Greater(t, rmsSlice(post), 0.1, "post-delay audio should be audible")
+	assert.InDelta(t, rmsSlice(full)*0.5, rmsSlice(post), rmsSlice(full)*0.1,
+		"Volume 0.5 with NoteDelay should halve amplitude vs full: full=%v post=%v", rmsSlice(full), rmsSlice(post))
 }

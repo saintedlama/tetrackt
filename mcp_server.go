@@ -148,7 +148,7 @@ func (s *mcpServer) handleSetNotes(ctx context.Context, request mcp.CallToolRequ
 				if *change.Volume < 0 || *change.Volume > 64 {
 					return nil, fmt.Errorf("volume must be in range 0..64")
 				}
-				cell.Volume = *change.Volume
+				cell.FX.Volume = audio.VolumeEffect{Active: true, Level: float64(*change.Volume) / 64.0}
 			}
 		}
 
@@ -337,26 +337,90 @@ func (s *mcpServer) handleApplyCellEffect(ctx context.Context, request mcp.CallT
 			if *args.Ticks < 1 || *args.Ticks > 32 {
 				return nil, fmt.Errorf("ticks must be in range 1..32")
 			}
-			row.Ticks = *args.Ticks
+			row.FX.Ticks = *args.Ticks
 		}
 
 		if args.ArpeggioOffsets != nil {
-			row.Arpeggio = audio.ArpeggioEffect{Offsets: append([]int(nil), args.ArpeggioOffsets...)}
+			arp := audio.ArpeggioEffect{Offsets: append([]int(nil), args.ArpeggioOffsets...)}
+			row.FX.Pitch = audio.PitchEffect{Arpeggio: &arp}
 		}
 
-		effectParam, err := buildEffectParam(effectType, args)
-		if err != nil {
-			return nil, err
+		ticks := row.FX.Ticks
+		if ticks <= 0 {
+			ticks = 1
 		}
 
-		row.Effect = tracker.TrackerEffect{Type: effectType, Param: effectParam}
+		switch effectType {
+		case tracker.EffectNone:
+			row.FX.VolumeSlide = audio.VolumeSlideEffect{}
+			row.FX.NoteCut = audio.NoteCutEffect{}
+			row.FX.NoteDelay = audio.NoteDelayEffect{}
+		case tracker.EffectVibrato:
+			speed := 4
+			depth := 0
+			if args.Param != nil {
+				if *args.Param < 0 || *args.Param > 255 {
+					return nil, fmt.Errorf("param for vibrato must be in range 0..255")
+				}
+				speed = *args.Param >> 4
+				if speed < 1 {
+					speed = 1
+				}
+				depth = *args.Param & 0xF
+			} else {
+				if args.VibratoSpeed != nil {
+					speed = *args.VibratoSpeed
+				}
+				if args.VibratoDepth != nil {
+					depth = *args.VibratoDepth
+				}
+				if speed < 1 || speed > 15 {
+					return nil, fmt.Errorf("vibrato_speed must be in range 1..15")
+				}
+				if depth < 0 || depth > 15 {
+					return nil, fmt.Errorf("vibrato_depth must be in range 0..15")
+				}
+			}
+			vib := audio.VibratoEffect{
+				Rate:  float64(ticks) / float64(speed),
+				Depth: float64(depth) / 4.0,
+			}
+			row.FX.Pitch = audio.PitchEffect{Vibrato: &vib}
+		case tracker.EffectVolumeSlide:
+			param := 0
+			if args.Param != nil {
+				param = *args.Param
+			}
+			if param < -16 || param > 16 {
+				return nil, fmt.Errorf("param for volume_slide must be in range -16..16")
+			}
+			row.FX.VolumeSlide = audio.VolumeSlideEffect{Delta: float64(param) / 16.0}
+		case tracker.EffectNoteCut:
+			param := 0
+			if args.Param != nil {
+				param = *args.Param
+			}
+			if param < 0 || param > 31 {
+				return nil, fmt.Errorf("param for note_cut must be in range 0..31")
+			}
+			row.FX.NoteCut = audio.NoteCutEffect{Tick: param}
+		case tracker.EffectNoteDelay:
+			param := 0
+			if args.Param != nil {
+				param = *args.Param
+			}
+			if param < 0 || param > 31 {
+				return nil, fmt.Errorf("param for note_delay must be in range 0..31")
+			}
+			row.FX.NoteDelay = audio.NoteDelayEffect{Tick: param}
+		}
+
 		m.dirty = true
 
 		return map[string]any{
-			"track":        args.Track,
-			"row":          args.Row,
-			"effect":       args.Effect,
-			"effect_param": effectParam,
+			"track":  args.Track,
+			"row":    args.Row,
+			"effect": args.Effect,
 		}, nil
 	})
 	if err != nil {
@@ -474,60 +538,6 @@ func parseEffectType(value string) (tracker.EffectType, error) {
 	}
 }
 
-func buildEffectParam(effectType tracker.EffectType, args applyCellEffectArgs) (int, error) {
-	switch effectType {
-	case tracker.EffectNone:
-		return 0, nil
-	case tracker.EffectVibrato:
-		if args.Param != nil {
-			if *args.Param < 0 || *args.Param > 255 {
-				return 0, fmt.Errorf("param for vibrato must be in range 0..255")
-			}
-			return *args.Param, nil
-		}
-
-		speed := 4
-		depth := 0
-		if args.VibratoSpeed != nil {
-			speed = *args.VibratoSpeed
-		}
-		if args.VibratoDepth != nil {
-			depth = *args.VibratoDepth
-		}
-
-		if speed < 1 || speed > 15 {
-			return 0, fmt.Errorf("vibrato_speed must be in range 1..15")
-		}
-		if depth < 0 || depth > 15 {
-			return 0, fmt.Errorf("vibrato_depth must be in range 0..15")
-		}
-
-		return (speed << 4) | (depth & 0xF), nil
-
-	case tracker.EffectVolumeSlide:
-		param := 0
-		if args.Param != nil {
-			param = *args.Param
-		}
-		if param < -16 || param > 16 {
-			return 0, fmt.Errorf("param for volume_slide must be in range -16..16")
-		}
-		return param, nil
-
-	case tracker.EffectNoteCut, tracker.EffectNoteDelay:
-		param := 0
-		if args.Param != nil {
-			param = *args.Param
-		}
-		if param < 0 || param > 31 {
-			return 0, fmt.Errorf("param for %s must be in range 0..31", strings.ToLower(strings.TrimSpace(args.Effect)))
-		}
-		return param, nil
-
-	default:
-		return 0, fmt.Errorf("unsupported effect type")
-	}
-}
 
 func cloneSynth(src *audio.Synth) *audio.Synth {
 	if src == nil {

@@ -110,8 +110,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cursorTrack := tm.CursorTrack()
 				cursorRow := tm.CursorRow()
 				row := tm.Tracks[cursorTrack].Rows[cursorRow]
-				d := tracker.NewRowEffectsDialog(row, cursorTrack, cursorRow)
-				d.FocusForEffect(row.Effect)
+				d := tracker.NewEffectsPanelDialog(cursorTrack, cursorRow, row)
 				return ui.NewDialogModel(d, m, m.width, m.height), nil
 			}
 		case "ctrl+t":
@@ -248,13 +247,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Sync synth panels with the newly selected track
 		m.synth().ApplyTrackChange(msg)
 
-	case tracker.RowEffectsApplied:
+	case tracker.EffectsPanelApplied:
 		tm := m.trackerModel()
 		if msg.TrackIdx < len(tm.Tracks) && msg.RowIdx < tm.NumRows {
-			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Volume = msg.Volume
-			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Arpeggio = msg.Arpeggio
-			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Ticks = msg.Ticks
-			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].Effect = msg.Effect
+			tm.Tracks[msg.TrackIdx].Rows[msg.RowIdx].FX = msg.FX
 		}
 		m.dirty = true
 		return m, nil
@@ -418,12 +414,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// previewTick returns a command that sends a previewTickMsg after one sub-tick delay.
+// previewTick returns a command that sends a previewTickMsg after one full row duration.
 func (m *model) previewTick() tea.Cmd {
-	trackerModel := m.trackerModel()
-	ticks := trackerModel.RowTicks(0)
-	duration := trackerModel.BPM.Duration() / time.Duration(ticks)
-	return tea.Tick(duration, func(t time.Time) tea.Msg {
+	return tea.Tick(m.trackerModel().BPM.Duration(), func(t time.Time) tea.Msg {
 		return previewTickMsg(t)
 	})
 }

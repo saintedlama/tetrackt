@@ -2,6 +2,8 @@ package tracker
 
 import (
 	"fmt"
+	"image/color"
+	"math"
 	"strings"
 	"time"
 
@@ -45,10 +47,18 @@ var (
 	cursorCellStyle = lipgloss.NewStyle().
 			Background(common.ColorSurface).
 			Foreground(common.ColorAccentPrimary)
+)
 
-	nibblePendingCellStyle = lipgloss.NewStyle().
-				Background(common.ColorSurface).
-				Foreground(common.ColorAccentWarning)
+// Per-effect foreground colors used in the VOL and FX sub-columns.
+// Inactive cells ("---") always render in ColorTextDisabled.
+var (
+	fxColorArp        color.Color = common.ColorWhite  // arpeggio  — melodic/harmonic
+	fxColorPortamento color.Color = common.ColorGreen  // portamento — pitch glide
+	fxColorVibrato    color.Color = common.ColorPurple // vibrato    — pitch modulation
+	fxColorVolume     color.Color = common.ColorOrange // volume override (VOL column)
+	fxColorVolSlide   color.Color = common.ColorYellow // volume slide
+	fxColorNoteCut    color.Color = common.ColorPink   // note cut   — timing event
+	fxColorNoteDelay  color.Color = common.ColorPink   // note delay — timing event
 )
 
 type Viewport struct {
@@ -59,7 +69,6 @@ type Viewport struct {
 const DefaultBPM = 160
 const minBPM = 40
 const maxBPM = 300
-const DefaultTicks = 0 // sub-ticks per row default (0 = no subdivision)
 const defaultEditStep = 1
 
 // BPM represents beats per minute with validation and duration calculation.
@@ -101,12 +110,9 @@ func (b BPM) Adjust(delta int) BPM {
 type trackerColumn int
 
 const (
-	columnNote trackerColumn = iota
-	columnVolume
-	columnArpeggio
-	columnPortamento
-	columnEffect
-	columnParam
+	columnNote   trackerColumn = iota
+	columnVolume               // VVV: volume override (V00–VFF, or ---)
+	columnFX                   // FXX: primary non-volume effect (letter + 2-hex param, or ---)
 	trackerColumnCount
 )
 
@@ -125,19 +131,12 @@ type trackerClipboard struct {
 	Cells   [][]TrackRow
 }
 
-// InlineEffectEdit represents an effect command + parameter pair typed inline.
-type InlineEffectEdit struct {
-	Type  EffectType
-	Param int
-}
-
 // TrackerModel represents the state of the tracker pattern editor
 type TrackerModel struct {
 	Tracks    []Track
 	NumRows   int
 	NumTracks int
 
-	// Navigation grid (manages cursor, viewport, selection)
 	// Navigation grid (manages cursor, viewport, selection)
 	nav *navigation.Grid
 
@@ -153,21 +152,10 @@ type TrackerModel struct {
 	CursorCol    trackerColumn
 	EditStep     int
 	clipboard    trackerClipboard
-	nibbleHi     *int
-}
 
-// RowTicks returns the number of sub-ticks for the given row.
-// It returns the first non-zero Ticks value across all tracks at that row,
-// or 0 when none is set.
-func (m *TrackerModel) RowTicks(rowIdx int) int {
-	if rowIdx >= 0 && rowIdx < m.NumRows {
-		for _, track := range m.Tracks {
-			if rowIdx < len(track.Rows) && track.Rows[rowIdx].Ticks > 0 {
-				return track.Rows[rowIdx].Ticks
-			}
-		}
-	}
-	return DefaultTicks
+	// inputBuf accumulates in-progress hex key strokes for VOL and FX columns.
+	// Cleared on any navigation action, tab/shift+tab, and delete.
+	inputBuf string
 }
 
 // Track represents a single track in the pattern
@@ -177,14 +165,11 @@ type Track struct {
 	Rows   []TrackRow
 }
 
-// TrackRow represents a single row in a track
+// TrackRow represents a single row in a track.
+// FX is the sole effects source of truth; inline compact fields have been removed.
 type TrackRow struct {
-	Note       notes.Note
-	Volume     int // 0-64
-	Ticks      int // sub-ticks to play for this row; 0 = no subdivision
-	Arpeggio   audio.ArpeggioEffect
-	Portamento int // sub-tick glide count; 0 = snap
-	Effect     TrackerEffect
+	Note notes.Note
+	FX   audio.EffectDefinitions
 }
 
 // NewTracker creates a new pattern with the specified number of tracks and rows
@@ -208,12 +193,8 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 			),
 			Rows: make([]TrackRow, numRows),
 		}
-		// Initialize all rows with empty data
 		for j := range numRows {
-			tracks[i].Rows[j] = TrackRow{
-				Note:   notes.Off(),
-				Volume: 0,
-			}
+			tracks[i].Rows[j] = TrackRow{Note: notes.Off()}
 		}
 	}
 
@@ -241,7 +222,6 @@ func (m *TrackerModel) Init() tea.Cmd {
 }
 
 func (m *TrackerModel) View() string {
-	// Track editor section
 	var tracks strings.Builder
 
 	// Track headers
@@ -254,15 +234,15 @@ func (m *TrackerModel) View() string {
 			trackHeader = headerStyle.Foreground(common.ColorGray).Render(trackHeader)
 		}
 		tracks.WriteString(trackHeader)
-		tracks.WriteString("            ")
+		tracks.WriteString("  ")
 	}
 	tracks.WriteString("\n")
 
 	// Separator
 	tracks.WriteString("    ")
 	for i := 0; i < m.NumTracks; i++ {
-		tracks.WriteString(strings.Repeat("─", 18))
-		tracks.WriteString("   ")
+		tracks.WriteString(strings.Repeat("─", 11))
+		tracks.WriteString("  ")
 	}
 	tracks.WriteString("\n")
 
@@ -287,54 +267,41 @@ func (m *TrackerModel) View() string {
 		}
 		tracks.WriteString("  ")
 
-		// Track cells
+		// Track cells — NOTE VVV FXX layout; editing handled per sub-column
 		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
 			trackRow := m.Tracks[trackIdx].Rows[row]
-			parts := []string{
-				fmt.Sprintf("%-3s", formatNote(trackRow.Note)),
-				formatVolume(trackRow.Volume),
-				effects.FormatArpeggio(trackRow.Arpeggio),
-				formatPortamento(trackRow.Portamento),
-				effects.Type(trackRow.Effect.Type).Format(),
-				effects.Type(trackRow.Effect.Type).FormatParam(trackRow.Effect.Param),
-			}
-
 			isCursorCell := row == m.nav.CursorRow() && trackIdx == m.nav.CursorTrack()
 			selected := m.nav.IsSelected(row, trackIdx)
-			for colIdx, part := range parts {
-				col := trackerColumn(colIdx)
-				isNibblePending := isCursorCell && m.nibbleHi != nil &&
-					(col == columnVolume || col == columnArpeggio || col == columnPortamento || col == columnParam)
 
-				if isNibblePending && col == m.CursorCol {
-					switch col {
-					case columnVolume:
-						part = formatVolumePending(*m.nibbleHi)
-					case columnArpeggio:
-						part = formatArpPending(*m.nibbleHi)
-					case columnPortamento:
-						part = formatPortamentoPending(*m.nibbleHi)
-					case columnParam:
-						part = formatParamPending(*m.nibbleHi)
-					}
-				}
+			noteStr := fmt.Sprintf("%-3s", formatNote(trackRow.Note))
+			volStr := formatVolume(trackRow.FX)
+			fxStr := formatFX(trackRow.FX)
 
-				styled := cellStyle.Render(part)
-				if selected {
-					styled = common.StyleSelected.Render(part)
-				}
-				if isCursorCell && col == m.CursorCol {
-					if isNibblePending {
-						styled = nibblePendingCellStyle.Render(part)
-					} else {
-						styled = cursorCellStyle.Render(part)
+			volFG := volCellColor(trackRow.FX)
+			fxFG := fxCellColor(trackRow.FX)
+
+			// Overlay partial input buffer on the cursor cell's active sub-column.
+			if isCursorCell && m.inputBuf != "" {
+				switch m.CursorCol {
+				case columnVolume:
+					volStr = "V" + string(m.inputBuf[0]) + "_"
+					volFG = fxColorVolume
+				case columnFX:
+					switch len(m.inputBuf) {
+					case 1:
+						fxStr = string(m.inputBuf[0]) + "__"
+					case 2:
+						fxStr = m.inputBuf + "_"
 					}
-				}
-				tracks.WriteString(styled)
-				if colIdx < len(parts)-1 {
-					tracks.WriteString(" ")
+					fxFG = fxLetterColor(string(m.inputBuf[0]))
 				}
 			}
+
+			tracks.WriteString(styledTrackerCell(noteStr, isCursorCell && m.CursorCol == columnNote, selected, nil))
+			tracks.WriteString(" ")
+			tracks.WriteString(styledTrackerCell(volStr, isCursorCell && m.CursorCol == columnVolume, selected, volFG))
+			tracks.WriteString(" ")
+			tracks.WriteString(styledTrackerCell(fxStr, isCursorCell && m.CursorCol == columnFX, selected, fxFG))
 			tracks.WriteString("  ")
 		}
 		tracks.WriteString("\n")
@@ -357,7 +324,7 @@ func (m *TrackerModel) View() string {
 		}
 	}
 	tracks.WriteString("\n")
-	tracks.WriteString(fmt.Sprintf("Step: %d  Col: %s%s%s", m.EditStep, m.cursorColumnLabel(), loopRange, playback))
+	tracks.WriteString(fmt.Sprintf("Step: %d  Col: %s  %s%s%s", m.EditStep, m.cursorColumnLabel(), m.columnHint(), loopRange, playback))
 
 	return tracks.String()
 }
@@ -376,7 +343,6 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 		edited := false
 		noteEntered := (*TrackerNoteEntered)(nil)
 
-		// Track mode key handling
 		switch keyStr {
 		case "space":
 			row := m.nav.CursorRow()
@@ -399,76 +365,71 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			}
 			return m, nil
 		case "tab":
+			m.inputBuf = ""
 			m.moveSubcolumn(1)
-			m.clearNibbleBuffer()
 			return m, nil
 		case "shift+tab":
+			m.inputBuf = ""
 			m.moveSubcolumn(-1)
-			m.clearNibbleBuffer()
 			return m, nil
 		case "left":
+			m.inputBuf = ""
 			result := m.nav.Move(-1, 0)
-			m.clearNibbleBuffer()
 			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "right":
+			m.inputBuf = ""
 			result := m.nav.Move(1, 0)
-			m.clearNibbleBuffer()
 			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "up":
+			m.inputBuf = ""
 			m.nav.Move(0, -1)
-			m.clearNibbleBuffer()
 		case "down":
+			m.inputBuf = ""
 			m.nav.Move(0, 1)
-			m.clearNibbleBuffer()
 		case "shift+up":
+			m.inputBuf = ""
 			result := m.nav.MoveExtending(0, -1)
-			m.clearNibbleBuffer()
 			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "shift+down":
+			m.inputBuf = ""
 			result := m.nav.MoveExtending(0, 1)
-			m.clearNibbleBuffer()
 			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "shift+left":
+			m.inputBuf = ""
 			result := m.nav.MoveExtending(-1, 0)
-			m.clearNibbleBuffer()
 			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "shift+right":
+			m.inputBuf = ""
 			result := m.nav.MoveExtending(1, 0)
-			m.clearNibbleBuffer()
 			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "home":
+			m.inputBuf = ""
 			m.nav.Move(0, -m.NumRows)
-			m.clearNibbleBuffer()
 		case "end":
+			m.inputBuf = ""
 			m.nav.Move(0, m.NumRows)
-			m.clearNibbleBuffer()
 		case "pgup":
+			m.inputBuf = ""
 			m.nav.Move(0, -m.nav.ViewportHeight())
-			m.clearNibbleBuffer()
 		case "pgdown":
+			m.inputBuf = ""
 			m.nav.Move(0, m.nav.ViewportHeight())
-			m.clearNibbleBuffer()
 		default:
-			nibbleBefore := m.nibbleHi
 			if msg, didEdit := m.handleEditInput(keyStr); didEdit {
 				edited = true
 				noteEntered = msg
-			} else if nibbleBefore == nil && m.nibbleHi != nil {
-				// First nibble buffered — no cell was committed but view must update
-				// to show the pending digit.
-				return m, nil
 			}
 		}
 
@@ -498,54 +459,47 @@ func (m *TrackerModel) handleGlobalEditingKey(key string) bool {
 	switch key {
 	case "ctrl+a":
 		m.nav.SelectAll()
-		m.clearNibbleBuffer()
 		return false
 	case "alt+c":
 		m.copySelectionToClipboard()
-		m.clearNibbleBuffer()
 		return false
 	case "alt+x":
 		m.copySelectionToClipboard()
 		m.clearSelectedCells()
-		m.clearNibbleBuffer()
 		return true
 	case "alt+up", "f8":
 		if m.transposeSelection(1) {
-			m.clearNibbleBuffer()
 			return true
 		}
 	case "alt+down", "f7":
 		if m.transposeSelection(-1) {
-			m.clearNibbleBuffer()
 			return true
 		}
 	case "alt+shift+up", "shift+alt+up", "shift+f8":
 		if m.transposeSelection(12) {
-			m.clearNibbleBuffer()
 			return true
 		}
 	case "alt+shift+down", "shift+alt+down", "shift+f7":
 		if m.transposeSelection(-12) {
-			m.clearNibbleBuffer()
 			return true
 		}
 	case "alt+v":
 		if m.pasteClipboard() {
-			m.clearNibbleBuffer()
 			return true
 		}
 	case "alt+shift+v", "shift+alt+v":
 		if m.pasteClipboardEffectsOnly() {
-			m.clearNibbleBuffer()
+			return true
+		}
+	case "alt+d":
+		if m.duplicateRow() {
 			return true
 		}
 	case "insert":
 		m.insertTrackSpace()
-		m.clearNibbleBuffer()
 		return true
 	case "shift+insert":
 		m.insertGlobalRowSpace()
-		m.clearNibbleBuffer()
 		return true
 	}
 	return false
@@ -562,65 +516,129 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 			row.Note = note
 			entered := &TrackerNoteEntered{Note: note, Row: *row, Synth: m.Tracks[cursorTrack].Synth}
 			m.advanceByEditStep()
-			m.clearNibbleBuffer()
 			return entered, true
 		}
+
 	case columnVolume:
-		if v, ok := parseHexNibble(key); ok {
-			val := m.pushNibble(v)
-			if val != nil {
-				row.Volume = min(64, *val)
+		if _, ok := parseHexNibble(key); ok {
+			m.inputBuf += strings.ToUpper(key)
+			if len(m.inputBuf) == 2 {
+				hi, _ := parseHexNibble(strings.ToLower(string(m.inputBuf[0])))
+				lo, _ := parseHexNibble(strings.ToLower(string(m.inputBuf[1])))
+				hexVal := hi*16 + lo
+				fx := row.FX
+				fx.Volume = audio.VolumeEffect{Active: true, Level: float64(hexVal) / 255.0}
+				row.FX = audio.NewEffectDefinitions(fx)
+				m.inputBuf = ""
 				m.advanceByEditStep()
 				return nil, true
 			}
+			return nil, false // partial — don't advance yet
 		}
-	case columnArpeggio:
-		if v, ok := parseHexNibble(key); ok {
-			val := m.pushNibble(v)
-			if val != nil {
-				o1 := (*val >> 4) & 0xF
-				o2 := *val & 0xF
-				row.Arpeggio = audio.ArpeggioEffect{Offsets: []int{0, o1, o2}}
-				m.advanceByEditStep()
-				return nil, true
-			}
-		}
-	case columnPortamento:
-		if v, ok := parseHexNibble(key); ok {
-			val := m.pushNibble(v)
-			if val != nil {
-				row.Portamento = *val
-				m.advanceByEditStep()
-				return nil, true
-			}
-		}
-	case columnEffect:
-		if typ, ok := effects.ParseKey(key); ok {
-			row.Effect.Type = EffectType(typ)
-			m.clearNibbleBuffer()
-			return nil, true
-		}
-	case columnParam:
-		if v, ok := parseHexNibble(key); ok {
-			val := m.pushNibble(v)
-			if val != nil {
-				if applyInlineEffect(row, row.Effect.Type, *val) {
-					m.advanceByEditStep()
-					return nil, true
-				}
-				m.clearNibbleBuffer()
+
+	case columnFX:
+		if len(m.inputBuf) == 0 {
+			// First char: must be a recognised effect letter.
+			switch strings.ToLower(key) {
+			case "v", "p", "s", "c", "d", "a":
+				m.inputBuf = strings.ToUpper(key)
 				return nil, false
+			}
+		} else if len(m.inputBuf) == 1 {
+			// Second char: first hex digit.
+			if _, ok := parseHexNibble(key); ok {
+				m.inputBuf += strings.ToUpper(key)
+				return nil, false
+			}
+		} else if len(m.inputBuf) == 2 {
+			// Third char: second hex digit — commit the effect.
+			if _, ok := parseHexNibble(key); ok {
+				m.inputBuf += strings.ToUpper(key)
+				hi, _ := parseHexNibble(strings.ToLower(string(m.inputBuf[1])))
+				lo, _ := parseHexNibble(strings.ToLower(string(m.inputBuf[2])))
+				param := hi*16 + lo
+				m.applyFXInput(row, string(m.inputBuf[0]), param)
+				m.inputBuf = ""
+				m.advanceByEditStep()
+				return nil, true
 			}
 		}
 	}
 
 	if key == "delete" {
+		m.inputBuf = ""
 		m.clearCurrentCellField(row)
-		m.clearNibbleBuffer()
 		return nil, true
 	}
 
 	return nil, false
+}
+
+// applyFXInput decodes and writes a 3-char FX command (letter + 2-hex param)
+// into row.FX. Clears all pitch/slide/cut/delay fields first so each entry
+// is a clean replace.
+func (m *TrackerModel) applyFXInput(row *TrackRow, letter string, param int) {
+	row.FX.Pitch = audio.PitchEffect{}
+	row.FX.VolumeSlide = audio.VolumeSlideEffect{}
+	row.FX.NoteCut = audio.NoteCutEffect{}
+	row.FX.NoteDelay = audio.NoteDelayEffect{}
+
+	switch strings.ToLower(letter) {
+	case "v": // Vibrato: hi-nibble = speed (1–F), lo-nibble = depth × 4 (0–F)
+		speed := (param >> 4) & 0xF
+		depth := param & 0xF
+		vib := &audio.VibratoEffect{Rate: float64(speed), Depth: float64(depth) / 4.0}
+		row.FX.Pitch = audio.PitchEffect{Vibrato: vib}
+	case "p": // Portamento: param = glide ticks
+		port := &audio.PortamentoEffect{Ticks: param}
+		row.FX.Pitch = audio.PitchEffect{Portamento: port}
+	case "s": // VolumeSlide: param = signed byte, mapped to [−1, 1]
+		delta := float64(int8(uint8(param))) / 127.0
+		row.FX.VolumeSlide = audio.VolumeSlideEffect{Delta: delta}
+	case "c": // NoteCut: param = tick index at which to cut
+		row.FX.NoteCut = audio.NoteCutEffect{Tick: param}
+	case "d": // NoteDelay: param = tick index at which playback begins
+		row.FX.NoteDelay = audio.NoteDelayEffect{Tick: param}
+	case "a": // Arpeggio preset: hi-nibble = preset (1–5), lo-nibble = step (1–F)
+		if (param >> 4) == 0 {
+			// Preset nibble 0 — clear arp (row.FX.Pitch already zeroed above).
+		} else {
+			ticks := max(1, row.FX.Ticks)
+			result, ok := effects.Apply(effects.ArpPreset, param, ticks)
+			if ok && result.Arpeggio.IsActive() {
+				arp := result.Arpeggio
+				row.FX.Pitch = audio.PitchEffect{Arpeggio: &arp}
+			}
+		}
+	}
+	row.FX = audio.NewEffectDefinitions(row.FX)
+}
+
+// columnHint returns a short status-bar hint for the active sub-column.
+// When there is a partial input buffer it shows the buffer with trailing
+// underscores so the user can see how many more characters are expected.
+func (m *TrackerModel) columnHint() string {
+	if m.inputBuf != "" {
+		switch m.CursorCol {
+		case columnVolume:
+			return "[V" + string(m.inputBuf[0]) + "_]"
+		case columnFX:
+			switch len(m.inputBuf) {
+			case 1:
+				return "[" + string(m.inputBuf[0]) + "__]"
+			case 2:
+				return "[" + m.inputBuf + "_]"
+			}
+		}
+	}
+	switch m.CursorCol {
+	case columnVolume:
+		return "[00–FF]"
+	case columnFX:
+		return "[V/P/S/C/D/A + hex]"
+	default:
+		return ""
+	}
 }
 
 func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
@@ -628,22 +646,12 @@ func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 	case columnNote:
 		row.Note = notes.Off()
 	case columnVolume:
-		row.Volume = 0
-	case columnArpeggio:
-		row.Arpeggio = audio.ArpeggioEffect{}
-	case columnPortamento:
-		row.Portamento = 0
-	case columnEffect:
-		switch row.Effect.Type {
-		case EffectRowTicks:
-			row.Ticks = 0
-		case EffectArpPreset:
-			row.Arpeggio = audio.ArpeggioEffect{}
-		}
-		row.Effect.Type = EffectNone
-		row.Effect.Param = 0
-	case columnParam:
-		_ = applyInlineEffect(row, row.Effect.Type, 0)
+		row.FX.Volume = audio.VolumeEffect{}
+	case columnFX:
+		row.FX.Pitch = audio.PitchEffect{}
+		row.FX.VolumeSlide = audio.VolumeSlideEffect{}
+		row.FX.NoteCut = audio.NoteCutEffect{}
+		row.FX.NoteDelay = audio.NoteDelayEffect{}
 	}
 }
 
@@ -670,7 +678,6 @@ func (m *TrackerModel) moveSubcolumn(delta int) {
 	newTrack := idx / int(trackerColumnCount)
 	m.CursorCol = trackerColumn(idx % int(trackerColumnCount))
 
-	// Update navigation grid if track changed
 	if newTrack != m.nav.CursorTrack() {
 		m.nav.SetCursorPosition(m.nav.CursorRow(), newTrack)
 	}
@@ -739,11 +746,7 @@ func (m *TrackerModel) pasteClipboardEffectsOnly() bool {
 			}
 			src := m.clipboard.Cells[r][t]
 			dst := &m.Tracks[dstTrack].Rows[dstRow]
-			dst.Volume = src.Volume
-			dst.Arpeggio = src.Arpeggio
-			dst.Portamento = src.Portamento
-			dst.Ticks = src.Ticks
-			dst.Effect = src.Effect
+			dst.FX = src.FX
 		}
 	}
 	return true
@@ -762,6 +765,26 @@ func (m *TrackerModel) transposeSelection(semitones int) bool {
 		}
 	}
 	return edited
+}
+
+// duplicateRow copies all tracks at the cursor row into the row that is
+// EditStep rows ahead, then advances the cursor by EditStep.  Returns false
+// (no edit) when the destination row would fall outside the pattern.
+func (m *TrackerModel) duplicateRow() bool {
+	step := m.EditStep
+	if step <= 0 {
+		step = defaultEditStep
+	}
+	src := m.nav.CursorRow()
+	dst := src + step
+	if dst >= m.NumRows {
+		return false
+	}
+	for t := range m.NumTracks {
+		m.Tracks[t].Rows[dst] = m.Tracks[t].Rows[src]
+	}
+	m.advanceByEditStep()
+	return true
 }
 
 func (m *TrackerModel) insertTrackSpace() {
@@ -783,21 +806,6 @@ func (m *TrackerModel) insertGlobalRowSpace() {
 	}
 }
 
-func (m *TrackerModel) clearNibbleBuffer() {
-	m.nibbleHi = nil
-}
-
-func (m *TrackerModel) pushNibble(v int) *int {
-	if m.nibbleHi == nil {
-		hi := v
-		m.nibbleHi = &hi
-		return nil
-	}
-	val := (*m.nibbleHi << 4) | v
-	m.nibbleHi = nil
-	return &val
-}
-
 func (m *TrackerModel) visibleRows() int {
 	chromeRows := 4 // header + separator + padding
 	return m.Viewport.Height - chromeRows
@@ -815,62 +823,134 @@ func formatNote(note notes.Note) string {
 	return fmt.Sprintf("%s%d", note.Base, note.Octave)
 }
 
-// formatVolume formats volume value for display.
-func formatVolume(volume int) string {
-	if volume == 0 {
-		return ".."
-	}
-	return fmt.Sprintf("%02X", volume)
-}
-
-// formatVolumePending renders the first nibble of a volume entry in progress.
-// e.g. hi=3 -> "3."
-func formatVolumePending(hi int) string {
-	return fmt.Sprintf("%X.", hi)
-}
-
-// formatArpPending renders the first nibble of an arpeggio entry in progress.
-// e.g. hi=4 -> "A4."
-func formatArpPending(hi int) string {
-	return fmt.Sprintf("A%X.", hi)
-}
-
-// formatParamPending renders the first nibble of a param entry in progress.
-// e.g. hi=B -> "B."
-func formatParamPending(hi int) string {
-	return fmt.Sprintf("%X.", hi)
-}
-
-// formatPortamento formats the portamento glide count for display.
-// Returns "---" for 0, or "G" followed by two hex digits for non-zero.
-func formatPortamento(p int) string {
-	if p == 0 {
+// formatVolume returns a 3-char display string for the Volume sub-column.
+// "---" when inactive; "VXX" (2 hex digits, 00–FF) when active.
+func formatVolume(fx audio.EffectDefinitions) string {
+	if !fx.Volume.Active {
 		return "---"
 	}
-	return fmt.Sprintf("G%02X", p)
+	level := int(math.Round(fx.Volume.Level * 255))
+	if level < 0 {
+		level = 0
+	}
+	if level > 255 {
+		level = 255
+	}
+	return fmt.Sprintf("V%02X", level)
 }
 
-// formatPortamentoPending renders the first nibble of a portamento entry in progress.
-// e.g. hi=3 -> "G3."
-func formatPortamentoPending(hi int) string {
-	return fmt.Sprintf("G%X.", hi)
+// formatFX returns a 3-char display string for the FX sub-column.
+// Shows the first active non-volume effect using tracker letter conventions,
+// or "---" when no such effect is active.
+// Priority: Arpeggio > Portamento > Vibrato > VolumeSlide > NoteCut > NoteDelay.
+func formatFX(fx audio.EffectDefinitions) string {
+	if p := fx.Pitch.Arpeggio; p != nil && p.IsActive() {
+		return effects.FormatArpeggio(*p)
+	}
+	if p := fx.Pitch.Portamento; p != nil && (p.Ticks > 0 || p.StartTick > 0) {
+		v := p.Ticks
+		if v > 255 {
+			v = 255
+		}
+		return fmt.Sprintf("P%02X", v)
+	}
+	if p := fx.Pitch.Vibrato; p != nil && p.IsActive() {
+		speed := int(p.Rate) & 0xF
+		depth := int(p.Depth*4) & 0xF
+		return fmt.Sprintf("V%X%X", speed, depth)
+	}
+	if fx.VolumeSlide.IsActive() {
+		delta := int(math.Round(fx.VolumeSlide.Delta * 127))
+		return fmt.Sprintf("S%02X", uint8(int8(delta)))
+	}
+	if fx.NoteCut.IsActive() {
+		v := fx.NoteCut.Tick
+		if v > 255 {
+			v = 255
+		}
+		return fmt.Sprintf("C%02X", v)
+	}
+	if fx.NoteDelay.IsActive() {
+		v := fx.NoteDelay.Tick
+		if v > 255 {
+			v = 255
+		}
+		return fmt.Sprintf("D%02X", v)
+	}
+	return "---"
 }
 
-func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {
-	result, ok := effects.Apply(effects.Type(effectType), param, row.Ticks)
-	if !ok {
-		return false
+// styledTrackerCell applies the correct style to a tracker sub-cell string.
+// fg overrides the foreground color for normal and cursor cells; pass nil
+// to use the default foreground.  Selection style always wins over fg.
+func styledTrackerCell(text string, isCursor bool, isSelected bool, fg color.Color) string {
+	if isCursor {
+		s := cursorCellStyle
+		if fg != nil {
+			s = s.Foreground(fg)
+		}
+		return s.Render(text)
 	}
+	if isSelected {
+		return common.StyleSelected.Render(text)
+	}
+	if fg != nil {
+		return lipgloss.NewStyle().Foreground(fg).Render(text)
+	}
+	return cellStyle.Render(text)
+}
 
-	row.Effect = result.Effect
-	if result.Ticks > 0 || effectType == EffectRowTicks {
-		row.Ticks = result.Ticks
+// volCellColor returns the foreground color for the VOL sub-column.
+// Returns ColorTextDisabled when the volume override is inactive ("---").
+func volCellColor(fx audio.EffectDefinitions) color.Color {
+	if fx.Volume.Active {
+		return fxColorVolume
 	}
-	if result.Arpeggio.IsActive() || effectType == EffectArpPreset {
-		row.Arpeggio = result.Arpeggio
-	}
+	return common.ColorTextDisabled
+}
 
-	return true
+// fxCellColor returns the foreground color for the FX sub-column based on
+// which effect is active.  Returns ColorTextDisabled when no effect is active.
+func fxCellColor(fx audio.EffectDefinitions) color.Color {
+	if p := fx.Pitch.Arpeggio; p != nil && p.IsActive() {
+		return fxColorArp
+	}
+	if p := fx.Pitch.Portamento; p != nil && (p.Ticks > 0 || p.StartTick > 0) {
+		return fxColorPortamento
+	}
+	if p := fx.Pitch.Vibrato; p != nil && p.IsActive() {
+		return fxColorVibrato
+	}
+	if fx.VolumeSlide.IsActive() {
+		return fxColorVolSlide
+	}
+	if fx.NoteCut.IsActive() {
+		return fxColorNoteCut
+	}
+	if fx.NoteDelay.IsActive() {
+		return fxColorNoteDelay
+	}
+	return common.ColorTextDisabled
+}
+
+// fxLetterColor maps a single FX column input letter to its effect color,
+// used to colorise the partial input buffer while typing.
+func fxLetterColor(letter string) color.Color {
+	switch strings.ToLower(letter) {
+	case "v":
+		return fxColorVibrato
+	case "p":
+		return fxColorPortamento
+	case "s":
+		return fxColorVolSlide
+	case "c":
+		return fxColorNoteCut
+	case "d":
+		return fxColorNoteDelay
+	case "a":
+		return fxColorArp
+	}
+	return common.ColorTextDisabled
 }
 
 func (m Track) CurrentRow() TrackRow {
