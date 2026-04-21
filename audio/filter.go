@@ -3,8 +3,6 @@ package audio
 import (
 	"math"
 	"time"
-
-	"github.com/gopxl/beep/v2"
 )
 
 // FilterType selects the filter mode.
@@ -56,9 +54,9 @@ func (f Filter) q() float64 {
 	return minQ + (maxQ-minQ)*f.Resonance
 }
 
-// NewFilterStreamer wraps a beep.Streamer with the biquad filter described by f.
+// NewFilterStreamer wraps a Streamer with the biquad filter described by f.
 // If f.Type == FilterOff the original streamer is returned unchanged.
-func NewFilterStreamer(src beep.Streamer, sampleRate beep.SampleRate, f Filter) beep.Streamer {
+func NewFilterStreamer(src Streamer, sampleRate SampleRate, f Filter) Streamer {
 	if f.Type == FilterOff {
 		return src
 	}
@@ -70,7 +68,7 @@ func NewFilterStreamer(src beep.Streamer, sampleRate beep.SampleRate, f Filter) 
 
 // biquadFilter applies a two-pole IIR biquad filter to both stereo channels.
 type biquadFilter struct {
-	src    beep.Streamer
+	src    Streamer
 	coeffs biquadCoeffs
 	// per-channel delay elements
 	x1L, x2L, y1L, y2L float64
@@ -163,7 +161,7 @@ type filterEnvelopeGenerator struct {
 	filter     *biquadFilter
 	lfo        *lfoGenerator
 	baseFilter Filter
-	sampleRate beep.SampleRate
+	sampleRate SampleRate
 	depth      float64
 
 	idx            int
@@ -176,7 +174,7 @@ type filterEnvelopeGenerator struct {
 
 // newFilterEnvelopeGenerator creates a filter pipeline driven by an ADSR
 // envelope. Only call when fe.Depth > 0 and f.Type != FilterOff.
-func newFilterEnvelopeGenerator(src beep.Streamer, sampleRate beep.SampleRate, noteSamples int, f Filter, fe FilterEnvelope, lfo *lfoGenerator) *filterEnvelopeGenerator {
+func newFilterEnvelopeGenerator(src Streamer, sampleRate SampleRate, noteSamples int, f Filter, fe FilterEnvelope, lfo *lfoGenerator) *filterEnvelopeGenerator {
 	sr := float64(sampleRate)
 	attackSamples := int(fe.Attack.Seconds() * sr)
 	decaySamples := int(fe.Decay.Seconds() * sr)

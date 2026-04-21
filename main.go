@@ -67,6 +67,18 @@ func (m model) trackerModel() *tracker.TrackerModel {
 	return m.screens[trackerScreenIdx].(*tracker.TrackerScreen).Tracker
 }
 
+func (m model) playbackIndicator() string {
+	tr := m.trackerModel()
+	if tr.IsPlaying {
+		return lipgloss.NewStyle().
+			Foreground(common.ColorAccentPlay).
+			Render(fmt.Sprintf("PLAY %02d", tr.PlaybackRow))
+	}
+	return lipgloss.NewStyle().
+		Foreground(common.ColorTextMuted).
+		Render("STOP --")
+}
+
 // tickMsg is sent to advance playback
 type tickMsg time.Time
 
@@ -522,8 +534,9 @@ func (m model) View() tea.View {
 	if m.mcpActive {
 		mcpIndicator = lipgloss.NewStyle().Foreground(common.ColorCyan).Render("● MCP") + "  "
 	}
+	playbackIndicator := m.playbackIndicator() + "  "
 	octaveIndicator := lipgloss.NewStyle().Foreground(common.ColorTextMuted).Render(fmt.Sprintf("Oct:%d", m.octave)) + "  "
-	right := lipgloss.JoinHorizontal(lipgloss.Top, mcpIndicator, octaveIndicator, helpHint, "  ", ui.Logo())
+	right := lipgloss.JoinHorizontal(lipgloss.Top, mcpIndicator, playbackIndicator, octaveIndicator, helpHint, "  ", ui.Logo())
 	spacerWidth := m.width - lipgloss.Width(tabBar) - lipgloss.Width(right)
 	if spacerWidth < 0 {
 		spacerWidth = 0

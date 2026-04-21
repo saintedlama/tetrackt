@@ -1,10 +1,12 @@
 package tracker
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tetrackt/tetrackt/audio"
@@ -207,6 +209,18 @@ func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 	assert.True(t, got.Arpeggio.IsActive(), "expected arp copied")
 	assert.Equal(t, EffectVibrato, got.Effect.Type, "expected effect type copied")
 	assert.Equal(t, 0x24, got.Effect.Param, "expected effect param copied")
+}
+
+func TestTrackerViewHeaderMatchesColumnWidths(t *testing.T) {
+	m := NewTracker(3, 4, 80, 24)
+
+	lines := strings.Split(strings.TrimRight(m.View(), "\n"), "\n")
+	require.GreaterOrEqual(t, len(lines), 3, "expected header, separator, and at least one row")
+
+	expectedWidth := 4 + m.NumTracks*m.trackWidth() + (m.NumTracks-1)*trackColumnGap
+	assert.Equal(t, expectedWidth, lipgloss.Width(lines[0]), "header width")
+	assert.Equal(t, expectedWidth, lipgloss.Width(lines[1]), "separator width")
+	assert.Equal(t, expectedWidth, lipgloss.Width(lines[2]), "first row width")
 }
 
 func TestNewBPM_ClampsToValidRange(t *testing.T) {

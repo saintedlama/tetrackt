@@ -1,21 +1,4 @@
 package audio
-
-import (
-	"github.com/gopxl/beep/v2"
-)
-
-// SampleRate is the number of audio samples per second.
-// It is an alias for beep.SampleRate, exposed so callers outside of audio
-// don't need to import beep directly.
-type SampleRate = beep.SampleRate
-
-// Streamer is the interface for pulling audio samples.
-// It is an alias for beep.Streamer, exposed so callers outside of audio
-// don't need to import beep directly.
-type Streamer = beep.Streamer
-
-type StreamerFunc = beep.StreamerFunc
-
 // Synth represents the audio synthesis engine (instrument patch definition).
 type Synth struct {
 	Oscillator1    Oscillator
@@ -61,8 +44,8 @@ func NewSynth(oscillator1 Oscillator, envelope1 Envelope, oscillator2 Oscillator
 //	patch.Reset()              // restart ADSR and LFOs (envelope gate)
 //	patch.Stream(buf)
 //
-// Patch implements beep.Streamer. It automatically stops after noteSamples
-// samples, so no external beep.Take wrapping is needed.
+// Patch implements Streamer. It automatically stops after noteSamples
+// samples so no external wrapping is needed.
 type Patch struct {
 	osc1         *oscillatorGenerator
 	osc2         *oscillatorGenerator
@@ -75,7 +58,7 @@ type Patch struct {
 	env3         *envelopeGenerator
 	filterEnvGen *filterEnvelopeGenerator // nil when FilterEnvelope.Depth == 0 or filter off
 	lfos         []*lfoGenerator
-	pipeline     beep.Streamer
+	pipeline     Streamer
 	noteSamples  int
 	remaining    int
 	volume       float64 // output scalar; 1.0 = unity, 0 = silent
@@ -84,7 +67,7 @@ type Patch struct {
 // NewPatch instantiates a synthesis pipeline at the given frequency.
 // noteSamples defines the total ADSR timeline length; the envelope silences
 // naturally after that many samples, but the caller may keep streaming beyond it.
-func (s *Synth) NewPatch(sampleRate beep.SampleRate, frequency float64, noteSamples int) *Patch {
+func (s *Synth) NewPatch(sampleRate SampleRate, frequency float64, noteSamples int) *Patch {
 	sr := float64(sampleRate)
 
 	osc1 := NewOscillator(s.Oscillator1.Type, frequency, sampleRate, s.Oscillator1.Phase, s.Oscillator1.PulseWidth, s.Oscillator1.Detune, s.Oscillator1.Wavetable, s.Oscillator1.NoisePeriod)
@@ -125,7 +108,7 @@ func (s *Synth) NewPatch(sampleRate beep.SampleRate, frequency float64, noteSamp
 
 	mixed := s.Mixer.Mix(mod1, mod2, mod3)
 	var filterEnvGen *filterEnvelopeGenerator
-	var pipeline beep.Streamer
+	var pipeline Streamer
 	if s.FilterEnvelope.Depth > 0 && s.Filter.Type != FilterOff {
 		pipeline = newFilterEnvelopeGenerator(mixed, sampleRate, noteSamples, s.Filter, s.FilterEnvelope, makeLFO(ModCutoff))
 	} else {
@@ -201,7 +184,7 @@ func (p *Patch) Reset() {
 	p.remaining = p.noteSamples
 }
 
-// Stream implements beep.Streamer — pulls the next samples from the pipeline.
+// Stream implements Streamer — pulls the next samples from the pipeline.
 // It returns false (drained) once noteSamples have been emitted.
 func (p *Patch) Stream(samples [][2]float64) (int, bool) {
 	if p.remaining <= 0 {
@@ -224,7 +207,7 @@ func (p *Patch) Stream(samples [][2]float64) (int, bool) {
 	return n, ok
 }
 
-// Err implements beep.Streamer.
+// Err implements Streamer.
 func (p *Patch) Err() error {
 	return p.pipeline.Err()
 }

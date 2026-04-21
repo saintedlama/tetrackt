@@ -18,8 +18,7 @@ import (
 var (
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(common.ColorAccentPrimary).
-			Padding(0, 1)
+			Foreground(common.ColorAccentPrimary)
 
 	rowNumStyle = lipgloss.NewStyle().
 			Foreground(common.ColorTextDisabled)
@@ -50,6 +49,18 @@ var (
 				Background(common.ColorSurface).
 				Foreground(common.ColorAccentWarning)
 )
+
+const (
+	trackColumnGap = 4
+)
+
+type trackCellRenderArgs struct {
+	row          TrackRow
+	isCursorCell bool
+	selected     bool
+	cursorCol    trackerColumn
+	nibbleHi     *int
+}
 
 type Viewport struct {
 	Width  int
@@ -243,26 +254,31 @@ func (m *TrackerModel) Init() tea.Cmd {
 func (m *TrackerModel) View() string {
 	// Track editor section
 	var tracks strings.Builder
+	trackWidth := m.trackWidth()
 
 	// Track headers
 	tracks.WriteString("    ") // Row number space
 	for i := 0; i < m.NumTracks; i++ {
-		trackHeader := fmt.Sprintf("Track %d", i+1)
+		trackHeader := lipgloss.PlaceHorizontal(trackWidth, lipgloss.Center, fmt.Sprintf("Track %d", i+1))
 		if i == m.nav.CursorTrack() {
 			trackHeader = headerStyle.Render(trackHeader)
 		} else {
 			trackHeader = headerStyle.Foreground(common.ColorGray).Render(trackHeader)
 		}
 		tracks.WriteString(trackHeader)
-		tracks.WriteString("            ")
+		if i < m.NumTracks-1 {
+			tracks.WriteString(strings.Repeat(" ", trackColumnGap))
+		}
 	}
 	tracks.WriteString("\n")
 
 	// Separator
 	tracks.WriteString("    ")
 	for i := 0; i < m.NumTracks; i++ {
-		tracks.WriteString(strings.Repeat("─", 18))
-		tracks.WriteString("   ")
+		tracks.WriteString(strings.Repeat("─", trackWidth))
+		if i < m.NumTracks-1 {
+			tracks.WriteString(strings.Repeat(" ", trackColumnGap))
+		}
 	}
 	tracks.WriteString("\n")
 
@@ -290,52 +306,17 @@ func (m *TrackerModel) View() string {
 		// Track cells
 		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
 			trackRow := m.Tracks[trackIdx].Rows[row]
-			parts := []string{
-				fmt.Sprintf("%-3s", formatNote(trackRow.Note)),
-				formatVolume(trackRow.Volume),
-				effects.FormatArpeggio(trackRow.Arpeggio),
-				formatPortamento(trackRow.Portamento),
-				effects.Type(trackRow.Effect.Type).Format(),
-				effects.Type(trackRow.Effect.Type).FormatParam(trackRow.Effect.Param),
-			}
-
 			isCursorCell := row == m.nav.CursorRow() && trackIdx == m.nav.CursorTrack()
-			selected := m.nav.IsSelected(row, trackIdx)
-			for colIdx, part := range parts {
-				col := trackerColumn(colIdx)
-				isNibblePending := isCursorCell && m.nibbleHi != nil &&
-					(col == columnVolume || col == columnArpeggio || col == columnPortamento || col == columnParam)
-
-				if isNibblePending && col == m.CursorCol {
-					switch col {
-					case columnVolume:
-						part = formatVolumePending(*m.nibbleHi)
-					case columnArpeggio:
-						part = formatArpPending(*m.nibbleHi)
-					case columnPortamento:
-						part = formatPortamentoPending(*m.nibbleHi)
-					case columnParam:
-						part = formatParamPending(*m.nibbleHi)
-					}
-				}
-
-				styled := cellStyle.Render(part)
-				if selected {
-					styled = common.StyleSelected.Render(part)
-				}
-				if isCursorCell && col == m.CursorCol {
-					if isNibblePending {
-						styled = nibblePendingCellStyle.Render(part)
-					} else {
-						styled = cursorCellStyle.Render(part)
-					}
-				}
-				tracks.WriteString(styled)
-				if colIdx < len(parts)-1 {
-					tracks.WriteString(" ")
-				}
+			tracks.WriteString(renderTrackCell(trackCellRenderArgs{
+				row:          trackRow,
+				isCursorCell: isCursorCell,
+				selected:     m.nav.IsSelected(row, trackIdx),
+				cursorCol:    m.CursorCol,
+				nibbleHi:     m.nibbleHi,
+			}))
+			if trackIdx < m.NumTracks-1 {
+				tracks.WriteString(strings.Repeat(" ", trackColumnGap))
 			}
-			tracks.WriteString("  ")
 		}
 		tracks.WriteString("\n")
 	}
@@ -360,6 +341,60 @@ func (m *TrackerModel) View() string {
 	tracks.WriteString(fmt.Sprintf("Step: %d  Col: %s%s%s", m.EditStep, m.cursorColumnLabel(), loopRange, playback))
 
 	return tracks.String()
+}
+
+func (m *TrackerModel) trackWidth() int {
+	return lipgloss.Width(renderTrackCell(trackCellRenderArgs{row: TrackRow{Note: notes.Off()}}))
+}
+
+func renderTrackCell(args trackCellRenderArgs) string {
+	parts := []string{
+		fmt.Sprintf("%-3s", formatNote(args.row.Note)),
+		formatVolume(args.row.Volume),
+		effects.FormatArpeggio(args.row.Arpeggio),
+		formatPortamento(args.row.Portamento),
+		effects.Type(args.row.Effect.Type).Format(),
+		effects.Type(args.row.Effect.Type).FormatParam(args.row.Effect.Param),
+	}
+
+	var b strings.Builder
+	for colIdx, part := range parts {
+		col := trackerColumn(colIdx)
+		isNibblePending := args.isCursorCell && args.nibbleHi != nil &&
+			(col == columnVolume || col == columnArpeggio || col == columnPortamento || col == columnParam)
+
+		if isNibblePending && col == args.cursorCol {
+			switch col {
+			case columnVolume:
+				part = formatVolumePending(*args.nibbleHi)
+			case columnArpeggio:
+				part = formatArpPending(*args.nibbleHi)
+			case columnPortamento:
+				part = formatPortamentoPending(*args.nibbleHi)
+			case columnParam:
+				part = formatParamPending(*args.nibbleHi)
+			}
+		}
+
+		styled := cellStyle.Render(part)
+		if args.selected {
+			styled = common.StyleSelected.Render(part)
+		}
+		if args.isCursorCell && col == args.cursorCol {
+			if isNibblePending {
+				styled = nibblePendingCellStyle.Render(part)
+			} else {
+				styled = cursorCellStyle.Render(part)
+			}
+		}
+
+		b.WriteString(styled)
+		if colIdx < len(parts)-1 {
+			b.WriteString(" ")
+		}
+	}
+
+	return b.String()
 }
 
 func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {

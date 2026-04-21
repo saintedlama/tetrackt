@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gopxl/beep/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +26,7 @@ func TestNewFilterDefaults(t *testing.T) {
 }
 
 func TestFilterOffPassthrough(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	src := ConstantStreamer(1.0)
 	result := NewFilterStreamer(src, sr, Filter{Type: FilterOff, Cutoff: 0.5})
 	require.True(t, reflect.ValueOf(result).Pointer() == reflect.ValueOf(src).Pointer(), "FilterOff should return the original streamer (pointer equality)")
@@ -65,7 +64,7 @@ func TestFilterQResonance(t *testing.T) {
 }
 
 func TestLowPassAttenuatesHighFreq(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	const numSamples = 44100
 
 	// Reference: 1000 Hz sine, no filter
@@ -82,7 +81,7 @@ func TestLowPassAttenuatesHighFreq(t *testing.T) {
 }
 
 func TestHighPassAttenuatesLowFreq(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	const numSamples = 44100
 
 	// Reference: 100 Hz sine, no filter

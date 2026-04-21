@@ -1,10 +1,6 @@
 package audio
 
-import (
-	"math"
-
-	"github.com/gopxl/beep/v2"
-)
+import "math"
 
 // LFOWaveform selects the LFO waveform shape.
 type LFOWaveform string
@@ -100,7 +96,7 @@ type modulatedOscillatorStreamer struct {
 
 // newModulatedOscillatorStreamer wraps osc with optional LFO-driven pitch,
 // pulse-width, and/or detune modulation. Returns osc unchanged when all LFOs are nil.
-func newModulatedOscillatorStreamer(osc *oscillatorGenerator, baseFreq, baseDuty float64, pitchLFO, pwmLFO, detuneLFO *lfoGenerator) beep.Streamer {
+func newModulatedOscillatorStreamer(osc *oscillatorGenerator, baseFreq, baseDuty float64, pitchLFO, pwmLFO, detuneLFO *lfoGenerator) Streamer {
 	if pitchLFO == nil && pwmLFO == nil && detuneLFO == nil {
 		return osc
 	}
@@ -144,13 +140,13 @@ func (m *modulatedOscillatorStreamer) Stream(samples [][2]float64) (int, bool) {
 func (m *modulatedOscillatorStreamer) Err() error { return m.osc.Err() }
 
 type modulatedVolumeStreamer struct {
-	inner beep.Streamer
+	inner Streamer
 	lfo   *lfoGenerator
 }
 
 // newModulatedVolumeStreamer wraps inner with LFO-driven gain modulation.
 // Returns inner unchanged when lfo is nil.
-func newModulatedVolumeStreamer(inner beep.Streamer, lfo *lfoGenerator) beep.Streamer {
+func newModulatedVolumeStreamer(inner Streamer, lfo *lfoGenerator) Streamer {
 	if lfo == nil {
 		return inner
 	}
@@ -176,12 +172,12 @@ type modulatedFilterStreamer struct {
 	filter     *biquadFilter
 	lfo        *lfoGenerator
 	baseFilter Filter
-	sampleRate beep.SampleRate
+	sampleRate SampleRate
 }
 
 // NewModulatedFilterStreamer builds a biquad filter with optional LFO cutoff
 // modulation. Behaves identically to NewFilterStreamer when lfo is nil.
-func NewModulatedFilterStreamer(src beep.Streamer, sampleRate beep.SampleRate, f Filter, lfo *lfoGenerator) beep.Streamer {
+func NewModulatedFilterStreamer(src Streamer, sampleRate SampleRate, f Filter, lfo *lfoGenerator) Streamer {
 	if f.Type == FilterOff {
 		return src
 	}

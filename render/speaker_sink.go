@@ -1,19 +1,22 @@
 package render
 
 import (
+	"io"
+	"math"
 	"sync"
 	"time"
 
-	"github.com/gopxl/beep/v2"
-	"github.com/gopxl/beep/v2/speaker"
+	"github.com/ebitengine/oto/v3"
 	"github.com/tetrackt/tetrackt/audio"
 )
 
 type SpeakerSink struct {
-	mu          sync.Mutex
-	initialized bool
-	sampleRate  audio.SampleRate
-	live        *queuedStreamer
+	mu         sync.Mutex
+	ctx        *oto.Context
+	sampleRate audio.SampleRate
+	live       *queuedReader
+	livePlayer *oto.Player
+	oneShots   []*oto.Player
 }
 
 func NewSpeakerSink(sampleRate audio.SampleRate) *SpeakerSink {
@@ -25,14 +28,25 @@ func NewSpeakerSink(sampleRate audio.SampleRate) *SpeakerSink {
 func (s *SpeakerSink) Begin(sampleRate audio.SampleRate) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.initialized {
-		bufferSize := sampleRate.N(100 * time.Millisecond)
-		speaker.Init(beep.SampleRate(sampleRate), bufferSize)
+	if s.ctx == nil {
+		ctx, readyCh, err := oto.NewContext(&oto.NewContextOptions{
+			SampleRate:   int(sampleRate),
+			ChannelCount: 2,
+			Format:       oto.FormatSignedInt16LE,
+			BufferSize:   100 * time.Millisecond,
+		})
+		if err != nil {
+			return err
+		}
+		<-readyCh
+		s.ctx = ctx
 		s.sampleRate = sampleRate
-		s.initialized = true
 	}
-	s.live = &queuedStreamer{}
-	speaker.Play(s.live)
+	qr := &queuedReader{}
+	player := s.ctx.NewPlayer(qr)
+	player.Play()
+	s.live = qr
+	s.livePlayer = player
 	return nil
 }
 
@@ -52,28 +66,62 @@ func (s *SpeakerSink) Write(samples [][2]float64) error {
 
 func (s *SpeakerSink) End() error {
 	s.mu.Lock()
-	if s.live != nil {
-		s.live.Stop()
-		s.live = nil
-	}
+	player := s.livePlayer
+	s.live = nil
+	s.livePlayer = nil
 	s.mu.Unlock()
+	if player != nil {
+		player.Close()
+	}
 	return nil
 }
 
 func (s *SpeakerSink) Clear() {
 	s.mu.Lock()
-	if s.live != nil {
-		s.live.Stop()
-		s.live = nil
-	}
+	player := s.livePlayer
+	oneShots := s.oneShots
+	s.live = nil
+	s.livePlayer = nil
+	s.oneShots = nil
 	s.mu.Unlock()
-	speaker.Clear()
+	if player != nil {
+		player.Close()
+	}
+	for _, p := range oneShots {
+		p.Close()
+	}
 }
 
 func (s *SpeakerSink) Play(streamer audio.Streamer, globalVolume float64) {
-	speaker.Play(audio.NewVolume(globalVolume).Streamer(streamer))
+	s.mu.Lock()
+	ctx := s.ctx
+	s.mu.Unlock()
+	if ctx == nil {
+		return
+	}
+	r := &pcmReader{streamer: audio.NewVolume(globalVolume).Streamer(streamer)}
+	player := ctx.NewPlayer(r)
+	s.mu.Lock()
+	s.oneShots = append(s.oneShots, player)
+	s.mu.Unlock()
+	player.Play()
+	go func() {
+		for player.IsPlaying() {
+			time.Sleep(time.Millisecond)
+		}
+		player.Close()
+		s.mu.Lock()
+		for i, p := range s.oneShots {
+			if p == player {
+				s.oneShots = append(s.oneShots[:i], s.oneShots[i+1:]...)
+				break
+			}
+		}
+		s.mu.Unlock()
+	}()
 }
 
+// sampleStreamer plays back a pre-rendered slice of samples, used by RenderToStream.
 type sampleStreamer struct {
 	samples [][2]float64
 	offset  int
@@ -99,59 +147,111 @@ func (s *sampleStreamer) Stream(buf [][2]float64) (int, bool) {
 	return total, true
 }
 
-func (s *sampleStreamer) Err() error {
-	return nil
-}
+func (s *sampleStreamer) Err() error { return nil }
 
-type queuedStreamer struct {
+// queuedReader is an io.Reader fed by Write() calls during live pattern playback.
+// When there is no queued audio it returns silence so the oto player stays active.
+type queuedReader struct {
 	mu     sync.Mutex
-	queue  [][2]float64
+	queue  []byte
 	closed bool
-	offset int
 }
 
-func (s *queuedStreamer) Append(samples [][2]float64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed || len(samples) == 0 {
+func (r *queuedReader) Append(samples [][2]float64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
 		return
 	}
-	s.queue = append(s.queue, samples...)
-}
-
-func (s *queuedStreamer) Stop() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.closed = true
-	s.queue = nil
-	s.offset = 0
-}
-
-func (s *queuedStreamer) Stream(buf [][2]float64) (int, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return 0, false
+	for _, s := range samples {
+		l := floatToInt16(s[0])
+		ch := floatToInt16(s[1])
+		r.queue = append(r.queue,
+			byte(uint16(l)),
+			byte(uint16(l)>>8),
+			byte(uint16(ch)),
+			byte(uint16(ch)>>8),
+		)
 	}
-	if len(s.queue) == 0 {
-		for i := range buf {
-			buf[i] = [2]float64{}
+}
+
+func (r *queuedReader) Read(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed && len(r.queue) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, r.queue)
+	r.queue = r.queue[n:]
+	for i := n; i < len(p); i++ {
+		p[i] = 0
+	}
+	return len(p), nil
+}
+
+// pcmReader wraps an audio.Streamer and exposes it as an io.Reader of 16-bit
+// little-endian stereo PCM, used for one-shot note previews in Play().
+type pcmReader struct {
+	streamer audio.Streamer
+	buf      [][2]float64
+	pcm      []byte
+	offset   int
+	done     bool
+}
+
+func (r *pcmReader) Read(p []byte) (int, error) {
+	written := 0
+	for written < len(p) {
+		if r.offset < len(r.pcm) {
+			n := copy(p[written:], r.pcm[r.offset:])
+			r.offset += n
+			written += n
+			continue
 		}
-		return len(buf), true
+		if r.done {
+			for i := written; i < len(p); i++ {
+				p[i] = 0
+			}
+			return len(p), io.EOF
+		}
+		need := (len(p) - written) / 4
+		if need == 0 {
+			break
+		}
+		if need > 512 {
+			need = 512
+		}
+		if len(r.buf) < need {
+			r.buf = make([][2]float64, need)
+		}
+		n, ok := r.streamer.Stream(r.buf[:need])
+		if !ok {
+			r.done = true
+		}
+		if n == 0 {
+			continue
+		}
+		r.pcm = r.pcm[:0]
+		for _, s := range r.buf[:n] {
+			l := floatToInt16(s[0])
+			ch := floatToInt16(s[1])
+			r.pcm = append(r.pcm,
+				byte(uint16(l)),
+				byte(uint16(l)>>8),
+				byte(uint16(ch)),
+				byte(uint16(ch)>>8),
+			)
+		}
+		r.offset = 0
 	}
-
-	n := copy(buf, s.queue)
-	for i := n; i < len(buf); i++ {
-		buf[i] = [2]float64{}
-	}
-	if n == len(s.queue) {
-		s.queue = s.queue[:0]
-	} else {
-		s.queue = append(s.queue[:0], s.queue[n:]...)
-	}
-	return len(buf), true
+	return written, nil
 }
 
-func (s *queuedStreamer) Err() error {
-	return nil
+func floatToInt16(v float64) int16 {
+	if v > 1 {
+		v = 1
+	} else if v < -1 {
+		v = -1
+	}
+	return int16(v * math.MaxInt16)
 }

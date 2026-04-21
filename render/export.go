@@ -2,6 +2,9 @@ package render
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/tetrackt/tetrackt/audio"
 )
@@ -58,5 +61,34 @@ func (s *WAVSink) End() error {
 	if s.outputPath == "" {
 		return fmt.Errorf("render: output path is empty")
 	}
-	return audio.WriteWAV(s.outputPath, s.sampleRate, s.frames)
+	return writeFileAtomically(s.outputPath, func(w io.Writer) error {
+		return EncodeWAV(w, s.sampleRate, s.frames)
+	})
+}
+
+// writeFileAtomically writes to outputPath via a temp file + rename.
+func writeFileAtomically(outputPath string, write func(io.Writer) error) error {
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(outputPath), "tetrackt-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	cleanup := func() { tmp.Close(); os.Remove(tmpPath) }
+	if err := write(tmp); err != nil {
+		cleanup()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	os.Remove(outputPath)
+	if err := os.Rename(tmpPath, outputPath); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	return nil
 }
