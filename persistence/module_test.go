@@ -72,24 +72,24 @@ func TestModuleToTracksPadsToEightWithDefaults(t *testing.T) {
 					audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Dest: audio.ModVolume},
 					audio.LFO{},
 				)),
-				Rows: []SavedTrackRow{{Base: "C", Octave: 4, Volume: 64}},
-			},
-			{
-				Synth: ToSavedSynth(audio.NewSynth(
-					audio.Oscillator{Type: audio.Triangle},
-					audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
-					audio.Oscillator{Type: audio.Silent},
-					audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
-					audio.Oscillator{Type: audio.Silent},
-					audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
-					audio.Mixer{Volume1: 1.0, Volume2: 1.0},
-					audio.NewFilter(),
-					audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Dest: audio.ModPitch},
-					audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Dest: audio.ModVolume},
-					audio.LFO{},
-				)),
-				Rows: []SavedTrackRow{{Base: "E", Octave: 3, Volume: 48}},
-			},
+			Rows: []SavedTrackRow{{Base: "C", Octave: 4}},
+		},
+		{
+			Synth: ToSavedSynth(audio.NewSynth(
+				audio.Oscillator{Type: audio.Triangle},
+				audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
+				audio.Oscillator{Type: audio.Silent},
+				audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
+				audio.Oscillator{Type: audio.Silent},
+				audio.Envelope{Attack: 0, Decay: 0, Sustain: 1, Release: 0},
+				audio.Mixer{Volume1: 1.0, Volume2: 1.0},
+				audio.NewFilter(),
+				audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Dest: audio.ModPitch},
+				audio.LFO{Waveform: audio.LFOSine, Rate: 1.0, Dest: audio.ModVolume},
+				audio.LFO{},
+			)),
+			Rows: []SavedTrackRow{{Base: "E", Octave: 3}},
+		},
 		},
 	}
 
@@ -102,13 +102,13 @@ func TestModuleToTracksPadsToEightWithDefaults(t *testing.T) {
 
 	assert.Equal(t, notes.Off(), m.Tracks[2].Rows[0].Note,
 		"expected padded row to be empty note")
-	assert.Equal(t, 0, m.Tracks[2].Rows[0].Volume,
-		"expected padded row to have zero volume")
+	assert.False(t, m.Tracks[2].Rows[0].FX.Volume.Active,
+		"expected padded row to have no volume effect")
 
 	assert.Equal(t, notes.Off(), m.Tracks[0].Rows[63].Note,
 		"expected padded tail row to be empty note")
-	assert.Equal(t, 0, m.Tracks[0].Rows[63].Volume,
-		"expected padded tail row to have zero volume")
+	assert.False(t, m.Tracks[0].Rows[63].FX.Volume.Active,
+		"expected padded tail row to have no volume effect")
 }
 
 func TestLoadFromBytes(t *testing.T) {
@@ -135,12 +135,12 @@ func TestSaveAndLoad(t *testing.T) {
 		Release: 300 * time.Millisecond,
 	}
 	trackerModel.Tracks[0].Rows[0] = tracker.TrackRow{
-		Note:   notes.NewNote("C", 4),
-		Volume: 64,
+		Note: notes.NewNote("C", 4),
+		FX:   audio.EffectDefinitions{Volume: audio.VolumeEffect{Active: true, Level: 1.0}},
 	}
 	trackerModel.Tracks[0].Rows[1] = tracker.TrackRow{
-		Note:   notes.NewNote("E", 4),
-		Volume: 80,
+		Note: notes.NewNote("E", 4),
+		FX:   audio.EffectDefinitions{Volume: audio.VolumeEffect{Active: true, Level: 0.75}},
 	}
 
 	// Save to a temporary file
@@ -170,9 +170,11 @@ func TestSaveAndLoad(t *testing.T) {
 
 	// Verify row data
 	assert.Equal(t, notes.NewNote("C", 4), newTracker.Tracks[0].Rows[0].Note, "expected Note=C-4")
-	assert.Equal(t, 64, newTracker.Tracks[0].Rows[0].Volume, "expected Volume=64")
+	assert.True(t, newTracker.Tracks[0].Rows[0].FX.Volume.Active, "expected volume active on row 0")
+	assert.InDelta(t, 1.0, newTracker.Tracks[0].Rows[0].FX.Volume.Level, 0.001, "expected Volume.Level=1.0")
 	assert.Equal(t, notes.NewNote("E", 4), newTracker.Tracks[0].Rows[1].Note, "expected Note=E-4")
-	assert.Equal(t, 80, newTracker.Tracks[0].Rows[1].Volume, "expected Volume=80")
+	assert.True(t, newTracker.Tracks[0].Rows[1].FX.Volume.Active, "expected volume active on row 1")
+	assert.InDelta(t, 0.75, newTracker.Tracks[0].Rows[1].FX.Volume.Level, 0.001, "expected Volume.Level=0.75")
 
 	// Verify envelope data
 	assert.Equal(t, 100*time.Millisecond, newTracker.Tracks[0].Synth.Envelope1.Attack, "expected Attack=100ms")

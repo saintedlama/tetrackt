@@ -34,18 +34,9 @@ func ToRenderRow(row TrackRow) render.Row {
 }
 
 func toRenderRow(row TrackRow) render.Row {
-	rr := render.Row{
-		Arpeggio:   row.Arpeggio,
-		Portamento: row.Portamento,
-		Effect: render.RowEffect{
-			Type:  render.EffectType(row.Effect.Type),
-			Param: row.Effect.Param,
-		},
-		Ticks: row.Ticks,
-	}
+	rr := render.Row{FX: row.FX}
 	if !notes.IsOff(row.Note) {
 		rr.Frequency = row.Note.Frequency()
-		rr.Volume = float64(row.Volume) / 64.0
 	}
 	return rr
 }

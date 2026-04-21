@@ -37,12 +37,14 @@ func TestEditStepAdvancesCursor(t *testing.T) {
 	assert.Equal(t, 2, m.nav.CursorRow(), "expected cursor row 2")
 }
 
-func TestTabMovesToNextSubcolumn(t *testing.T) {
+func TestTabMovesToNextTrack(t *testing.T) {
 	m := NewTracker(2, 8, 80, 24)
 	require.Equal(t, columnNote, m.CursorCol, "expected initial note column")
+	require.Equal(t, 0, m.nav.CursorTrack(), "expected initial track 0")
 
 	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	assert.Equal(t, columnVolume, m.CursorCol, "expected volume column after tab")
+	assert.Equal(t, columnNote, m.CursorCol, "expected note column after tab")
+	assert.Equal(t, 1, m.nav.CursorTrack(), "expected track 1 after tab")
 }
 
 func TestInsertTrackSpaceShiftsRowsDown(t *testing.T) {
@@ -120,41 +122,6 @@ func TestParseEffectCommandKeyAliases(t *testing.T) {
 	}
 }
 
-func TestInlineRowTicksCommand(t *testing.T) {
-	m := NewTracker(1, 8, 80, 24)
-	m.CursorCol = columnEffect
-
-	_, _ = m.Update(tea.KeyPressMsg{Text: "5"})
-	assert.Equal(t, EffectRowTicks, m.Tracks[0].Rows[0].Effect.Type, "expected EffectRowTicks")
-
-	m.CursorCol = columnParam
-	_, _ = m.Update(tea.KeyPressMsg{Text: "0"})
-	_, _ = m.Update(tea.KeyPressMsg{Text: "C"})
-
-	row := m.Tracks[0].Rows[0]
-	assert.Equal(t, 12, row.Ticks, "expected ticks=12")
-	assert.Equal(t, 0x0C, row.Effect.Param, "expected effect param 0x0C")
-}
-
-func TestInlineArpPresetCommand(t *testing.T) {
-	m := NewTracker(1, 8, 80, 24)
-
-	// Arp offsets are sized by the row's tick count — set it explicitly.
-	m.Tracks[0].Rows[0].Ticks = 4
-
-	m.CursorCol = columnEffect
-	_, _ = m.Update(tea.KeyPressMsg{Text: "6"}) // EffectArpPreset
-
-	m.CursorCol = columnParam
-	_, _ = m.Update(tea.KeyPressMsg{Text: "1"})
-	_, _ = m.Update(tea.KeyPressMsg{Text: "4"})
-
-	row := m.Tracks[0].Rows[0]
-	assert.Equal(t, EffectArpPreset, row.Effect.Type, "expected EffectArpPreset")
-	assert.True(t, row.Arpeggio.IsActive(), "expected arp offsets to be generated")
-	assert.Len(t, row.Arpeggio.Offsets, 4, "expected 4 offsets matching row tick count")
-}
-
 func TestTransposeAltShiftOrderVariants(t *testing.T) {
 	m := NewTracker(1, 4, 80, 24)
 	m.nav.SetCursorPosition(0, 0)
@@ -178,13 +145,13 @@ func TestTransposeAltShiftOrderVariants(t *testing.T) {
 func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 	m := NewTracker(2, 4, 80, 24)
 
-	// Source cell contains note + effects payload.
+	arp := audio.ArpeggioEffect{Offsets: []int{0, 4, 7}}
+	// Source cell contains note + FX payload.
 	m.Tracks[0].Rows[0] = TrackRow{
-		Note:     notes.Note{Base: notes.BaseE, Octave: 4},
-		Volume:   48,
-		Ticks:    12,
-		Arpeggio: audio.ArpeggioEffect{Offsets: []int{0, 4, 7}},
-		Effect:   TrackerEffect{Type: EffectVibrato, Param: 0x24},
+		Note: notes.Note{Base: notes.BaseE, Octave: 4},
+		FX: audio.EffectDefinitions{
+			Pitch: audio.PitchEffect{Arpeggio: &arp},
+		},
 	}
 
 	// Copy source cell.
@@ -202,11 +169,8 @@ func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 	got := m.Tracks[1].Rows[1]
 	assert.Equal(t, notes.BaseA, got.Note.Base, "expected destination note base A to be preserved")
 	assert.Equal(t, notes.Octave(5), got.Note.Octave, "expected destination note octave 5 to be preserved")
-	assert.Equal(t, 48, got.Volume, "expected volume copied")
-	assert.Equal(t, 12, got.Ticks, "expected ticks copied")
-	assert.True(t, got.Arpeggio.IsActive(), "expected arp copied")
-	assert.Equal(t, EffectVibrato, got.Effect.Type, "expected effect type copied")
-	assert.Equal(t, 0x24, got.Effect.Param, "expected effect param copied")
+	require.NotNil(t, got.FX.Pitch.Arpeggio, "expected arp copied")
+	assert.True(t, got.FX.Pitch.Arpeggio.IsActive(), "expected arp active after copy")
 }
 
 func TestNewBPM_ClampsToValidRange(t *testing.T) {

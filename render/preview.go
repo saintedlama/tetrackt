@@ -24,19 +24,12 @@ func (p *PreviewPlayer) Start(row Row, synth *audio.Synth, rowDuration time.Dura
 		return false
 	}
 
-	subticks := row.Ticks
 	durationMs := float64(rowDuration) / float64(time.Millisecond)
-	fx := rowToEffectDefs(row, subticks)
-	ep := audio.NewEffectsPatch(synth, fx, durationMs, subticks)
+	ep := audio.NewEffectsPatch(synth, row.FX, durationMs)
 	streamer := ep.Streamer(sampleRate, row.Frequency, p.prevFrequency)
 	p.prevFrequency = row.Frequency
 
-	vol := globalVolume
-	if row.Volume > 0 {
-		vol *= row.Volume
-	}
-
-	p.sink.Play(streamer, vol)
+	p.sink.Play(streamer, globalVolume)
 	return false
 }
 

@@ -94,7 +94,6 @@ func (e *RenderEngine) renderRow(rowIdx int, sink RenderSink) error {
 }
 
 func (e *RenderEngine) startRow(rowIdx int) {
-	ticks := e.pattern.RowTicks(rowIdx)
 	durationMs := float64(e.pattern.RowDuration.Milliseconds())
 
 	for trackIdx := 0; trackIdx < e.pattern.NumTracks; trackIdx++ {
@@ -106,20 +105,11 @@ func (e *RenderEngine) startRow(rowIdx int) {
 			continue
 		}
 
-		subticks := ticks
-		if subticks <= 0 {
-			subticks = 1
-		}
-		fx := rowToEffectDefs(row, subticks)
-		ep := audio.NewEffectsPatch(track.Synth, fx, durationMs, subticks)
+		ep := audio.NewEffectsPatch(track.Synth, row.FX, durationMs)
 		streamer := ep.Streamer(e.cfg.SampleRate, row.Frequency, e.prevFrequencies[trackIdx])
 		e.prevFrequencies[trackIdx] = row.Frequency
 
 		vol := e.cfg.GlobalVolume
-		if row.Volume > 0 {
-			vol *= row.Volume
-		}
-
 		if vol != 1.0 {
 			e.activeVoices = append(e.activeVoices, &scaledStreamer{s: streamer, scale: vol})
 		} else {

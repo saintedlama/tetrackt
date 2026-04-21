@@ -11,7 +11,6 @@ import (
 	"github.com/tetrackt/tetrackt/notes"
 	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
-	"github.com/tetrackt/tetrackt/ui/tracker/effects"
 	"github.com/tetrackt/tetrackt/ui/tracker/navigation"
 )
 
@@ -45,10 +44,6 @@ var (
 	cursorCellStyle = lipgloss.NewStyle().
 			Background(common.ColorSurface).
 			Foreground(common.ColorAccentPrimary)
-
-	nibblePendingCellStyle = lipgloss.NewStyle().
-				Background(common.ColorSurface).
-				Foreground(common.ColorAccentWarning)
 )
 
 type Viewport struct {
@@ -59,7 +54,6 @@ type Viewport struct {
 const DefaultBPM = 160
 const minBPM = 40
 const maxBPM = 300
-const DefaultTicks = 0 // sub-ticks per row default (0 = no subdivision)
 const defaultEditStep = 1
 
 // BPM represents beats per minute with validation and duration calculation.
@@ -102,11 +96,6 @@ type trackerColumn int
 
 const (
 	columnNote trackerColumn = iota
-	columnVolume
-	columnArpeggio
-	columnPortamento
-	columnEffect
-	columnParam
 	trackerColumnCount
 )
 
@@ -125,19 +114,12 @@ type trackerClipboard struct {
 	Cells   [][]TrackRow
 }
 
-// InlineEffectEdit represents an effect command + parameter pair typed inline.
-type InlineEffectEdit struct {
-	Type  EffectType
-	Param int
-}
-
 // TrackerModel represents the state of the tracker pattern editor
 type TrackerModel struct {
 	Tracks    []Track
 	NumRows   int
 	NumTracks int
 
-	// Navigation grid (manages cursor, viewport, selection)
 	// Navigation grid (manages cursor, viewport, selection)
 	nav *navigation.Grid
 
@@ -153,21 +135,6 @@ type TrackerModel struct {
 	CursorCol    trackerColumn
 	EditStep     int
 	clipboard    trackerClipboard
-	nibbleHi     *int
-}
-
-// RowTicks returns the number of sub-ticks for the given row.
-// It returns the first non-zero Ticks value across all tracks at that row,
-// or 0 when none is set.
-func (m *TrackerModel) RowTicks(rowIdx int) int {
-	if rowIdx >= 0 && rowIdx < m.NumRows {
-		for _, track := range m.Tracks {
-			if rowIdx < len(track.Rows) && track.Rows[rowIdx].Ticks > 0 {
-				return track.Rows[rowIdx].Ticks
-			}
-		}
-	}
-	return DefaultTicks
 }
 
 // Track represents a single track in the pattern
@@ -177,14 +144,11 @@ type Track struct {
 	Rows   []TrackRow
 }
 
-// TrackRow represents a single row in a track
+// TrackRow represents a single row in a track.
+// FX is the sole effects source of truth; inline compact fields have been removed.
 type TrackRow struct {
-	Note       notes.Note
-	Volume     int // 0-64
-	Ticks      int // sub-ticks to play for this row; 0 = no subdivision
-	Arpeggio   audio.ArpeggioEffect
-	Portamento int // sub-tick glide count; 0 = snap
-	Effect     TrackerEffect
+	Note notes.Note
+	FX   audio.EffectDefinitions
 }
 
 // NewTracker creates a new pattern with the specified number of tracks and rows
@@ -208,12 +172,8 @@ func NewTracker(numTracks, numRows, viewportWidth, viewportHeight int) *TrackerM
 			),
 			Rows: make([]TrackRow, numRows),
 		}
-		// Initialize all rows with empty data
 		for j := range numRows {
-			tracks[i].Rows[j] = TrackRow{
-				Note:   notes.Off(),
-				Volume: 0,
-			}
+			tracks[i].Rows[j] = TrackRow{Note: notes.Off()}
 		}
 	}
 
@@ -241,7 +201,6 @@ func (m *TrackerModel) Init() tea.Cmd {
 }
 
 func (m *TrackerModel) View() string {
-	// Track editor section
 	var tracks strings.Builder
 
 	// Track headers
@@ -254,15 +213,15 @@ func (m *TrackerModel) View() string {
 			trackHeader = headerStyle.Foreground(common.ColorGray).Render(trackHeader)
 		}
 		tracks.WriteString(trackHeader)
-		tracks.WriteString("            ")
+		tracks.WriteString("  ")
 	}
 	tracks.WriteString("\n")
 
 	// Separator
 	tracks.WriteString("    ")
 	for i := 0; i < m.NumTracks; i++ {
-		tracks.WriteString(strings.Repeat("─", 18))
-		tracks.WriteString("   ")
+		tracks.WriteString(strings.Repeat("─", 8))
+		tracks.WriteString("  ")
 	}
 	tracks.WriteString("\n")
 
@@ -287,55 +246,22 @@ func (m *TrackerModel) View() string {
 		}
 		tracks.WriteString("  ")
 
-		// Track cells
+		// Track cells — note only; full inline editing to be redesigned
 		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
 			trackRow := m.Tracks[trackIdx].Rows[row]
-			parts := []string{
-				fmt.Sprintf("%-3s", formatNote(trackRow.Note)),
-				formatVolume(trackRow.Volume),
-				effects.FormatArpeggio(trackRow.Arpeggio),
-				formatPortamento(trackRow.Portamento),
-				effects.Type(trackRow.Effect.Type).Format(),
-				effects.Type(trackRow.Effect.Type).FormatParam(trackRow.Effect.Param),
-			}
-
 			isCursorCell := row == m.nav.CursorRow() && trackIdx == m.nav.CursorTrack()
 			selected := m.nav.IsSelected(row, trackIdx)
-			for colIdx, part := range parts {
-				col := trackerColumn(colIdx)
-				isNibblePending := isCursorCell && m.nibbleHi != nil &&
-					(col == columnVolume || col == columnArpeggio || col == columnPortamento || col == columnParam)
 
-				if isNibblePending && col == m.CursorCol {
-					switch col {
-					case columnVolume:
-						part = formatVolumePending(*m.nibbleHi)
-					case columnArpeggio:
-						part = formatArpPending(*m.nibbleHi)
-					case columnPortamento:
-						part = formatPortamentoPending(*m.nibbleHi)
-					case columnParam:
-						part = formatParamPending(*m.nibbleHi)
-					}
-				}
-
-				styled := cellStyle.Render(part)
-				if selected {
-					styled = common.StyleSelected.Render(part)
-				}
-				if isCursorCell && col == m.CursorCol {
-					if isNibblePending {
-						styled = nibblePendingCellStyle.Render(part)
-					} else {
-						styled = cursorCellStyle.Render(part)
-					}
-				}
-				tracks.WriteString(styled)
-				if colIdx < len(parts)-1 {
-					tracks.WriteString(" ")
-				}
+			part := fmt.Sprintf("%-3s", formatNote(trackRow.Note))
+			styled := cellStyle.Render(part)
+			if selected {
+				styled = common.StyleSelected.Render(part)
 			}
-			tracks.WriteString("  ")
+			if isCursorCell {
+				styled = cursorCellStyle.Render(part)
+			}
+			tracks.WriteString(styled)
+			tracks.WriteString("   ")
 		}
 		tracks.WriteString("\n")
 	}
@@ -376,7 +302,6 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 		edited := false
 		noteEntered := (*TrackerNoteEntered)(nil)
 
-		// Track mode key handling
 		switch keyStr {
 		case "space":
 			row := m.nav.CursorRow()
@@ -400,75 +325,56 @@ func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {
 			return m, nil
 		case "tab":
 			m.moveSubcolumn(1)
-			m.clearNibbleBuffer()
 			return m, nil
 		case "shift+tab":
 			m.moveSubcolumn(-1)
-			m.clearNibbleBuffer()
 			return m, nil
 		case "left":
 			result := m.nav.Move(-1, 0)
-			m.clearNibbleBuffer()
 			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "right":
 			result := m.nav.Move(1, 0)
-			m.clearNibbleBuffer()
 			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "up":
 			m.nav.Move(0, -1)
-			m.clearNibbleBuffer()
 		case "down":
 			m.nav.Move(0, 1)
-			m.clearNibbleBuffer()
 		case "shift+up":
 			result := m.nav.MoveExtending(0, -1)
-			m.clearNibbleBuffer()
 			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "shift+down":
 			result := m.nav.MoveExtending(0, 1)
-			m.clearNibbleBuffer()
 			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "shift+left":
 			result := m.nav.MoveExtending(-1, 0)
-			m.clearNibbleBuffer()
 			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "shift+right":
 			result := m.nav.MoveExtending(1, 0)
-			m.clearNibbleBuffer()
 			if result.TrackChanged {
 				trackChanged = true
 			}
 		case "home":
 			m.nav.Move(0, -m.NumRows)
-			m.clearNibbleBuffer()
 		case "end":
 			m.nav.Move(0, m.NumRows)
-			m.clearNibbleBuffer()
 		case "pgup":
 			m.nav.Move(0, -m.nav.ViewportHeight())
-			m.clearNibbleBuffer()
 		case "pgdown":
 			m.nav.Move(0, m.nav.ViewportHeight())
-			m.clearNibbleBuffer()
 		default:
-			nibbleBefore := m.nibbleHi
 			if msg, didEdit := m.handleEditInput(keyStr); didEdit {
 				edited = true
 				noteEntered = msg
-			} else if nibbleBefore == nil && m.nibbleHi != nil {
-				// First nibble buffered — no cell was committed but view must update
-				// to show the pending digit.
-				return m, nil
 			}
 		}
 
@@ -498,54 +404,43 @@ func (m *TrackerModel) handleGlobalEditingKey(key string) bool {
 	switch key {
 	case "ctrl+a":
 		m.nav.SelectAll()
-		m.clearNibbleBuffer()
 		return false
 	case "alt+c":
 		m.copySelectionToClipboard()
-		m.clearNibbleBuffer()
 		return false
 	case "alt+x":
 		m.copySelectionToClipboard()
 		m.clearSelectedCells()
-		m.clearNibbleBuffer()
 		return true
 	case "alt+up", "f8":
 		if m.transposeSelection(1) {
-			m.clearNibbleBuffer()
 			return true
 		}
 	case "alt+down", "f7":
 		if m.transposeSelection(-1) {
-			m.clearNibbleBuffer()
 			return true
 		}
 	case "alt+shift+up", "shift+alt+up", "shift+f8":
 		if m.transposeSelection(12) {
-			m.clearNibbleBuffer()
 			return true
 		}
 	case "alt+shift+down", "shift+alt+down", "shift+f7":
 		if m.transposeSelection(-12) {
-			m.clearNibbleBuffer()
 			return true
 		}
 	case "alt+v":
 		if m.pasteClipboard() {
-			m.clearNibbleBuffer()
 			return true
 		}
 	case "alt+shift+v", "shift+alt+v":
 		if m.pasteClipboardEffectsOnly() {
-			m.clearNibbleBuffer()
 			return true
 		}
 	case "insert":
 		m.insertTrackSpace()
-		m.clearNibbleBuffer()
 		return true
 	case "shift+insert":
 		m.insertGlobalRowSpace()
-		m.clearNibbleBuffer()
 		return true
 	}
 	return false
@@ -562,61 +457,12 @@ func (m *TrackerModel) handleEditInput(key string) (*TrackerNoteEntered, bool) {
 			row.Note = note
 			entered := &TrackerNoteEntered{Note: note, Row: *row, Synth: m.Tracks[cursorTrack].Synth}
 			m.advanceByEditStep()
-			m.clearNibbleBuffer()
 			return entered, true
-		}
-	case columnVolume:
-		if v, ok := parseHexNibble(key); ok {
-			val := m.pushNibble(v)
-			if val != nil {
-				row.Volume = min(64, *val)
-				m.advanceByEditStep()
-				return nil, true
-			}
-		}
-	case columnArpeggio:
-		if v, ok := parseHexNibble(key); ok {
-			val := m.pushNibble(v)
-			if val != nil {
-				o1 := (*val >> 4) & 0xF
-				o2 := *val & 0xF
-				row.Arpeggio = audio.ArpeggioEffect{Offsets: []int{0, o1, o2}}
-				m.advanceByEditStep()
-				return nil, true
-			}
-		}
-	case columnPortamento:
-		if v, ok := parseHexNibble(key); ok {
-			val := m.pushNibble(v)
-			if val != nil {
-				row.Portamento = *val
-				m.advanceByEditStep()
-				return nil, true
-			}
-		}
-	case columnEffect:
-		if typ, ok := effects.ParseKey(key); ok {
-			row.Effect.Type = EffectType(typ)
-			m.clearNibbleBuffer()
-			return nil, true
-		}
-	case columnParam:
-		if v, ok := parseHexNibble(key); ok {
-			val := m.pushNibble(v)
-			if val != nil {
-				if applyInlineEffect(row, row.Effect.Type, *val) {
-					m.advanceByEditStep()
-					return nil, true
-				}
-				m.clearNibbleBuffer()
-				return nil, false
-			}
 		}
 	}
 
 	if key == "delete" {
 		m.clearCurrentCellField(row)
-		m.clearNibbleBuffer()
 		return nil, true
 	}
 
@@ -627,23 +473,6 @@ func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 	switch m.CursorCol {
 	case columnNote:
 		row.Note = notes.Off()
-	case columnVolume:
-		row.Volume = 0
-	case columnArpeggio:
-		row.Arpeggio = audio.ArpeggioEffect{}
-	case columnPortamento:
-		row.Portamento = 0
-	case columnEffect:
-		switch row.Effect.Type {
-		case EffectRowTicks:
-			row.Ticks = 0
-		case EffectArpPreset:
-			row.Arpeggio = audio.ArpeggioEffect{}
-		}
-		row.Effect.Type = EffectNone
-		row.Effect.Param = 0
-	case columnParam:
-		_ = applyInlineEffect(row, row.Effect.Type, 0)
 	}
 }
 
@@ -670,7 +499,6 @@ func (m *TrackerModel) moveSubcolumn(delta int) {
 	newTrack := idx / int(trackerColumnCount)
 	m.CursorCol = trackerColumn(idx % int(trackerColumnCount))
 
-	// Update navigation grid if track changed
 	if newTrack != m.nav.CursorTrack() {
 		m.nav.SetCursorPosition(m.nav.CursorRow(), newTrack)
 	}
@@ -739,11 +567,7 @@ func (m *TrackerModel) pasteClipboardEffectsOnly() bool {
 			}
 			src := m.clipboard.Cells[r][t]
 			dst := &m.Tracks[dstTrack].Rows[dstRow]
-			dst.Volume = src.Volume
-			dst.Arpeggio = src.Arpeggio
-			dst.Portamento = src.Portamento
-			dst.Ticks = src.Ticks
-			dst.Effect = src.Effect
+			dst.FX = src.FX
 		}
 	}
 	return true
@@ -783,21 +607,6 @@ func (m *TrackerModel) insertGlobalRowSpace() {
 	}
 }
 
-func (m *TrackerModel) clearNibbleBuffer() {
-	m.nibbleHi = nil
-}
-
-func (m *TrackerModel) pushNibble(v int) *int {
-	if m.nibbleHi == nil {
-		hi := v
-		m.nibbleHi = &hi
-		return nil
-	}
-	val := (*m.nibbleHi << 4) | v
-	m.nibbleHi = nil
-	return &val
-}
-
 func (m *TrackerModel) visibleRows() int {
 	chromeRows := 4 // header + separator + padding
 	return m.Viewport.Height - chromeRows
@@ -813,64 +622,6 @@ func formatNote(note notes.Note) string {
 	}
 
 	return fmt.Sprintf("%s%d", note.Base, note.Octave)
-}
-
-// formatVolume formats volume value for display.
-func formatVolume(volume int) string {
-	if volume == 0 {
-		return ".."
-	}
-	return fmt.Sprintf("%02X", volume)
-}
-
-// formatVolumePending renders the first nibble of a volume entry in progress.
-// e.g. hi=3 -> "3."
-func formatVolumePending(hi int) string {
-	return fmt.Sprintf("%X.", hi)
-}
-
-// formatArpPending renders the first nibble of an arpeggio entry in progress.
-// e.g. hi=4 -> "A4."
-func formatArpPending(hi int) string {
-	return fmt.Sprintf("A%X.", hi)
-}
-
-// formatParamPending renders the first nibble of a param entry in progress.
-// e.g. hi=B -> "B."
-func formatParamPending(hi int) string {
-	return fmt.Sprintf("%X.", hi)
-}
-
-// formatPortamento formats the portamento glide count for display.
-// Returns "---" for 0, or "G" followed by two hex digits for non-zero.
-func formatPortamento(p int) string {
-	if p == 0 {
-		return "---"
-	}
-	return fmt.Sprintf("G%02X", p)
-}
-
-// formatPortamentoPending renders the first nibble of a portamento entry in progress.
-// e.g. hi=3 -> "G3."
-func formatPortamentoPending(hi int) string {
-	return fmt.Sprintf("G%X.", hi)
-}
-
-func applyInlineEffect(row *TrackRow, effectType EffectType, param int) bool {
-	result, ok := effects.Apply(effects.Type(effectType), param, row.Ticks)
-	if !ok {
-		return false
-	}
-
-	row.Effect = result.Effect
-	if result.Ticks > 0 || effectType == EffectRowTicks {
-		row.Ticks = result.Ticks
-	}
-	if result.Arpeggio.IsActive() || effectType == EffectArpPreset {
-		row.Arpeggio = result.Arpeggio
-	}
-
-	return true
 }
 
 func (m Track) CurrentRow() TrackRow {

@@ -186,7 +186,7 @@ func (t *TrackerScreen) Help() []ui.HelpSection {
 				{Key: "FX cmd (0..7)", Desc: "0 none, 1 vib, 2 volslide, 3 cut, 4 delay, 5 ticks, 6 cont, 7 arp"},
 				{Key: "FX aliases", Desc: "V S C D T O A in Effect column"},
 				{Key: "FX param", Desc: "2 hex nibbles in Param column"},
-				{Key: "Ctrl+E", Desc: "Advanced row effects editor"},
+				{Key: "Ctrl+E / Ctrl+R", Desc: "Effects panel (pitch, volume & timing)"},
 				{Key: "Delete", Desc: "Clear focused subcolumn"},
 				{Key: "", Desc: ""},
 				{Key: "Shift+Arrows", Desc: "Rectangular selection"},
