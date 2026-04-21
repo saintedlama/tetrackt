@@ -218,9 +218,6 @@ func (ep *EffectsPatch) Streamer(sr SampleRate, freq float64, prevFreq float64) 
 	}
 
 	ticks := ep.effects.Ticks
-	if ticks < 1 {
-		ticks = 1
-	}
 	tickSamples := totalSamples / ticks
 	remainder := totalSamples - tickSamples*ticks
 
