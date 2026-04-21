@@ -321,6 +321,10 @@ func (d *EffectsPanelDialog) adjustFocused(dir int) {
 
 	case epfArpTicks:
 		d.arpTicks = max(epMinArpTicks, min(epMaxArpTicks, d.arpTicks+dir))
+		// If the sequence is now longer than the row tick count, raise ticks to match.
+		if d.arpTicks > d.ticks {
+			d.ticks = d.arpTicks
+		}
 		// Grow or trim the offset slice to match the new tick count.
 		for len(d.arpOffsets) < d.arpTicks {
 			d.arpOffsets = append(d.arpOffsets, 0)

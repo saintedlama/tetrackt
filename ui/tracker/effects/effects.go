@@ -62,19 +62,48 @@ func (t Type) FormatParam(param int) string {
 }
 
 // FormatArpeggio formats an arpeggio effect for display (3 chars).
-// Active arp with offsets [0,4,7] shows "A47"; inactive shows "---".
+// Detected preset arps show "APS" (preset nibble + step nibble as hex);
+// manual arps show "A??"; inactive shows "---".
 func FormatArpeggio(arp audio.ArpeggioEffect) string {
 	if !arp.IsActive() {
 		return "---"
 	}
-	o1, o2 := 0, 0
-	if len(arp.Offsets) > 1 {
-		o1 = arp.Offsets[1] % 10
+	if preset, step, ok := detectArpPreset(arp); ok {
+		return fmt.Sprintf("A%X%X", preset, step)
 	}
-	if len(arp.Offsets) > 2 {
-		o2 = arp.Offsets[2] % 10
+	return "A??"
+}
+
+// slicesEqual reports whether two int slices are identical.
+func slicesEqual(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
 	}
-	return fmt.Sprintf("A%d%d", o1, o2)
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// detectArpPreset tries to identify the preset and step for an arpeggio effect
+// by comparing its offsets against all (preset, step) combinations.
+// Returns preset (1–5), step (1–15), and whether a match was found.
+func detectArpPreset(arp audio.ArpeggioEffect) (preset, step int, ok bool) {
+	if !arp.IsActive() {
+		return 0, 0, false
+	}
+	ticks := len(arp.Offsets)
+	for p := 1; p <= 5; p++ {
+		for s := 1; s <= 15; s++ {
+			offsets := generateArpOffsets(p, ticks, s)
+			if slicesEqual(offsets, arp.Offsets) {
+				return p, s, true
+			}
+		}
+	}
+	return 0, 0, false
 }
 
 // ParseKey parses a single key press into an effect type.
