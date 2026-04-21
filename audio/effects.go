@@ -121,6 +121,59 @@ type EffectDefinitions struct {
 	NoteDelay         NoteDelayEffect
 }
 
+// NewEffectDefinitions returns a validated and clamped copy of fx.
+//
+// Clamping rules:
+//   - Ticks < 1 is set to 1.
+//   - Portamento.StartTick and Portamento.Ticks are clamped to >= 0.
+//   - Vibrato.Depth and Vibrato.Rate are clamped to >= 0.
+//   - Volume.Level is clamped to [0, 1] when Volume is active.
+//   - VolumeSlide.Delta is clamped to [−1, 1].
+//   - NoteCut.Tick and NoteDelay.Tick are clamped to >= 0
+//     (negative values are normalised to 0, which means inactive).
+func NewEffectDefinitions(fx EffectDefinitions) EffectDefinitions {
+	if fx.Ticks < 1 {
+		fx.Ticks = 1
+	}
+
+	if fx.Pitch.Portamento != nil {
+		p := *fx.Pitch.Portamento
+		if p.StartTick < 0 {
+			p.StartTick = 0
+		}
+		if p.Ticks < 0 {
+			p.Ticks = 0
+		}
+		fx.Pitch.Portamento = &p
+	}
+
+	if fx.Pitch.Vibrato != nil {
+		v := *fx.Pitch.Vibrato
+		if v.Depth < 0 {
+			v.Depth = 0
+		}
+		if v.Rate < 0 {
+			v.Rate = 0
+		}
+		fx.Pitch.Vibrato = &v
+	}
+
+	if fx.Volume.Active {
+		fx.Volume.Level = max(0, min(1, fx.Volume.Level))
+	}
+
+	fx.VolumeSlide.Delta = max(-1, min(1, fx.VolumeSlide.Delta))
+
+	if fx.NoteCut.Tick < 0 {
+		fx.NoteCut.Tick = 0
+	}
+	if fx.NoteDelay.Tick < 0 {
+		fx.NoteDelay.Tick = 0
+	}
+
+	return fx
+}
+
 // EffectsPatch couples a Synth with time-aware effect definitions.
 // It knows the note duration in milliseconds and derives the tick count from
 // EffectDefinitions.Ticks (0 is treated as 1), applying effects at each tick
@@ -139,11 +192,12 @@ type EffectsPatch struct {
 
 // NewEffectsPatch creates an EffectsPatch from the given Synth definition, effect
 // definitions, and note duration in milliseconds. The tick count is taken from
-// fx.Ticks; a value less than 1 is treated as 1.
+// fx.Ticks; a value less than 1 is treated as 1. fx is validated and clamped
+// via NewEffectDefinitions before being stored.
 func NewEffectsPatch(synth *Synth, fx EffectDefinitions, durationMs float64) *EffectsPatch {
 	return &EffectsPatch{
 		synth:      synth,
-		effects:    fx,
+		effects:    NewEffectDefinitions(fx),
 		durationMs: durationMs,
 	}
 }

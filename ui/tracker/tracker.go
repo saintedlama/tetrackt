@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/tetrackt/tetrackt/notes"
 	ui "github.com/tetrackt/tetrackt/ui"
 	"github.com/tetrackt/tetrackt/ui/common"
+	"github.com/tetrackt/tetrackt/ui/tracker/effects"
 	"github.com/tetrackt/tetrackt/ui/tracker/navigation"
 )
 
@@ -95,7 +97,9 @@ func (b BPM) Adjust(delta int) BPM {
 type trackerColumn int
 
 const (
-	columnNote trackerColumn = iota
+	columnNote   trackerColumn = iota
+	columnVolume               // VVV: volume override (V00–VFF, or ---)
+	columnFX                   // FXX: primary non-volume effect (letter + 2-hex param, or ---)
 	trackerColumnCount
 )
 
@@ -220,7 +224,7 @@ func (m *TrackerModel) View() string {
 	// Separator
 	tracks.WriteString("    ")
 	for i := 0; i < m.NumTracks; i++ {
-		tracks.WriteString(strings.Repeat("─", 8))
+		tracks.WriteString(strings.Repeat("─", 11))
 		tracks.WriteString("  ")
 	}
 	tracks.WriteString("\n")
@@ -246,22 +250,22 @@ func (m *TrackerModel) View() string {
 		}
 		tracks.WriteString("  ")
 
-		// Track cells — note only; full inline editing to be redesigned
+		// Track cells — NOTE VVV FXX layout; editing handled per sub-column
 		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
 			trackRow := m.Tracks[trackIdx].Rows[row]
 			isCursorCell := row == m.nav.CursorRow() && trackIdx == m.nav.CursorTrack()
 			selected := m.nav.IsSelected(row, trackIdx)
 
-			part := fmt.Sprintf("%-3s", formatNote(trackRow.Note))
-			styled := cellStyle.Render(part)
-			if selected {
-				styled = common.StyleSelected.Render(part)
-			}
-			if isCursorCell {
-				styled = cursorCellStyle.Render(part)
-			}
-			tracks.WriteString(styled)
-			tracks.WriteString("   ")
+			noteStr := fmt.Sprintf("%-3s", formatNote(trackRow.Note))
+			volStr := formatVolume(trackRow.FX)
+			fxStr := formatFX(trackRow.FX)
+
+			tracks.WriteString(styledTrackerCell(noteStr, isCursorCell && m.CursorCol == columnNote, selected))
+			tracks.WriteString(" ")
+			tracks.WriteString(styledTrackerCell(volStr, isCursorCell && m.CursorCol == columnVolume, selected))
+			tracks.WriteString(" ")
+			tracks.WriteString(styledTrackerCell(fxStr, isCursorCell && m.CursorCol == columnFX, selected))
+			tracks.WriteString("  ")
 		}
 		tracks.WriteString("\n")
 	}
@@ -473,6 +477,13 @@ func (m *TrackerModel) clearCurrentCellField(row *TrackRow) {
 	switch m.CursorCol {
 	case columnNote:
 		row.Note = notes.Off()
+	case columnVolume:
+		row.FX.Volume = audio.VolumeEffect{}
+	case columnFX:
+		row.FX.Pitch = audio.PitchEffect{}
+		row.FX.VolumeSlide = audio.VolumeSlideEffect{}
+		row.FX.NoteCut = audio.NoteCutEffect{}
+		row.FX.NoteDelay = audio.NoteDelayEffect{}
 	}
 }
 
@@ -622,6 +633,74 @@ func formatNote(note notes.Note) string {
 	}
 
 	return fmt.Sprintf("%s%d", note.Base, note.Octave)
+}
+
+// formatVolume returns a 3-char display string for the Volume sub-column.
+// "---" when inactive; "VXX" (2 hex digits, 00–FF) when active.
+func formatVolume(fx audio.EffectDefinitions) string {
+	if !fx.Volume.Active {
+		return "---"
+	}
+	level := int(math.Round(fx.Volume.Level * 255))
+	if level < 0 {
+		level = 0
+	}
+	if level > 255 {
+		level = 255
+	}
+	return fmt.Sprintf("V%02X", level)
+}
+
+// formatFX returns a 3-char display string for the FX sub-column.
+// Shows the first active non-volume effect using tracker letter conventions,
+// or "---" when no such effect is active.
+// Priority: Arpeggio > Portamento > Vibrato > VolumeSlide > NoteCut > NoteDelay.
+func formatFX(fx audio.EffectDefinitions) string {
+	if p := fx.Pitch.Arpeggio; p != nil && p.IsActive() {
+		return effects.FormatArpeggio(*p)
+	}
+	if p := fx.Pitch.Portamento; p != nil && (p.Ticks > 0 || p.StartTick > 0) {
+		v := p.Ticks
+		if v > 255 {
+			v = 255
+		}
+		return fmt.Sprintf("P%02X", v)
+	}
+	if p := fx.Pitch.Vibrato; p != nil && p.IsActive() {
+		speed := int(p.Rate) & 0xF
+		depth := int(p.Depth*4) & 0xF
+		return fmt.Sprintf("V%X%X", speed, depth)
+	}
+	if fx.VolumeSlide.IsActive() {
+		delta := int(math.Round(fx.VolumeSlide.Delta * 127))
+		return fmt.Sprintf("S%02X", uint8(int8(delta)))
+	}
+	if fx.NoteCut.IsActive() {
+		v := fx.NoteCut.Tick
+		if v > 255 {
+			v = 255
+		}
+		return fmt.Sprintf("C%02X", v)
+	}
+	if fx.NoteDelay.IsActive() {
+		v := fx.NoteDelay.Tick
+		if v > 255 {
+			v = 255
+		}
+		return fmt.Sprintf("D%02X", v)
+	}
+	return "---"
+}
+
+// styledTrackerCell applies the correct style to a tracker sub-cell string.
+func styledTrackerCell(text string, isCursor bool, isSelected bool) string {
+	if isCursor {
+		return cursorCellStyle.Render(text)
+	}
+	if isSelected {
+		return common.StyleSelected.Render(text)
+	}
+	return cellStyle.Render(text)
 }
 
 func (m Track) CurrentRow() TrackRow {

@@ -40,21 +40,21 @@ var epPitchModeNames = []string{"None", "Arpeggio", "Portamento", "Vibrato"}
 type epFieldKind int
 
 const (
-	epfPitchMode    epFieldKind = iota // pitch mode selector (always visible)
-	epfTicks                           // row tick count (always visible, shared by all pitch effects)
-	epfArpTicks                        // arp: number of offsets in the sequence (may loop within ticks)
-	epfArpFillPreset                   // arp: pattern generator to use when filling offsets
-	epfArpFillStep                     // arp: semitone step between pattern degrees
-	epfArpOffset                       // arp: one semitone offset; offsetIdx selects which
-	epfPortStart                       // portamento: sub-tick where glide begins
-	epfPortTicks                       // portamento: sub-ticks for the glide
-	epfVibratoDepth                    // vibrato: peak deviation in semitones
-	epfVibratoRate                     // vibrato: sine oscillations per note
-	epfRetrigger                       // retrigger ADSR at every sub-tick boundary
-	epfVolume                          // volume: initial playback volume level
-	epfVolSlide                        // volume slide: per-tick delta
-	epfNoteCut                         // note cut: sub-tick to silence (0 = off)
-	epfNoteDelay                       // note delay: sub-tick to start (0 = immediate)
+	epfPitchMode     epFieldKind = iota // pitch mode selector (always visible)
+	epfTicks                            // row tick count (always visible, shared by all pitch effects)
+	epfArpTicks                         // arp: number of offsets in the sequence (may loop within ticks)
+	epfArpFillPreset                    // arp: pattern generator to use when filling offsets
+	epfArpFillStep                      // arp: semitone step between pattern degrees
+	epfArpOffset                        // arp: one semitone offset; offsetIdx selects which
+	epfPortStart                        // portamento: sub-tick where glide begins
+	epfPortTicks                        // portamento: sub-ticks for the glide
+	epfVibratoDepth                     // vibrato: peak deviation in semitones
+	epfVibratoRate                      // vibrato: sine oscillations per note
+	epfRetrigger                        // retrigger ADSR at every sub-tick boundary
+	epfVolume                           // volume: initial playback volume level
+	epfVolSlide                         // volume slide: per-tick delta
+	epfNoteCut                          // note cut: sub-tick to silence (0 = off)
+	epfNoteDelay                        // note delay: sub-tick to start (0 = immediate)
 )
 
 // epField is a single focusable entry in the panel's field list.
@@ -64,23 +64,23 @@ type epField struct {
 }
 
 const (
-	epMinArpTicks    = 1
-	epMaxArpTicks    = 8
-	epMinArpOffset   = -24
-	epMaxArpOffset   = 24
-	epMinTicks       = 1
-	epMaxTicks       = 32
-	epMinFillStep    = 1
-	epMaxFillStep    = 24
-	epMaxPortStart   = 32
-	epMaxPortTicks   = 64
-	epMaxVibDepth    = 4.0
-	epMaxVibRate     = 16.0
-	epVolSlideStep   = 0.01
-	epVolStep        = 0.05
-	epMaxNoteCut     = 32
-	epMaxNoteDelay   = 32
-	epBarWidth       = 10
+	epMinArpTicks  = 1
+	epMaxArpTicks  = 8
+	epMinArpOffset = -24
+	epMaxArpOffset = 24
+	epMinTicks     = 1
+	epMaxTicks     = 32
+	epMinFillStep  = 1
+	epMaxFillStep  = 24
+	epMaxPortStart = 32
+	epMaxPortTicks = 64
+	epMaxVibDepth  = 4.0
+	epMaxVibRate   = 16.0
+	epVolSlideStep = 0.01
+	epVolStep      = 0.05
+	epMaxNoteCut   = 32
+	epMaxNoteDelay = 32
+	epBarWidth     = 10
 )
 
 // epArpFillPresets lists the non-trivial arp fill patterns in display order.
@@ -95,7 +95,7 @@ var epArpFillPresets = []ArpPreset{
 
 var epArpFillPresetNames = []string{"Up", "Down", "Converge", "Diverge", "Random"}
 
-// EffectsPanelDialog is a prototype effects configuration panel opened with ctrl+r.
+// EffectsPanelDialog is a prototype effects configuration panel opened with ctrl+e.
 // It surfaces the complete EffectDefinitions API with a linear, navigable field list.
 // Pressing enter applies the changes to the track row; esc discards.
 type EffectsPanelDialog struct {
@@ -207,17 +207,16 @@ func (d *EffectsPanelDialog) toEffectDefs() audio.EffectDefinitions {
 	fx.VolumeSlide = audio.VolumeSlideEffect{Delta: d.volSlideDelta}
 	fx.NoteCut = audio.NoteCutEffect{Tick: d.noteCutTick}
 	fx.NoteDelay = audio.NoteDelayEffect{Tick: d.noteDelayTick}
-	return fx
+	return audio.NewEffectDefinitions(fx)
 }
 
 // fields returns the ordered list of focusable fields for the current state.
-// Ticks appears directly after the mode selector — it is the shared
-// tick count that gives meaning to every per-tick value below it.
-// Mode-specific parameters follow immediately after.
+// Ticks is always the first field — it is a row-level parameter independent of
+// any pitch effect. Pitch mode and its sub-fields follow, then Volume & Timing.
 func (d *EffectsPanelDialog) fields() []epField {
 	fs := []epField{
-		{epfPitchMode, 0},
 		{epfTicks, 0},
+		{epfPitchMode, 0},
 	}
 	switch d.mode {
 	case pitchModeArp:
@@ -416,6 +415,10 @@ func (d *EffectsPanelDialog) render() string {
 
 	fieldIdx := 0
 
+	// Ticks — row-level parameter, shown before any section
+	b.WriteString(d.renderField(fields[fieldIdx], fieldIdx == d.focusIdx) + "\n\n")
+	fieldIdx++
+
 	// Pitch section
 	b.WriteString(sectionStyle.Render("Pitch") + "\n")
 	for fieldIdx < len(fields) {
@@ -435,7 +438,7 @@ func (d *EffectsPanelDialog) render() string {
 		fieldIdx++
 	}
 
-	b.WriteString("\n" + hintStyle.Render("↑↓ navigate  ◀▶ adjust  shift+◀▶ ±5  enter apply  esc cancel"))
+	b.WriteString("\n" + hintStyle.Render("↑↓ navigate  ←→ adjust  shift+←→ ±5  enter apply  esc cancel"))
 	if d.mode == pitchModeArp {
 		b.WriteString("  " + hintStyle.Render("f fill offsets"))
 	}
@@ -469,7 +472,7 @@ func (d *EffectsPanelDialog) fieldParts(f epField) (label, value, hint string) {
 		value = fmt.Sprintf("◀ %-11s ▶", epPitchModeNames[d.mode])
 
 	case epfTicks:
-		label = "  Ticks"
+		label = "Ticks"
 		value = fmt.Sprintf("%s  %d", bar(float64(epMinTicks), float64(epMaxTicks), float64(d.ticks)), d.ticks)
 		hint = "row tick count"
 

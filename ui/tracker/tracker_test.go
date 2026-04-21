@@ -37,14 +37,25 @@ func TestEditStepAdvancesCursor(t *testing.T) {
 	assert.Equal(t, 2, m.nav.CursorRow(), "expected cursor row 2")
 }
 
-func TestTabMovesToNextTrack(t *testing.T) {
+func TestTabCyclesThroughColumnsAndTracks(t *testing.T) {
 	m := NewTracker(2, 8, 80, 24)
 	require.Equal(t, columnNote, m.CursorCol, "expected initial note column")
 	require.Equal(t, 0, m.nav.CursorTrack(), "expected initial track 0")
 
+	// Tab 1: NOTE → VOL on track 0
 	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	assert.Equal(t, columnNote, m.CursorCol, "expected note column after tab")
-	assert.Equal(t, 1, m.nav.CursorTrack(), "expected track 1 after tab")
+	assert.Equal(t, columnVolume, m.CursorCol, "expected volume column after first tab")
+	assert.Equal(t, 0, m.nav.CursorTrack(), "expected track 0 after first tab")
+
+	// Tab 2: VOL → FX on track 0
+	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	assert.Equal(t, columnFX, m.CursorCol, "expected FX column after second tab")
+	assert.Equal(t, 0, m.nav.CursorTrack(), "expected track 0 after second tab")
+
+	// Tab 3: FX → NOTE on track 1
+	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	assert.Equal(t, columnNote, m.CursorCol, "expected note column after third tab")
+	assert.Equal(t, 1, m.nav.CursorTrack(), "expected track 1 after third tab")
 }
 
 func TestInsertTrackSpaceShiftsRowsDown(t *testing.T) {

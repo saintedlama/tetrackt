@@ -104,7 +104,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open load dialog
 			d := ui.NewDialogModel(ui.NewFileDialog(ui.ModeLoad, ""), m, m.width, m.height)
 			return d, d.Init()
-		case "ctrl+e", "ctrl+r":
+		case "ctrl+e":
 			if m.activeScreen == trackerScreenIdx {
 				tm := m.trackerModel()
 				cursorTrack := tm.CursorTrack()
