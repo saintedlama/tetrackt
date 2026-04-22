@@ -20,7 +20,8 @@ import (
 var (
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(common.ColorAccentPrimary)
+			Foreground(common.ColorAccentPrimary).
+			Padding(0, 1)
 
 	rowNumStyle = lipgloss.NewStyle().
 			Foreground(common.ColorTextDisabled)
@@ -59,18 +60,6 @@ var (
 	fxColorNoteCut    color.Color = common.ColorPink   // note cut   — timing event
 	fxColorNoteDelay  color.Color = common.ColorPink   // note delay — timing event
 )
-
-const (
-	trackColumnGap = 2
-)
-
-type trackCellRenderArgs struct {
-	row          TrackRow
-	isCursorCell bool
-	selected     bool
-	cursorCol    trackerColumn
-	inputBuf     string
-}
 
 type Viewport struct {
 	Width  int
@@ -234,31 +223,26 @@ func (m *TrackerModel) Init() tea.Cmd {
 
 func (m *TrackerModel) View() string {
 	var tracks strings.Builder
-	trackWidth := m.trackWidth()
 
 	// Track headers
 	tracks.WriteString("    ") // Row number space
 	for i := 0; i < m.NumTracks; i++ {
-		trackHeader := lipgloss.PlaceHorizontal(trackWidth, lipgloss.Center, fmt.Sprintf("Track %d", i+1))
+		trackHeader := fmt.Sprintf("Track %d", i+1)
 		if i == m.nav.CursorTrack() {
 			trackHeader = headerStyle.Render(trackHeader)
 		} else {
 			trackHeader = headerStyle.Foreground(common.ColorGray).Render(trackHeader)
 		}
 		tracks.WriteString(trackHeader)
-		if i < m.NumTracks-1 {
-			tracks.WriteString(strings.Repeat(" ", trackColumnGap))
-		}
+		tracks.WriteString("  ")
 	}
 	tracks.WriteString("\n")
 
 	// Separator
 	tracks.WriteString("    ")
 	for i := 0; i < m.NumTracks; i++ {
-		tracks.WriteString(strings.Repeat("─", trackWidth))
-		if i < m.NumTracks-1 {
-			tracks.WriteString(strings.Repeat(" ", trackColumnGap))
-		}
+		tracks.WriteString(strings.Repeat("─", 11))
+		tracks.WriteString("  ")
 	}
 	tracks.WriteString("\n")
 
@@ -287,16 +271,38 @@ func (m *TrackerModel) View() string {
 		for trackIdx := 0; trackIdx < m.NumTracks; trackIdx++ {
 			trackRow := m.Tracks[trackIdx].Rows[row]
 			isCursorCell := row == m.nav.CursorRow() && trackIdx == m.nav.CursorTrack()
-			tracks.WriteString(renderTrackCell(trackCellRenderArgs{
-				row:          trackRow,
-				isCursorCell: isCursorCell,
-				selected:     m.nav.IsSelected(row, trackIdx),
-				cursorCol:    m.CursorCol,
-				inputBuf:     m.inputBuf,
-			}))
-			if trackIdx < m.NumTracks-1 {
-				tracks.WriteString(strings.Repeat(" ", trackColumnGap))
+			selected := m.nav.IsSelected(row, trackIdx)
+
+			noteStr := fmt.Sprintf("%-3s", formatNote(trackRow.Note))
+			volStr := formatVolume(trackRow.FX)
+			fxStr := formatFX(trackRow.FX)
+
+			volFG := volCellColor(trackRow.FX)
+			fxFG := fxCellColor(trackRow.FX)
+
+			// Overlay partial input buffer on the cursor cell's active sub-column.
+			if isCursorCell && m.inputBuf != "" {
+				switch m.CursorCol {
+				case columnVolume:
+					volStr = "V" + string(m.inputBuf[0]) + "_"
+					volFG = fxColorVolume
+				case columnFX:
+					switch len(m.inputBuf) {
+					case 1:
+						fxStr = string(m.inputBuf[0]) + "__"
+					case 2:
+						fxStr = m.inputBuf + "_"
+					}
+					fxFG = fxLetterColor(string(m.inputBuf[0]))
+				}
 			}
+
+			tracks.WriteString(styledTrackerCell(noteStr, isCursorCell && m.CursorCol == columnNote, selected, nil))
+			tracks.WriteString(" ")
+			tracks.WriteString(styledTrackerCell(volStr, isCursorCell && m.CursorCol == columnVolume, selected, volFG))
+			tracks.WriteString(" ")
+			tracks.WriteString(styledTrackerCell(fxStr, isCursorCell && m.CursorCol == columnFX, selected, fxFG))
+			tracks.WriteString("  ")
 		}
 		tracks.WriteString("\n")
 	}
@@ -321,44 +327,6 @@ func (m *TrackerModel) View() string {
 	tracks.WriteString(fmt.Sprintf("Step: %d  Col: %s  %s%s%s", m.EditStep, m.cursorColumnLabel(), m.columnHint(), loopRange, playback))
 
 	return tracks.String()
-}
-
-func (m *TrackerModel) trackWidth() int {
-	return lipgloss.Width(renderTrackCell(trackCellRenderArgs{row: TrackRow{Note: notes.Off()}}))
-}
-
-func renderTrackCell(args trackCellRenderArgs) string {
-	noteStr := fmt.Sprintf("%-3s", formatNote(args.row.Note))
-	volStr := formatVolume(args.row.FX)
-	fxStr := formatFX(args.row.FX)
-
-	volFG := volCellColor(args.row.FX)
-	fxFG := fxCellColor(args.row.FX)
-
-	if args.isCursorCell && args.inputBuf != "" {
-		switch args.cursorCol {
-		case columnVolume:
-			volStr = "V" + string(args.inputBuf[0]) + "_"
-			volFG = fxColorVolume
-		case columnFX:
-			switch len(args.inputBuf) {
-			case 1:
-				fxStr = string(args.inputBuf[0]) + "__"
-			case 2:
-				fxStr = args.inputBuf + "_"
-			}
-			fxFG = fxLetterColor(string(args.inputBuf[0]))
-		}
-	}
-
-	var b strings.Builder
-	b.WriteString(styledTrackerCell(noteStr, args.isCursorCell && args.cursorCol == columnNote, args.selected, nil))
-	b.WriteString(" ")
-	b.WriteString(styledTrackerCell(volStr, args.isCursorCell && args.cursorCol == columnVolume, args.selected, volFG))
-	b.WriteString(" ")
-	b.WriteString(styledTrackerCell(fxStr, args.isCursorCell && args.cursorCol == columnFX, args.selected, fxFG))
-
-	return b.String()
 }
 
 func (m *TrackerModel) Update(msg tea.Msg) (ui.Component, tea.Cmd) {

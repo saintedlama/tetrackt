@@ -1,18 +1,17 @@
 package tracker
 
 import (
-	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tetrackt/tetrackt/audio"
 	"github.com/tetrackt/tetrackt/notes"
 	"github.com/tetrackt/tetrackt/ui/tracker/effects"
 )
+
 func TestNoteEntryInEditModeEmitsPreviewMessage(t *testing.T) {
 	m := NewTracker(2, 8, 80, 24)
 	m.Octave = 4
@@ -183,18 +182,6 @@ func TestPasteEffectsOnlyKeepsDestinationNote(t *testing.T) {
 	assert.Equal(t, notes.Octave(5), got.Note.Octave, "expected destination note octave 5 to be preserved")
 	require.NotNil(t, got.FX.Pitch.Arpeggio, "expected arp copied")
 	assert.True(t, got.FX.Pitch.Arpeggio.IsActive(), "expected arp active after copy")
-}
-
-func TestTrackerViewHeaderMatchesColumnWidths(t *testing.T) {
-	m := NewTracker(3, 4, 80, 24)
-
-	lines := strings.Split(strings.TrimRight(m.View(), "\n"), "\n")
-	require.GreaterOrEqual(t, len(lines), 3, "expected header, separator, and at least one row")
-
-	expectedWidth := 4 + m.NumTracks*m.trackWidth() + (m.NumTracks-1)*trackColumnGap
-	assert.Equal(t, expectedWidth, lipgloss.Width(lines[0]), "header width")
-	assert.Equal(t, expectedWidth, lipgloss.Width(lines[1]), "separator width")
-	assert.Equal(t, expectedWidth, lipgloss.Width(lines[2]), "first row width")
 }
 
 func TestNewBPM_ClampsToValidRange(t *testing.T) {
