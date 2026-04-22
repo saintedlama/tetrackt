@@ -74,19 +74,17 @@ func TestArch_NoPanicInProductionCode(t *testing.T) {
 		Test(t, ws)
 }
 
-// TestArch_OnlyAudioOrRenderDependsOnBeep enforces that beep sub-packages
-// (speaker, effects, generators, …) are only imported by audio or render.
-// audio owns synthesis; render owns sinks and playback scheduling.
-// main.go and all other packages must stay beep-free.
-func TestArch_OnlyAudioDependsOnBeepCore(t *testing.T) {
+// TestArch_OnlyAudioOrRenderDependsOnOto enforces that the oto audio backend
+// is only imported by the render package, which owns sinks and playback scheduling.
+func TestArch_OnlyRenderDependsOnOto(t *testing.T) {
 	ws := loadWorkspace(t)
 
-	archscout.Rule("only audio and render may depend on beep packages").
+	archscout.Rule("only render may depend on oto packages").
 		Dependencies().
 		InPackage(module.Pkg("...")).
-		NotInPackage(module.Pkg("audio/..."), module.Pkg("render/...")).
+		NotInPackage(module.Pkg("render/...")).
 		IsNotTest().
-		DependOn("github.com/gopxl/beep/v2/...").
+		DependOn("github.com/ebitengine/oto/...").
 		Test(t, ws)
 }
 
@@ -105,13 +103,14 @@ func TestArch_AudioExportsPublicAPITypes(t *testing.T) {
 	}
 }
 
-// TestArch_AudioReexportsBeepCoreTypes verifies that beep's fundamental types
-// are re-exported from audio so no other package needs to import beep/v2 directly.
-func TestArch_AudioReexportsBeepCoreTypes(t *testing.T) {
+// TestArch_AudioExportsStreamingTypes verifies that the audio package exposes
+// the key streaming types the rest of the codebase depends on (now defined locally,
+// not re-exported from beep).
+func TestArch_AudioExportsStreamingTypes(t *testing.T) {
 	ws := loadWorkspace(t)
 
 	for _, typeName := range []string{"SampleRate", "Streamer"} {
-		archscout.Rule("audio must re-export beep type "+typeName).
+		archscout.Rule("audio must export type "+typeName).
 			Types().
 			InPackage(module.Pkg("audio")).
 			Match(func(typ archscout.Type) bool { return typ.Name == typeName }).

@@ -4,13 +4,12 @@ import (
 	"math"
 	"testing"
 
-	"github.com/gopxl/beep/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestOscillatorSilent(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	osc := NewOscillator(Silent, 440.0, sr, 0, 0, 0, nil, 0)
 	samples := StreamN(osc, 100)
 	for i, s := range samples {
@@ -20,7 +19,7 @@ func TestOscillatorSilent(t *testing.T) {
 }
 
 func TestOscillatorSquare(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	// Half period: 44100 / (2*100) = 220.5 → flip at sample 221
 	osc := NewOscillator(Square, 100.0, sr, 0, 0, 0, nil, 0)
 	samples := StreamN(osc, 250)
@@ -34,7 +33,7 @@ func TestOscillatorSquare(t *testing.T) {
 }
 
 func TestOscillatorSawtooth(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	osc := NewOscillator(Sawtooth, 100.0, sr, 0, 0, 0, nil, 0)
 	samples := StreamN(osc, 10)
 
@@ -47,7 +46,7 @@ func TestOscillatorSawtooth(t *testing.T) {
 }
 
 func TestOscillatorSawtoothReverse(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	osc := NewOscillator(SawtoothReverse, 100.0, sr, 0, 0, 0, nil, 0)
 	samples := StreamN(osc, 10)
 
@@ -60,7 +59,7 @@ func TestOscillatorSawtoothReverse(t *testing.T) {
 }
 
 func TestOscillatorTriangle(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 
 	// phase=0 → 4*0-1 = -1
 	s0 := StreamN(NewOscillator(Triangle, 100.0, sr, 0.0, 0, 0, nil, 0), 1)
@@ -76,7 +75,7 @@ func TestOscillatorTriangle(t *testing.T) {
 }
 
 func TestOscillatorSine(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	tests := []struct {
 		phase float64
 		want  float64
@@ -93,7 +92,7 @@ func TestOscillatorSine(t *testing.T) {
 }
 
 func TestOscillatorNoise(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	osc := NewOscillator(Noise, 440.0, sr, 0, 0, 0, nil, 0)
 	samples := StreamN(osc, 1000)
 
@@ -109,7 +108,7 @@ func TestOscillatorNoise(t *testing.T) {
 }
 
 func TestOscillatorStereo(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	osc := NewOscillator(Sine, 440.0, sr, 0, 0, 0, nil, 0)
 	samples := StreamN(osc, 100)
 	for i, s := range samples {
@@ -118,7 +117,7 @@ func TestOscillatorStereo(t *testing.T) {
 }
 
 func TestOscillatorInitialPhase(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	// Square with phase=0.6, default pulseWidth=0.5 → 0.6 >= 0.5 → -1
 	osc := NewOscillator(Square, 100.0, sr, 0.6, 0, 0, nil, 0)
 	s := StreamN(osc, 1)
@@ -126,7 +125,7 @@ func TestOscillatorInitialPhase(t *testing.T) {
 }
 
 func TestOscillatorWavetableInterpolates(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	// 4-sample table: [0, 1, 0, -1] — one cycle of a sine-like shape
 	table := []float64{0, 1, 0, -1}
 	osc := NewOscillator(Wavetable, 100.0, sr, 0, 0, 0, table, 0)
@@ -137,7 +136,7 @@ func TestOscillatorWavetableInterpolates(t *testing.T) {
 }
 
 func TestOscillatorWavetableEmptyIsSilent(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	osc := NewOscillator(Wavetable, 440.0, sr, 0, 0, 0, nil, 0)
 	s := StreamN(osc, 100)
 	for i, sample := range s {
@@ -147,7 +146,7 @@ func TestOscillatorWavetableEmptyIsSilent(t *testing.T) {
 }
 
 func TestOscillatorWavetableStereo(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	osc := NewOscillator(Wavetable, 440.0, sr, 0, 0, 0, WavetableSoftSaw, 0)
 	s := StreamN(osc, 100)
 	for i, sample := range s {

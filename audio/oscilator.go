@@ -3,8 +3,6 @@ package audio
 import (
 	"math"
 	"math/rand/v2"
-
-	"github.com/gopxl/beep/v2"
 )
 
 type Oscillator struct {
@@ -36,7 +34,7 @@ const (
 // pulseWidth is used only by Square; a zero value defaults to 0.5 (50% duty).
 // detuneCents shifts the oscillator frequency by the given number of cents
 // (100 cents = 1 semitone, 1200 cents = 1 octave); 0 disables detune.
-func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate beep.SampleRate, initialPhase float64, pulseWidth float64, detuneCents float64, wavetable []float64, noisePeriod int) *oscillatorGenerator {
+func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate SampleRate, initialPhase float64, pulseWidth float64, detuneCents float64, wavetable []float64, noisePeriod int) *oscillatorGenerator {
 	pw := pulseWidth
 	if pw == 0 {
 		pw = 0.5
@@ -58,12 +56,12 @@ func NewOscillator(oscillatorType OscillatorType, frequency float64, sampleRate 
 	}
 }
 
-// oscillatorGenerator implements beep.Streamer for oscillator waveform generation
+// oscillatorGenerator implements Streamer for oscillator waveform generation
 type oscillatorGenerator struct {
 	oscillatorType   OscillatorType
 	frequency        float64
 	detuneMultiplier float64 // pre-computed 2^(cents/1200); applied by SetFrequency during arp retune
-	sampleRate       beep.SampleRate
+	sampleRate       SampleRate
 	phase            float64
 	pulseWidth       float64   // resolved duty cycle [0.01..0.99]
 	wavetable        []float64 // single-cycle samples for Wavetable type

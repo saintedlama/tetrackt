@@ -11,6 +11,7 @@ import (
 	"github.com/tetrackt/tetrackt/notes"
 	"github.com/tetrackt/tetrackt/ui/tracker/effects"
 )
+
 func TestNoteEntryInEditModeEmitsPreviewMessage(t *testing.T) {
 	m := NewTracker(2, 8, 80, 24)
 	m.Octave = 4

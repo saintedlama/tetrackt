@@ -4,12 +4,11 @@ import (
 	"math"
 	"testing"
 
-	"github.com/gopxl/beep/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-const srLFO beep.SampleRate = 44100
+const srLFO SampleRate = 44100
 
 func TestLFOWaveformSine(t *testing.T) {
 	t.Helper()
@@ -188,7 +187,7 @@ func TestModulatedVolumeGainFloorIsZero(t *testing.T) {
 	// advance to phase 0.5 (square → -1), gain = 1 + (-1*2) = -1 → floor 0
 	volumeLFO.nextBlock(threequarterSamples)
 
-	osc := NewOscillator(Sawtooth, 100, beep.SampleRate(sr), 0, 0, 0, nil, 0)
+	osc := NewOscillator(Sawtooth, 100, SampleRate(sr), 0, 0, 0, nil, 0)
 	mod := &modulatedVolumeStreamer{inner: osc, lfo: volumeLFO}
 
 	buf := make([][2]float64, 64)

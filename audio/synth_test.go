@@ -4,14 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gopxl/beep/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tetrackt/tetrackt/notes"
 )
 
 func TestSynthPatchLength(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	dur := 100 * time.Millisecond
 	n := sr.N(dur)
 
@@ -22,9 +21,8 @@ func TestSynthPatchLength(t *testing.T) {
 
 	buf := make([][2]float64, 512)
 	total := 0
-	limited := beep.Take(n, patch)
 	for {
-		count, ok := limited.Stream(buf)
+		count, ok := patch.Stream(buf)
 		total += count
 		if !ok {
 			break
@@ -35,7 +33,7 @@ func TestSynthPatchLength(t *testing.T) {
 }
 
 func TestSynthSilentOscillators(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	dur := 10 * time.Millisecond
 	n := sr.N(dur)
 
@@ -51,7 +49,7 @@ func TestSynthSilentOscillators(t *testing.T) {
 }
 
 func TestSynthMixerZeroVolume(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	dur := 10 * time.Millisecond
 	n := sr.N(dur)
 
@@ -67,7 +65,7 @@ func TestSynthMixerZeroVolume(t *testing.T) {
 }
 
 func TestSynthMixerBalance(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	dur := 10 * time.Millisecond
 	n := sr.N(dur)
 
@@ -88,7 +86,7 @@ func TestSynthMixerBalance(t *testing.T) {
 }
 
 func TestSynthFilterOff(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	dur := 50 * time.Millisecond
 	n := sr.N(dur)
 	freq := notes.NewNote(notes.BaseA, notes.Octave4).Frequency()
@@ -110,7 +108,7 @@ func TestSynthFilterOff(t *testing.T) {
 }
 
 func TestSynthDetuneShiftsFrequency(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	dur := 100 * time.Millisecond
 	n := sr.N(dur)
 	baseFreq := 440.0
@@ -142,7 +140,7 @@ func TestSynthDetuneShiftsFrequency(t *testing.T) {
 }
 
 func TestSynthDetuneZeroNoEffect(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	dur := 10 * time.Millisecond
 	n := sr.N(dur)
 
@@ -155,7 +153,7 @@ func TestSynthDetuneZeroNoEffect(t *testing.T) {
 }
 
 func TestPatchSetFrequencyRetunes(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	dur := 100 * time.Millisecond
 	n := sr.N(dur)
 	half := n / 2
@@ -187,7 +185,7 @@ func TestPatchSetFrequencyRetunes(t *testing.T) {
 }
 
 func TestPatchSetFrequencyPreservesDetune(t *testing.T) {
-	sr := beep.SampleRate(44100)
+	sr := SampleRate(44100)
 	dur := 100 * time.Millisecond
 	n := sr.N(dur)
 
@@ -219,7 +217,7 @@ func TestPatchSetFrequencyPreservesDetune(t *testing.T) {
 
 func TestPatchReset(t *testing.T) {
 	// 1000 Hz so 1 sample = 1ms for easy math
-	const sr = beep.SampleRate(1000)
+	const sr = SampleRate(1000)
 	const n = 1000
 
 	osc := Oscillator{Type: Sine}

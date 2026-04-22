@@ -1,11 +1,6 @@
 package audio
 
-import (
-	"math"
-
-	"github.com/gopxl/beep/v2"
-	"github.com/gopxl/beep/v2/effects"
-)
+import "math"
 
 // MixMode controls the post-mix summing curve applied after all channels are blended.
 type MixMode int
@@ -50,12 +45,12 @@ type Mixer struct {
 // panStreamer applies constant-power stereo panning to a signal.
 // pan in [-1, +1]; 0 = centre (√2/2 on each side).
 type panStreamer struct {
-	s     beep.Streamer
+	s     Streamer
 	gainL float64
 	gainR float64
 }
 
-func newPanStreamer(s beep.Streamer, pan float64) beep.Streamer {
+func newPanStreamer(s Streamer, pan float64) Streamer {
 	if pan == 0 {
 		return s // centre: skip to preserve original amplitude
 	}
@@ -76,7 +71,7 @@ func (p *panStreamer) Err() error { return p.s.Err() }
 
 // mixModeStreamer applies a post-mix shaping curve sample-by-sample.
 type mixModeStreamer struct {
-	s    beep.Streamer
+	s    Streamer
 	mode MixMode
 }
 
@@ -123,11 +118,23 @@ func nesApprox(x float64) float64 {
 
 // Mix applies per-channel volume, muting and panning to s1/s2/s3, sums them,
 // applies the MixMode shaping curve, then applies master volume.
-func (m Mixer) Mix(s1, s2, s3 beep.Streamer) beep.Streamer {
-	v1 := &effects.Volume{Streamer: s1, Base: 2, Volume: math.Log2(m.Volume1), Silent: m.Volume1 == 0 || m.Mute1}
-	v2 := &effects.Volume{Streamer: s2, Base: 2, Volume: math.Log2(m.Volume2), Silent: m.Volume2 == 0 || m.Mute2}
-	v3 := &effects.Volume{Streamer: s3, Base: 2, Volume: math.Log2(m.Volume3), Silent: m.Volume3 == 0 || m.Mute3}
-	var mixed beep.Streamer = beep.Mix(newPanStreamer(v1, m.Pan1), newPanStreamer(v2, m.Pan2), newPanStreamer(v3, m.Pan3))
+func (m Mixer) Mix(s1, s2, s3 Streamer) Streamer {
+	vol1 := m.Volume1
+	if m.Volume1 == 0 || m.Mute1 {
+		vol1 = 0
+	}
+	vol2 := m.Volume2
+	if m.Volume2 == 0 || m.Mute2 {
+		vol2 = 0
+	}
+	vol3 := m.Volume3
+	if m.Volume3 == 0 || m.Mute3 {
+		vol3 = 0
+	}
+	v1 := newScaledStreamer(s1, vol1)
+	v2 := newScaledStreamer(s2, vol2)
+	v3 := newScaledStreamer(s3, vol3)
+	var mixed Streamer = mixAll(newPanStreamer(v1, m.Pan1), newPanStreamer(v2, m.Pan2), newPanStreamer(v3, m.Pan3))
 
 	if m.Mode != MixLinear {
 		mixed = &mixModeStreamer{s: mixed, mode: m.Mode}
@@ -140,5 +147,5 @@ func (m Mixer) Mix(s1, s2, s3 beep.Streamer) beep.Streamer {
 	if masterVol == 1.0 {
 		return mixed
 	}
-	return &effects.Volume{Streamer: mixed, Base: 2, Volume: math.Log2(masterVol), Silent: false}
+	return newScaledStreamer(mixed, masterVol)
 }

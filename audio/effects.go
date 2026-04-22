@@ -3,8 +3,6 @@ package audio
 import (
 	"math"
 	"time"
-
-	"github.com/gopxl/beep/v2/effects"
 )
 
 // ArpeggioEffect cycles through frequency offsets, one per tick.
@@ -254,7 +252,7 @@ func (ep *EffectsPatch) Streamer(sr SampleRate, freq float64, prevFreq float64) 
 	// Wrap with a gain stage when VolumeEffect is active so the level is
 	// applied uniformly to every sample regardless of tick boundaries.
 	if ep.effects.Volume.IsActive() {
-		return &effects.Gain{Streamer: s, Gain: initialVolume - 1}
+		return newScaledStreamer(s, initialVolume)
 	}
 	return s
 }

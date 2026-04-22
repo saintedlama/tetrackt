@@ -3,8 +3,6 @@ package audio
 import (
 	"math"
 	"time"
-
-	"github.com/gopxl/beep/v2"
 )
 
 // minEnvelopeLevel is the floor for exponential envelope calculations.
@@ -25,7 +23,7 @@ const (
 type envelopeGenerator struct {
 	samples  int // total number of samples for the envelope
 	idx      int // current sample index
-	Streamer beep.Streamer
+	Streamer Streamer
 
 	currentStage      Stages
 	currentLevel      float64
@@ -45,8 +43,8 @@ type Envelope struct {
 	Release time.Duration
 }
 
-// Creates a beep.Streamer that applies ADSR envelope to the provided streamer
-func NewEnvelope(streamer beep.Streamer, sampleRate beep.SampleRate, noteSamples int, envelope Envelope) beep.Streamer {
+// Creates a Streamer that applies ADSR envelope to the provided streamer
+func NewEnvelope(streamer Streamer, sampleRate SampleRate, noteSamples int, envelope Envelope) Streamer {
 	sr := float64(sampleRate)
 	attackSamples := int(envelope.Attack.Seconds() * sr)
 	decaySamples := int(envelope.Decay.Seconds() * sr)
