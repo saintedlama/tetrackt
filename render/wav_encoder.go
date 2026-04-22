@@ -1,52 +1,33 @@
 package render
 
 import (
-	"bytes"
-	"encoding/binary"
 	"io"
 
 	"github.com/tetrackt/tetrackt/audio"
+	"github.com/youpy/go-wav"
 )
 
 // EncodeWAV writes a standard RIFF/WAV file with 16-bit signed PCM stereo data to w.
 func EncodeWAV(w io.Writer, sampleRate audio.SampleRate, frames [][2]float64) error {
 	const numChannels = 2
 	const bitsPerSample = 16
-	const bytesPerSample = 2
 
-	numSamples := len(frames)
-	dataSize := uint32(numSamples * numChannels * bytesPerSample)
-	fileSize := 36 + dataSize
+	numSamples := uint32(len(frames))
+	
+	// Create WAV writer
+	writer := wav.NewWriter(w, numSamples, numChannels, uint32(sampleRate), bitsPerSample)
 
-	var hdr bytes.Buffer
-	hdr.WriteString("RIFF")
-	binary.Write(&hdr, binary.LittleEndian, fileSize)
-	hdr.WriteString("WAVE")
-	hdr.WriteString("fmt ")
-	binary.Write(&hdr, binary.LittleEndian, uint32(16))
-	binary.Write(&hdr, binary.LittleEndian, uint16(1))
-	binary.Write(&hdr, binary.LittleEndian, uint16(numChannels))
-	binary.Write(&hdr, binary.LittleEndian, uint32(sampleRate))
-	binary.Write(&hdr, binary.LittleEndian, uint32(int(sampleRate)*numChannels*bytesPerSample))
-	binary.Write(&hdr, binary.LittleEndian, uint16(numChannels*bytesPerSample))
-	binary.Write(&hdr, binary.LittleEndian, uint16(bitsPerSample))
-	hdr.WriteString("data")
-	binary.Write(&hdr, binary.LittleEndian, dataSize)
-
-	if _, err := w.Write(hdr.Bytes()); err != nil {
-		return err
-	}
-
-	buf := make([]byte, numSamples*numChannels*bytesPerSample)
+	// Convert float64 frames to wav.Sample
+	samples := make([]wav.Sample, numSamples)
 	for i, frame := range frames {
-		l := floatToInt16(frame[0])
-		r := floatToInt16(frame[1])
-		off := i * 4
-		buf[off+0] = byte(l)
-		buf[off+1] = byte(uint16(l) >> 8)
-		buf[off+2] = byte(r)
-		buf[off+3] = byte(uint16(r) >> 8)
+		samples[i] = wav.Sample{
+			Values: [2]int{
+				int(floatToInt16(frame[0])), // left channel
+				int(floatToInt16(frame[1])), // right channel
+			},
+		}
 	}
-	_, err := w.Write(buf)
-	return err
+
+	// Write samples
+	return writer.WriteSamples(samples)
 }
