@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.1.0](https://github.com/saintedlama/tetrackt/compare/v1.0.0...v1.1.0) (2026-04-22)
+
+
+### Features
+
+* add EffectsPatch — frequency-based, note-free subtick effects engine ([#15](https://github.com/saintedlama/tetrackt/issues/15)) ([8a1e56a](https://github.com/saintedlama/tetrackt/commit/8a1e56aa5fdb1cd25532b059896b36aeda94c76b))
+* allow double CTRL+c to close the "save" dialog for quick exit ([d7b8b5c](https://github.com/saintedlama/tetrackt/commit/d7b8b5c7b2edbf3c0e4f22ee70d8d05f453110fc))
+* display tracker speed and use consistent naming for speed ([1fd400f](https://github.com/saintedlama/tetrackt/commit/1fd400f1445f12f4472e1666741bf6e3ab8c1144))
+* effect overhaul ([#16](https://github.com/saintedlama/tetrackt/issues/16)) ([5796efd](https://github.com/saintedlama/tetrackt/commit/5796efd3a5107255036366aa99c3fa841a6ae873))
+* fatter synth patch bank presets ([69beaab](https://github.com/saintedlama/tetrackt/commit/69beaab1388f2a82e98b51185b8e31d8ef6480f6))
+* implement ADSR preview graph and fix synth constructor ([f7225c1](https://github.com/saintedlama/tetrackt/commit/f7225c1498521085097d578f7e38c5d0a7cbcc16))
+* implement WAV export functionality and audio rendering engine, refactor tracker ([8993551](https://github.com/saintedlama/tetrackt/commit/899355151742a7121ec0c12edf6ce58ab9c1cc0e))
+* improve UX in synth ([db443c9](https://github.com/saintedlama/tetrackt/commit/db443c9f8ff2593fdcf5bc867894c098eb7efc5d))
+* integrate AKWF wavetable library with tar.gz embedding ([2a01e61](https://github.com/saintedlama/tetrackt/commit/2a01e6159f7eec753c5cdf6e946f80186c87ae46))
+* render screen to small mesage if we don't have enough space ([f9a4a42](https://github.com/saintedlama/tetrackt/commit/f9a4a42b1d315f9a48cf67218ce09626e4eca28d))
+* usability enhancements for tracker editing ([96648dd](https://github.com/saintedlama/tetrackt/commit/96648ddd637c1ae350ef95cff5c092b4ff4833b5))
+
+
+### Bug Fixes
+
+* add pattern validation for note to MCP server ([56ce824](https://github.com/saintedlama/tetrackt/commit/56ce824746e64540c87bebd2a074d2c4f7d05311))
+* map silencing mixers to enter key ([afdf8b1](https://github.com/saintedlama/tetrackt/commit/afdf8b1eac5de79c2cf305eebcefb0abb3af2b60))
+* repair preview and playback weirdness ([cd9e684](https://github.com/saintedlama/tetrackt/commit/cd9e6845794d4ce2f324a4af37a28bbe310e1547))
+* use groups and color to distinguish voices ([8c2d490](https://github.com/saintedlama/tetrackt/commit/8c2d4905e60ef8c7e9aacd2e64bc78689be501cc))
+
 ## 1.0.0 (2026-04-13)
 
 
