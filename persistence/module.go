@@ -256,16 +256,28 @@ func fromSavedSynth(s SavedSynth) *audio.Synth {
 	return synth
 }
 
-// SavedTrackRow is the JSON-serializable form of TrackRow
+// SavedFXEffects is the JSON-serializable form of audio.EffectDefinitions.
+// It is stored as an optional object on SavedTrackRow; omitted when nil.
+type SavedFXEffects struct {
+	Ticks        int      `json:"Ticks,omitempty"`
+	ArpeggioOffsets []int    `json:"arpeggio_offsets,omitempty"`
+	PortamentoStart int      `json:"portamento_start,omitempty"`
+	PortamentoTicks int      `json:"portamento_ticks,omitempty"`
+	VibratoDepth    float64  `json:"vibrato_depth,omitempty"`
+	VibratoRate     float64  `json:"vibrato_rate,omitempty"`
+	Retrigger       bool     `json:"retrigger,omitempty"`
+	VolumeLevel     *float64 `json:"volume_level,omitempty"`
+	VolSlideDelta   float64  `json:"vol_slide_delta,omitempty"`
+	NoteCutTick     int      `json:"note_cut_tick,omitempty"`
+	NoteDelayTick   int      `json:"note_delay_tick,omitempty"`
+}
+
+// SavedTrackRow is the JSON-serializable form of TrackRow.
+// FX is the sole source of truth; legacy compact fields have been removed.
 type SavedTrackRow struct {
-	Base            string `json:"base"`
-	Octave          int    `json:"octave"`
-	Volume          int    `json:"volume"`
-	Ticks           int    `json:"ticks,omitempty"`
-	ArpeggioOffsets []int  `json:"arpeggio_offsets,omitempty"`
-	Portamento      int    `json:"portamento,omitempty"`
-	EffectType      int    `json:"effect_type,omitempty"`
-	EffectParam     int    `json:"effect_param,omitempty"`
+	Base   string          `json:"base"`
+	Octave int             `json:"octave"`
+	FX     *SavedFXEffects `json:"fx,omitempty"`
 }
 
 // SavedMeta holds optional display metadata for a patch loaded from the bank.
@@ -302,16 +314,41 @@ func TracksToModule(tracker *utracker.TrackerModel) *SavedModule {
 	for i, track := range tracker.Tracks {
 		rows := make([]SavedTrackRow, len(track.Rows))
 		for j, row := range track.Rows {
-			rows[j] = SavedTrackRow{
-				Base:            string(row.Note.Base),
-				Octave:          int(row.Note.Octave),
-				Volume:          row.Volume,
-				Ticks:           row.Ticks,
-				ArpeggioOffsets: row.Arpeggio.Offsets,
-				Portamento:      row.Portamento,
-				EffectType:      int(row.Effect.Type),
-				EffectParam:     row.Effect.Param,
+			sr := SavedTrackRow{
+				Base:   string(row.Note.Base),
+				Octave: int(row.Note.Octave),
 			}
+			fx := row.FX
+			sfx := &SavedFXEffects{
+				Ticks:      fx.Ticks,
+				Retrigger:     fx.RetriggerEnvelope,
+				VolSlideDelta: fx.VolumeSlide.Delta,
+				NoteCutTick:   fx.NoteCut.Tick,
+				NoteDelayTick: fx.NoteDelay.Tick,
+			}
+			if fx.Volume.Active {
+				lvl := fx.Volume.Level
+				sfx.VolumeLevel = &lvl
+			}
+			if fx.Pitch.Arpeggio != nil {
+				sfx.ArpeggioOffsets = fx.Pitch.Arpeggio.Offsets
+			}
+			if fx.Pitch.Portamento != nil {
+				sfx.PortamentoStart = fx.Pitch.Portamento.StartTick
+				sfx.PortamentoTicks = fx.Pitch.Portamento.Ticks
+			}
+			if fx.Pitch.Vibrato != nil {
+				sfx.VibratoDepth = fx.Pitch.Vibrato.Depth
+				sfx.VibratoRate = fx.Pitch.Vibrato.Rate
+			}
+			// Only attach FX when there is something non-default to store.
+			if sfx.Ticks != 0 || sfx.Retrigger || sfx.VolSlideDelta != 0 ||
+				sfx.NoteCutTick != 0 || sfx.NoteDelayTick != 0 || sfx.VolumeLevel != nil ||
+				len(sfx.ArpeggioOffsets) > 0 || sfx.PortamentoStart != 0 || sfx.PortamentoTicks != 0 ||
+				sfx.VibratoDepth != 0 {
+				sr.FX = sfx
+			}
+			rows[j] = sr
 		}
 		st := SavedTrack{
 			Synth: toSavedSynth(track.Synth),
@@ -367,19 +404,33 @@ func ModuleToTracks(mod *SavedModule, tracker *utracker.TrackerModel) {
 		// Update each row with saved data
 		for j, row := range savedTrack.Rows {
 			if j < len(track.Rows) {
-				track.Rows[j] = utracker.TrackRow{
-					Note:   notes.Note{Base: notes.Base(row.Base), Octave: notes.Octave(row.Octave)},
-					Volume: row.Volume,
-					Ticks:  row.Ticks,
-					Arpeggio: audio.ArpeggioEffect{
-						Offsets: row.ArpeggioOffsets,
-					},
-					Portamento: row.Portamento,
-					Effect: utracker.TrackerEffect{
-						Type:  utracker.EffectType(row.EffectType),
-						Param: row.EffectParam,
-					},
+				tr := utracker.TrackRow{
+					Note: notes.Note{Base: notes.Base(row.Base), Octave: notes.Octave(row.Octave)},
 				}
+				if row.FX != nil {
+					fx := audio.EffectDefinitions{
+						Ticks:          row.FX.Ticks,
+						RetriggerEnvelope: row.FX.Retrigger,
+						VolumeSlide:       audio.VolumeSlideEffect{Delta: row.FX.VolSlideDelta},
+						NoteCut:           audio.NoteCutEffect{Tick: row.FX.NoteCutTick},
+						NoteDelay:         audio.NoteDelayEffect{Tick: row.FX.NoteDelayTick},
+					}
+					if row.FX.VolumeLevel != nil {
+						fx.Volume = audio.VolumeEffect{Active: true, Level: *row.FX.VolumeLevel}
+					}
+					if len(row.FX.ArpeggioOffsets) > 0 {
+						a := audio.ArpeggioEffect{Offsets: row.FX.ArpeggioOffsets}
+						fx.Pitch.Arpeggio = &a
+					} else if row.FX.PortamentoStart > 0 || row.FX.PortamentoTicks > 0 {
+						p := audio.PortamentoEffect{StartTick: row.FX.PortamentoStart, Ticks: row.FX.PortamentoTicks}
+						fx.Pitch.Portamento = &p
+					} else if row.FX.VibratoDepth > 0 {
+						v := audio.VibratoEffect{Depth: row.FX.VibratoDepth, Rate: row.FX.VibratoRate}
+						fx.Pitch.Vibrato = &v
+					}
+					tr.FX = fx
+				}
+				track.Rows[j] = tr
 			}
 		}
 	}

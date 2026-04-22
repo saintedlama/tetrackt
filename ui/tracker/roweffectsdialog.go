@@ -146,41 +146,75 @@ type RowEffectsDialog struct {
 
 // NewRowEffectsDialog creates a dialog pre-populated with the current row's settings.
 func NewRowEffectsDialog(row TrackRow, trackIdx, rowIdx int) *RowEffectsDialog {
-	ticks := row.Ticks
+	ticks := row.FX.Ticks
 	if ticks <= 0 {
 		ticks = 1
 	}
 	offsets := make([]int, ticks)
-	if row.Arpeggio.IsActive() {
-		copy(offsets, row.Arpeggio.Offsets)
+	if row.FX.Pitch.Arpeggio != nil && row.FX.Pitch.Arpeggio.IsActive() {
+		copy(offsets, row.FX.Pitch.Arpeggio.Offsets)
 	}
-	vibratoSpeed := (row.Effect.Param >> 4) & 0xF
-	vibratoDepth := row.Effect.Param & 0xF
-	if vibratoSpeed == 0 {
-		vibratoSpeed = 4 // sensible default
+
+	var effectType EffectType
+	var effectParam int
+	var vibratoSpeed, vibratoDepth int
+	vibratoSpeed = 4 // sensible default
+
+	if row.FX.VolumeSlide.Delta != 0 {
+		effectType = EffectVolumeSlide
+		effectParam = int(row.FX.VolumeSlide.Delta * 64)
+	} else if row.FX.NoteCut.Tick > 0 {
+		effectType = EffectNoteCut
+		effectParam = row.FX.NoteCut.Tick
+	} else if row.FX.NoteDelay.Tick > 0 {
+		effectType = EffectNoteDelay
+		effectParam = row.FX.NoteDelay.Tick
+	} else if row.FX.Pitch.Vibrato != nil && row.FX.Pitch.Vibrato.IsActive() {
+		effectType = EffectVibrato
+		effectParam = 0 // vibrato uses separate speed/depth fields
+		if row.FX.Pitch.Vibrato.Rate > 0 && ticks > 0 {
+			vibratoSpeed = int(float64(ticks) / row.FX.Pitch.Vibrato.Rate)
+			if vibratoSpeed < 1 {
+				vibratoSpeed = 1
+			} else if vibratoSpeed > 15 {
+				vibratoSpeed = 15
+			}
+		}
+		vibratoDepth = int(row.FX.Pitch.Vibrato.Depth * 4)
+		if vibratoDepth > 15 {
+			vibratoDepth = 15
+		}
 	}
-	// Default to Up preset when the row has no existing arpeggio so that enabling
-	// ARP immediately produces an audible chord arpeggio instead of all-zero offsets.
+
+	var portamento int
+	if row.FX.Pitch.Portamento != nil {
+		portamento = (row.FX.Pitch.Portamento.StartTick << 4) | (row.FX.Pitch.Portamento.Ticks & 0xF)
+	}
+
+	arpActive := row.FX.Pitch.Arpeggio != nil && row.FX.Pitch.Arpeggio.IsActive()
 	preset := ArpPresetNone
-	if !row.Arpeggio.IsActive() {
+	if !arpActive {
 		preset = ArpPresetUp
 	}
 
-	effectParam := row.Effect.Param
-	if row.Effect.Type == EffectVibrato {
-		effectParam = 0 // vibrato uses separate speed/depth fields
+	// Derive volume from FX.Volume (0.0–1.0 → 0–maxVolume).
+	volume := 0
+	if row.FX.Volume.Active {
+		volume = int(row.FX.Volume.Level * float64(maxVolume))
 	}
+
+	_ = portamento // portamento is informational; dialog manages it separately
 
 	return &RowEffectsDialog{
 		trackIdx:     trackIdx,
 		rowIdx:       rowIdx,
-		volume:       row.Volume,
+		volume:       volume,
 		ticks:        ticks,
-		arpEnabled:   row.Arpeggio.IsActive(),
+		arpEnabled:   arpActive,
 		preset:       preset,
 		step:         defaultStep,
 		offsets:      offsets,
-		effectType:   row.Effect.Type,
+		effectType:   effectType,
 		vibratoSpeed: vibratoSpeed,
 		vibratoDepth: vibratoDepth,
 		effectParam:  effectParam,
