@@ -300,13 +300,14 @@ func TestEffectsStreamerWithMultipleTicksCompletes(t *testing.T) {
 // Tests for panStreamer completion behavior
 func TestPanStreamerCompletesWithFiniteSource(t *testing.T) {
 	source := newFiniteTestStreamer(35, 0.6)
-	panned := newPanStreamer(source, 0.5) // Center pan
+	panned := newPanStreamer(source, 0) // Center pan (special case: no transformation)
 	
 	samples, completed := streamWithLimit(panned, 1000)
 	
 	assert.True(t, completed, "pan streamer should complete when source completes")
 	assert.Equal(t, 35, len(samples), "should produce same number of samples as source")
 	
+	// At pan=0, the implementation returns the original streamer unchanged
 	for i, sample := range samples {
 		assert.InDelta(t, 0.6, sample[0], 1e-9, "sample %d L should be unmodified at center pan", i)
 		assert.InDelta(t, 0.6, sample[1], 1e-9, "sample %d R should be unmodified at center pan", i)
