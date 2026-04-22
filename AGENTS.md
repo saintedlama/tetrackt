@@ -13,7 +13,7 @@ Or via Make: `make test`, `make build`, `make lint`, `make run`.
 
 ## Stack
 
-- **Go 1.25**
+- **Go 1.26**
 - **bubbletea/v2** — TUI framework (Elm-style: Model/Update/View)
 - **lipgloss/v2** — terminal styling
 - **beep/v2** — audio streaming and synthesis
