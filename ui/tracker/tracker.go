@@ -20,8 +20,7 @@ import (
 var (
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(common.ColorAccentPrimary).
-			Padding(0, 1)
+			Foreground(common.ColorAccentPrimary)
 
 	rowNumStyle = lipgloss.NewStyle().
 			Foreground(common.ColorTextDisabled)
@@ -227,7 +226,8 @@ func (m *TrackerModel) View() string {
 	// Track headers
 	tracks.WriteString("    ") // Row number space
 	for i := 0; i < m.NumTracks; i++ {
-		trackHeader := fmt.Sprintf("Track %d", i+1)
+		// Format header to exactly 11 characters to match separator and data columns
+		trackHeader := fmt.Sprintf("%-11s", fmt.Sprintf("Track %d", i+1))
 		if i == m.nav.CursorTrack() {
 			trackHeader = headerStyle.Render(trackHeader)
 		} else {
