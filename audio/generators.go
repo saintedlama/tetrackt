@@ -57,10 +57,11 @@ func newScaledStreamer(s Streamer, scale float64) Streamer {
 
 func (ss *scaledStreamer) Stream(samples [][2]float64) (n int, ok bool) {
 	if ss.silent {
-		for i := range samples {
+		n, ok = ss.s.Stream(samples)
+		for i := range samples[:n] {
 			samples[i] = [2]float64{}
 		}
-		return len(samples), true
+		return n, ok
 	}
 	n, ok = ss.s.Stream(samples)
 	for i := range samples[:n] {
