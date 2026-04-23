@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/saintedlama/tetrackt/compare/v1.1.0...v1.1.1) (2026-04-22)
+
+
+### Bug Fixes
+
+* remove freebsd from builds again ([d737767](https://github.com/saintedlama/tetrackt/commit/d73776716c01dbcb8d48be98d61251e86c817506))
+
 ## [1.1.0](https://github.com/saintedlama/tetrackt/compare/v1.0.0...v1.1.0) (2026-04-22)
 
 
