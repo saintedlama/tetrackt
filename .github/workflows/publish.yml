@@ -38,18 +38,23 @@ jobs:
           - goos: linux
             goarch: amd64
             suffix: ""
-          - goos: linux
-            goarch: arm64
-            suffix: ""
+            cgo: "1"
+            cc: ""
           - goos: darwin
             goarch: amd64
             suffix: ""
+            cgo: "0"
+            cc: ""
           - goos: darwin
             goarch: arm64
             suffix: ""
+            cgo: "0"
+            cc: ""
           - goos: windows
             goarch: amd64
             suffix: ".exe"
+            cgo: "0"
+            cc: ""
     steps:
       - uses: actions/checkout@v6
 
@@ -58,9 +63,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Install build prerequisites
+      - name: Install Linux build prerequisites
         if: matrix.goos == 'linux'
-        run: sudo apt install libasound2-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev
 
       - name: Generate wavetable archive
         run: make compress
@@ -69,7 +76,8 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: "0"
+          CGO_ENABLED: ${{ matrix.cgo }}
+          CC: ${{ matrix.cc }}
         run: |
           ARTIFACT="tetrackt_${{ matrix.goos }}_${{ matrix.goarch }}${{ matrix.suffix }}"
           go build -trimpath -ldflags="-s -w" -o "${ARTIFACT}" .
