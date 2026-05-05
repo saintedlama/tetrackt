@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/saintedlama/tetrackt/compare/v1.1.1...v1.1.2) (2026-04-23)
+
+
+### Bug Fixes
+
+* fix linux builds and remove test build actions ([65f1a57](https://github.com/saintedlama/tetrackt/commit/65f1a5768c731348e8f32dd96a20e2bfd905e07d))
+
 ## [1.1.1](https://github.com/saintedlama/tetrackt/compare/v1.1.0...v1.1.1) (2026-04-22)
 
 
