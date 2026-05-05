@@ -38,3 +38,6 @@ go.work.sum
 
 # Samples and generated files
 module.json
+
+# agent stuff
+.claude/

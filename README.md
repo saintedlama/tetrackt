@@ -2,6 +2,18 @@
 
 Tetrackt is a noise maker for the command line. A creative playground for whisking crazy sounds together — not for making great music, but for making interesting ones. It is not a chiptune tracker, a sequencer, or a DAW. It is a noise maker.
 
+![Tracker](screenshots/tracker.png)
+
+![Synth](screenshots/synth.png)
+
+### Tracker and Effects
+
+![Tracker and effects demo](screenshots/tracker-notes.gif)
+
+### Synth and Patch Bank
+
+![Synth and patch bank demo](screenshots/synth-patchbank.gif)
+
 ## What's inside
 
 Three oscillators per patch. Detune them against each other, run them through a filter, slap an LFO on the cutoff, and watch something weird happen. That's the idea.
