@@ -1,6 +1,6 @@
 module github.com/tetrackt/tetrackt
 
-go 1.27.1
+go 1.26.8
 
 require (
 	charm.land/bubbles/v2 v2.2.1
